@@ -3636,16 +3636,20 @@ function renderBDTab(){
     var riskLabel=daysToTL!==null?(daysToTL<0?'🔴 OVERDUE':daysToTL<30?'🔴 <30d':daysToTL<60?'🟡 <60d':'🟢 On Track'):'⚪ No TL Date';
     var riskColor=daysToTL!==null?(daysToTL<0?'#dc2626':daysToTL<30?'#f97316':daysToTL<60?'#d97706':'#16a34a'):'#94a3b8';
 
-    // Timeline backtrack from Temp Live
+    // Timeline: pre-PO backtrack + forward milestones from PO
     var chain=[];
     if(tld){
-      var uatDue=new Date(tld.getTime()-7*86400000);
-      var satDue=new Date(tld.getTime()-17*86400000);
-      var poNeed=new Date(tld.getTime()-77*86400000);
-      var prNeed=new Date(tld.getTime()-91*86400000);
-      var boqNeed=new Date(tld.getTime()-93*86400000);
-      var layoutNeed=new Date(tld.getTime()-100*86400000);
-      var bdHandover=new Date(tld.getTime()-107*86400000);
+      // poRef: actual PO if available, else estimated = Temp Live − 15d
+      var poNeed=new Date(tld.getTime()-15*86400000);
+      var poRef=poD||poNeed;
+      // Pre-PO milestones (offset from PO)
+      var bdHandover=new Date(poRef.getTime()-30*86400000);
+      var layoutNeed=new Date(poRef.getTime()-23*86400000);
+      var boqNeed=new Date(poRef.getTime()-16*86400000);
+      var prNeed=new Date(poRef.getTime()-14*86400000);
+      // Forward milestones
+      var satDue=new Date(poRef.getTime()+60*86400000);  // SAT = PO + 60d
+      var uatDue=new Date(satDue.getTime()+10*86400000); // UAT = SAT + 10d
       function _fmtBDD(d){return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});}
       function milestone(lbl,d,done){
         var diff=Math.round((d-today)/86400000);
@@ -3662,11 +3666,10 @@ function renderBDTab(){
       chain.push(milestone('First Cut Layout',layoutNeed,false));
       chain.push(milestone('BOQ Done',boqNeed,false));
       chain.push(milestone('PR Raised',prNeed,false));
-      chain.push(milestone('PO Released',poNeed,!!poD));
-      chain.push(milestone('SAT (Temp: PO+15d)',new Date((poD||poNeed).getTime()+15*86400000),!!pd(r['SAT Date'])));
-      chain.push(milestone('SAT (Full: PO+60d)',new Date((poD||poNeed).getTime()+60*86400000),!!pd(r['SAT Date'])));
-      chain.push(milestone('UAT',uatDue,!!pd(r['UAT DATE'])));
-      chain.push(milestone('⭐ Temp Live',tld,false));
+      chain.push(milestone('PO Released',poRef,!!poD));
+      chain.push(milestone('⭐ Temp Live (PO+15d)',tld,false));
+      chain.push(milestone('SAT (PO+60d)',satDue,!!pd(r['SAT Date'])));
+      chain.push(milestone('UAT (SAT+10d)',uatDue,!!pd(r['UAT DATE'])));
     }
 
     // 30-day team trigger buttons
@@ -3709,11 +3712,11 @@ function renderBDTab(){
     // Timeline
     if(chain.length){
       html+='<div style="padding:10px 14px;border-top:1px solid var(--border)">'
-        +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Timeline Backtrack from Temp Live</div>'
+        +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Project Timeline (PO → Temp Live → SAT → UAT)</div>'
         +chain.join('')+'</div>';
     } else {
       html+='<div style="padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">'
-        +'Log <b>Temp Live Date: DD Mon</b> in daily updates to see timeline backtrack.</div>';
+        +'Add <b>PO Date</b> or log <b>Temp Live Date: DD Mon</b> in daily updates to see timeline.</div>';
     }
 
     // Team trigger buttons
