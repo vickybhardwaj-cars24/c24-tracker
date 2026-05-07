@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.46</title>
+<title>Cars24 Projects Tracker v3.35</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -113,7 +113,7 @@ td{padding:7px 12px;vertical-align:middle}
 .r3{background:#fef9c3;color:#ca8a04}.r4{background:#dcfce7;color:#16a34a}
 .r5{background:#f0fdf4;color:#15803d}.r0{background:var(--surface);color:var(--muted)}
 #sv{display:none;padding:14px 20px}#sv.show{display:block}
-#suv,#taskv,#pmsv,#tickv,#slackv,#bdv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#bdv.show{display:block}
+#suv,#taskv,#pmsv,#tickv,#slackv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show{display:block}
 #calv{display:none;padding:14px 20px}#calv.show{display:block}
 #inv{display:none}#inv.show{display:block}
 #warnv{display:none;padding:14px 20px}#warnv.show{display:block}
@@ -379,7 +379,15 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 .slack-box h3{font-size:14px;font-weight:700;margin:0}
 #slack-preview{flex:1;overflow-y:auto;font-family:monospace;font-size:11px;background:#1e1e2e;color:#cdd6f4;padding:12px;border-radius:8px;white-space:pre-wrap;min-height:200px;max-height:50vh}
 </style>
-<script src="/shared/c24-uploader.js"></script>
+<script>
+var C24Uploader=(function(){
+  function fetchText(url,opts){return fetch(url,opts||{}).then(function(r){if(!r.ok)throw new Error('HTTP '+r.status);return r.text();});}
+  function basicHeader(auth){return 'Basic '+btoa(auth.username+':'+auth.password);}
+  function verify(opts){return fetch(opts.workerUrl+'auth/verify',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:opts.auth.username,password:opts.auth.password})}).then(function(r){return r.json().then(function(j){if(!r.ok||j.error)throw{status:r.status,message:j.error||'Auth failed'};return j;});});}
+  function upload(opts){return fetch(opts.workerUrl+opts.toolPath+'.csv',{method:'POST',headers:{'Content-Type':'text/csv','Authorization':basicHeader(opts.auth)},body:opts.csvText}).then(function(r){return r.json().then(function(j){if(!r.ok||j.error)throw{status:r.status,message:j.error||'Upload failed'};return j;});});}
+  return{fetchText:fetchText,verify:verify,upload:upload};
+})();
+</script>
 </head>
 <body>
 <header>
@@ -484,7 +492,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('taskv',this)">📋 Tasks</button>
     <button class="vtab" onclick="setView('pmsv',this)">👤 PM Scorecard</button>
     <button class="vtab" onclick="setView('slackv',this)">📣 Slack</button>
-    <button class="vtab" onclick="setView('bdv',this)">🏗️ BD</button>
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
   </div>
   <span class="cchip" id="cchip"></span>
@@ -525,8 +532,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   </tr></thead><tbody id="pm-scorecard-body"></tbody></table>
 </div>
 <div id="tickv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
-<div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
-<div id="bdv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
+<div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
 
 <div id="targets-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);flex-direction:column">
   <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0">
@@ -923,9 +929,8 @@ function setView(v,btn){
   if(v==='pmsv') renderPMScorecard();
   if(v==='tickv') renderTicketTab();
   if(v==='slackv') renderSlackTab();
-  if(v==='bdv') renderBDTab();
   if(v==='suv') setTimeout(function(){renderSatUat();},0);
-  ['tv','suv','inv','taskv','pmsv','tickv','slackv','bdv'].forEach(id=>{
+  ['tv','suv','inv','taskv','pmsv','tickv','slackv'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     if(id==='tv'){el.classList.toggle('hide',v!=='tv');}
@@ -989,7 +994,7 @@ function renderTable(){
     const pctColor=pctN>=80?'#16a34a':pctN>=50?'#2563eb':'#d97706';
     const cells=[
       '<td style="color:var(--muted);font-size:11px;text-align:center;white-space:nowrap">'+(r['S.No.']?parseInt(r['S.No.'])||r['S.No.']:idx+1)+'</td>',
-      '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
+      '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">'+esc(r.Owner||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(r.Vendor||'—')+'</td>',
       '<td>'+(!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>',
@@ -1021,36 +1026,20 @@ function sortBy(col){
 // ═══════════════════════════════════════════════════════════════
 
 function getRevHistory(r){
-  // Scan DATE_COLS for "Revised date : <date>" entries
-  // Deduplicate: same revised-to date = one revision, keep first occurrence
-  var hits=[];
-  var seen={};
-  var rx=/revised\s+date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
-  DATE_COLS.forEach(function(col){
-    var txt=(r[col]||'').trim(); if(!txt) return;
-    var m; rx.lastIndex=0;
-    while((m=rx.exec(txt))!==null){
-      var dateStr=m[1].trim().replace(/\b(st|nd|rd|th)\b/gi,'').trim();
-      // Normalise: "5 May" and "5th May" both become "5 May"
-      var key=dateStr.toLowerCase();
-      if(!seen[key]){
-        seen[key]=true;
-        hits.push({col:col,dateStr:dateStr,key:key});
+    const hits=[];
+    // Regex: "Revised date : 30 Apr" | "15th December" | "23rd January" | "16th Jun"
+    const rx=/revised\s+date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
+    DATE_COLS.forEach(col=>{
+      const txt=(r[col]||'').trim();
+      if(!txt) return;
+      let m;
+      while((m=rx.exec(txt))!==null){
+        hits.push({col:col, dateStr:m[1].trim()});
       }
-      // If same date seen again, skip — already logged earliest occurrence
-    }
-  });
-  return hits;
-}
-function fmtRevHistory(r){
-  var hits=getRevHistory(r);
-  if(!hits.length) return '';
-  return hits.map(function(h,i){
-    return (i+1)+'. First logged '+h.col+' → Revised to '+h.dateStr;
-  }).join('\n');
-}
-
-
+      rx.lastIndex=0;
+    });
+    return hits;
+  }
 function committedDate(r){
   // Always use Revised Completion as the committed date
   // Fall back to Planned only if Revised is not set
@@ -1090,7 +1079,7 @@ function gmailDraft(r, type){
         +revLine
         +'\nRequest HEM team to schedule the UAT inspection and Design team to confirm all snag items from SAT have been addressed.\n\nNote: UAT must be completed within 15 days of SAT as per CARS24 project compliance policy.\n\nRegards,\n'+owner+'\nCARS24 Projects Team';
     }
-    return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+    return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
   }
 function commCard(entry,type){
   const r=entry.r,diff=entry.diff,idx3=entry.idx3;
@@ -1147,8 +1136,6 @@ function renderSatUat(){
   const satComm=allData.filter(r=>{
     const st=(r['Status']||'').toLowerCase();
     if(st.includes('sat done')||st.includes('uat done')||st.includes('completed')) return false;
-    // Also exclude if SAT Date is already filled (SAT happened regardless of status label)
-    if(pd(r['SAT Date'])) return false;
     const cd=committedDate(r); if(!cd) return false;
     const diff=Math.round((cd-today3)/86400000);
     return diff>=-14&&diff<=14;
@@ -1166,12 +1153,12 @@ function renderSatUat(){
     if(!pd(r['SAT Date'])) return false;  // SAT must be done
     if(pd(r['UAT DATE'])) return false;   // UAT must not be done
     const satD=pd(r['SAT Date']);
-    const uatTarget=new Date(satD.getTime()+10*86400000);
+    const uatTarget=new Date(satD.getTime()+15*86400000);
     const diff=Math.round((uatTarget-today3)/86400000);
     return diff>=-14&&diff<=14;
   }).map(r=>{
     const satD=pd(r['SAT Date']);
-    const uatTarget=new Date(satD.getTime()+10*86400000);
+    const uatTarget=new Date(satD.getTime()+15*86400000);
     const diff=Math.round((uatTarget-today3)/86400000);
     const idx3=allData.indexOf(r);
     return {r,uatTarget,diff,idx3};
@@ -1202,7 +1189,7 @@ function renderSatUat(){
 
   // ── Existing pipeline tables (keep nw, rc, pending, done) ───────────────
   let satLW2=0,satLLW2=0,uatLW2=0,uatLLW2=0;
-  const nwSAT=[],recent=[],pendArr=[],dangerArr=[],warningArr=[],onTrackArr=[],doneArr=[],satDelayArr=[],noDateArr=[];
+  const nwSAT=[],recent=[],pendArr=[],dangerArr=[],warningArr=[],onTrackArr=[],doneArr=[];
   allData.forEach(r=>{
     const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']),planD=pd(r['Planned Completion']);
     const idx3=allData.indexOf(r);
@@ -1215,13 +1202,10 @@ function renderSatUat(){
     if(uatD&&uatD>=d2w&&uatD<d1w)    uatLLW2++;
     if(satD&&satD<=d7&&satD>today3&&!st.includes('sat done')&&!st.includes('uat done'))
       nwSAT.push({r,idx3,satD,uatD,planD,dt:Math.round((satD-today3)/86400000)});
-    if(sr||ur){
-      const satUatDays=(satD&&uatD)?Math.round((uatD-satD)/86400000):0;
-      recent.push({r,idx3,satD,uatD,sr,ur,both:sr&&ur,gap:satUatDays,dt:satUatDays});
-    }
+    if(sr||ur) recent.push({r,idx3,satD,uatD,sr,ur,both:sr&&ur});
     if(satD&&!uatD&&!st.includes('uat done')){
       const _g=Math.round((today3-satD)/86400000);
-      const _ut=new Date(satD.getTime()+10*86400000); // UAT target = SAT + 10 days
+      const _ut=new Date(satD.getTime()+15*86400000);
       const _dl=Math.round((_ut-today3)/86400000);
       const _pe={r,idx3,satD,uatD,planD,gap:_g,dt:_dl,uatTarget:_ut,name:r['Site Name']||'—'};
       pendArr.push(_pe);
@@ -1229,33 +1213,7 @@ function renderSatUat(){
       else if(_g>=10) warningArr.push(_pe);
       else onTrackArr.push(_pe);
     };
-    if(uatD){
-      const _satUatDays2=(satD&&uatD)?Math.round((uatD-satD)/86400000):0;
-      doneArr.push({r,idx3,satD,uatD,planD,gap:_satUatDays2,dt:_satUatDays2});
-
-    }
-    // SAT Delay: ORIGINAL planned date passed >7 days, SAT not yet done
-    // Use planD (Planned Completion) to check delay — revision doesn't reset the clock
-    if(!satD&&!st.includes('sat done')&&!st.includes('uat done')){
-      if(planD){
-        const _od3=Math.round((today3-planD)/86400000);
-        if(_od3>7){
-          const _finalDate=committedDate(r); // show revised date as final date
-          satDelayArr.push({r,idx3,planD,finalDate:_finalDate,overdue:_od3});
-        }
-      }
-    }
-    // No revised date flag
-    if(!uatD&&!st.includes('uat done')&&!st.includes('completed')){
-      const _revD2=pd(r['Revised Completion']),_planD2=pd(r['Planned Completion']);
-      const _comm2=_revD2||_planD2;
-      if(_comm2&&_comm2<today3){
-        const _od4=Math.round((today3-_comm2)/86400000);
-        const _hasRev=!!_revD2;
-        const _lbl=_hasRev?'Revised date passed - '+_od4+'d ago':'No revised date - '+_od4+'d overdue';
-        noDateArr.push({r,idx3,overdue:_od4,hasRev:_hasRev,label:_lbl,satDone:!!satD});
-      }
-    }
+    if(uatD) doneArr.push({r,idx3,satD,uatD,planD,dt:0});
   });
 
   function mkTable(arr,cls){
@@ -1265,14 +1223,14 @@ function renderSatUat(){
       +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Owner</th>'
       +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">SAT Date</th>'
       +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">UAT Date</th>'
-      +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">SAT→UAT Days</th>'
+      +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Days</th>'
       +'</tr></thead><tbody>'
       +arr.map(u=>'<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openModal('+u.idx3+')">'
         +'<td style="padding:6px 10px;font-weight:600">'+esc(u.r['Site Name']||'—')+'</td>'
         +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'—')+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['SAT Date']||'—')+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['UAT DATE']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+(u.gap>10?'#dc2626':u.gap>7?'#d97706':'#16a34a')+'">'+(u.gap||u.dt||0)+'d</td>'
+        +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+(u.gap>15?'#dc2626':u.gap>7?'#d97706':'#16a34a')+'">'+(u.gap||u.dt||0)+'d</td>'
         +'</tr>').join('')
       +'</tbody></table>';
   }
@@ -1301,8 +1259,8 @@ function renderSatUat(){
       +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'--')+'</td>'
       +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['SAT Date']||'--')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
-      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a></td>':'<td></td>')
-      +(u.gap>10?'<td style="padding:6px 10px;text-align:center"><span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;border:1px solid #fecaca">🚨 UAT Date Missing</span></td>':'<td></td>')
+      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'
+      +(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a></td>':'<td></td>')
       +'</tr>';
   }
   function _mkDWOTbl(arr,col,showA){
@@ -1313,10 +1271,10 @@ function renderSatUat(){
       +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">SAT Date</th>'
       +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">UAT Target</th>'
       +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Days Since SAT</th>'
-      +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Action</th>'+'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Flag</th>'
+      +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Action</th>'
       +'</tr></thead><tbody>'+arr.map(function(u){return _mkDWORow(u,col,showA);}).join('')+'</tbody></table>';
   }
-  const _dH=dangerArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Danger - >10 Days Since SAT ('+dangerArr.length+')</div>'+_mkDWOTbl(dangerArr,'#dc2626',true)+'</div>':'';
+  const _dH=dangerArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Danger - >15 Days Since SAT ('+dangerArr.length+')</div>'+_mkDWOTbl(dangerArr,'#dc2626',true)+'</div>':'';
   const _wH=warningArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Warning - 10-15 Days Since SAT ('+warningArr.length+')</div>'+_mkDWOTbl(warningArr,'#d97706',false)+'</div>':'';
   const _oH=onTrackArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">On Track - SAT Done, UAT Pending Under 10 Days ('+onTrackArr.length+')</div>'+_mkDWOTbl(onTrackArr,'#16a34a',false)+'</div>':'';
   if(_sub==='comm'){
@@ -1329,46 +1287,7 @@ function renderSatUat(){
     return;
   }
 
-  var _ndH='';
-  if(noDateArr.length){
-    _ndH='<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#ea580c;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">No Revised Date Provided ('+noDateArr.length+')</div>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--surface)">'
-    +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Site</th>'
-    +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Owner</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Committed</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Status</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Flag</th>'
-    +'</tr></thead><tbody>'
-    +noDateArr.map(function(u){
-      var cd=pd(u.r['Revised Completion'])||pd(u.r['Planned Completion']);
-      var cdStr=cd?cd.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
-      var fc=u.hasRev?'#dc2626':'#ea580c';
-      return '<tr style="border-bottom:1px solid var(--border)">'  
-        +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'--')+'</td>'
-        +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'--')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+cdStr+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;font-size:11px">'+esc(u.r['Status']||'--')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;font-size:11px;font-weight:700;color:'+fc+'">'+u.label+'</td>'
-        +'</tr>';
-    }).join('')+'</tbody></table></div>';
-  }
-  const _sdH=satDelayArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">⚠️ SAT Delay — Final Date Warning ('+satDelayArr.length+')</div>'
-    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--surface)">'
-    +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Site</th>'
-    +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Owner</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Planned</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Overdue</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Action</th>'+'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Flag</th>'+'</tr></thead><tbody>'
-    +satDelayArr.map(function(u){
-      return '<tr style="border-bottom:1px solid var(--border)">'
-        +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'—')+'</td>'
-        +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['Revised Completion']||u.r['Planned Completion']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
-        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a></td>'
-        +'</tr>';
-    }).join('')+'</tbody></table></div>':'';
-  el.innerHTML=_snav+_ndH+_sdH+_dH+_wH+_oH+(
+  el.innerHTML=_snav+_dH+_wH+_oH+(
     (satCommHtml||uatCommHtml
       ? '<div style="margin-bottom:20px;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:12px">'
         +'<div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">📧 Communication Required <span style="font-size:10px;font-weight:400;color:var(--muted)">Email HEM + Design team — fills To: field manually</span></div>'
@@ -1628,7 +1547,7 @@ function openModal(idx){
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
-    ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}<div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
+    <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
       </div>
@@ -1962,7 +1881,7 @@ function renderInsightKPIs(){
     var count=0;
     Object.keys(SNAG_DATA).forEach(function(site){
       var items=SNAG_DATA[site]||[];
-      var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length;
+      var open=items.filter(function(i){return (i.status||'').toLowerCase()!=='closed';}).length;
       if(open>70) count++;
     });
     if(Object.keys(SNAG_DATA).length>0) setManualKPI('snag70',count);
@@ -2068,7 +1987,7 @@ function renderSnagTab(){
   var sites=Object.keys(SNAG_DATA).map(function(site){
     var rows=SNAG_DATA[site];
     var total=rows.length;
-    var completed=rows.filter(function(r){var s=(r.status||'').toLowerCase();return s==='completed'||s==='done'||s==='closed'||s==='na'||s==='n/a'||s==='not applicable';}).length;
+    var completed=rows.filter(function(r){var s=(r.status||'').toLowerCase();return s==='completed'||s==='done';}).length;
     var pending=rows.filter(function(r){return (r.status||'').toLowerCase()==='pending';}).length;
     var wip=rows.filter(function(r){return (r.status||'').toLowerCase()==='wip';}).length;
     var open=total-completed;
@@ -2782,34 +2701,34 @@ function renderTaskTab(){
   el.innerHTML=html;
 }
 function copyTasksForSlack(){
-  var byPM={};
+  var byDate={};
   allData.forEach(function(r){
     if(!r['Site Name']) return;
-    var owner=(r['Owner']||'').trim(); if(!owner) return;
-    var siteItems=[];
-    for(var ci=DATE_COLS.length-1;ci>=0;ci--){
-      var upd=(r[DATE_COLS[ci]]||'').trim(); if(!upd) continue;
-      var m=upd.match(/task\s*:\s*([\s\S]*)/i);
-      if(m&&m[1].trim()){
-        var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
-        if(items.length){siteItems=items;break;}
-      }
-    }
-    if(!siteItems.length) return;
-    if(!byPM[owner]) byPM[owner]=[];
-    byPM[owner].push({site:r['Site Name'],items:siteItems});
-  });
-  var lines=['*CARS24 Action Items*',''];
-  Object.keys(byPM).sort().forEach(function(owner){
-    lines.push(slackHandle(owner)+' -- Action Items');
-    byPM[owner].forEach(function(entry){
-      lines.push('  *'+entry.site+'*');
-      entry.items.forEach(function(item){lines.push('    - '+item);});
+    DATE_COLS.forEach(function(col){
+      var update=(r[col]||'').trim();
+      if(!update) return;
+      var m=update.match(/task\s*:\s*([\s\S]*)/i);
+      if(!m||!m[1].trim()) return;
+      var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
+      if(!items.length) return;
+      if(!byDate[col]) byDate[col]=[];
+      byDate[col].push({site:r['Site Name'],owner:(r['Owner']||''),items:items});
     });
-    lines.push('');
   });
-  lines.push('_Paste into Claude for analysis_');
-  navigator.clipboard.writeText(lines.join('\n')).then(function(){toast('Copied','ok');});
+  var dateCols=Object.keys(byDate).sort(function(a,b){
+    return DATE_COLS.indexOf(b)-DATE_COLS.indexOf(a);
+  });
+  var lines=['*📋 CARS24 Action Items*',''];
+  dateCols.forEach(function(col){
+    lines.push('*── '+col+' ──*');
+    byDate[col].forEach(function(e){
+      lines.push('*'+e.site+'*'+(e.owner?' ('+e.owner+')':''));
+      e.items.forEach(function(i){lines.push('  • '+i);});
+      lines.push('');
+    });
+  });
+  lines.push('_Paste this into Claude for analysis_');
+  navigator.clipboard.writeText(lines.join('\n')).then(function(){toast('✓ Copied for Slack / Claude','ok');});
 }
 
 function syncSheets(){
@@ -2825,7 +2744,7 @@ function syncSheets(){
     .then(function(r){if(!r.ok) throw new Error('HTTP '+r.status); return r.json();})
     .then(function(j){
       if(j&&j.data&&j.data.length){
-        var rows=j.data.filter(function(r){return (r['Site Name']||'').trim();});
+        var rows=j.data.filter(function(r){return r['Site Name']||r['S.No.'];});
         if(rows.length){
           allData=rows; filteredData=[...allData];
           buildFilters(); renderKPIs(); renderAll();
@@ -2870,7 +2789,7 @@ function autoSync(){
     .then(function(r){return r.json();})
     .then(function(j){
       if(j&&j.data&&j.data.length){
-        var rows=j.data.filter(function(r){return (r['Site Name']||'').trim();});
+        var rows=j.data.filter(function(r){return r['Site Name']||r['S.No.'];});
         // Skip dataset write if the canonical same-origin CSV has already loaded —
         // GitHub-backed CSV is authoritative; HOTP is now best-effort backup only.
         if(rows.length && !__originLoaded){
@@ -2961,7 +2880,7 @@ function renderPMScorecard(){
     var bl=extractBlockers(r); if(bl&&bl.length) ow.blockers++;
     // Snag score
     var snags=(SNAG_DATA[(r['Site Name']||'').trim()]||[]);
-    if(snags.length){ow.snagPts+=snags.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length; ow.snagSites++;}
+    if(snags.length){ow.snagPts+=snags.filter(function(i){return (i.status||'').toLowerCase()!=='closed';}).length; ow.snagSites++;}
   });
   var pmRows=Object.keys(owners).sort().map(function(o){
     var d=owners[o];
@@ -3003,7 +2922,7 @@ function showSnag70List(){
   var sites=[];
   Object.keys(SNAG_DATA).forEach(function(site){
     var items=SNAG_DATA[site]||[];
-    var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length;
+    var open=items.filter(function(i){return (i.status||'').toLowerCase()!=='closed';}).length;
     if(open>70) sites.push({site:site,open:open,total:items.length});
   });
   sites.sort(function(a,b){return b.open-a.open;});
@@ -3203,7 +3122,7 @@ function renderTicketTab(){
     var site=tickSiteName(store);
     var pri=col(r,['Priority','priority']);
     var assign=col(r,['Assigned To','assigned_to'])||'Unassigned';
-    var _cr=col(r,['Created At','created_at']);var tat=(function(){if(_cr){var d=new Date(_cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);})();
+    var tat=parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);
     var status=col(r,['Status','status']);
     var pmRem=col(r,['PM Final Remarks','Remarks','remarks'])||'—';
     var pmSt=col(r,['PM Final Status','pm_final_status'])||'';
@@ -3359,10 +3278,10 @@ function vendorDelayMail(r){
   var now=new Date(); now.setHours(0,0,0,0);
   var od=satD2?Math.round((now-new Date(satD2.getTime()+15*86400000))/86400000):0;
   var revH=getRevHistory(r);
-  var revLine=fmtRevHistory(r)?'\nRevision History:\n'+fmtRevHistory(r)+'\n':'\nNo revision history.\n';
+  var revLine=revH.length?'\nRevision History ('+revH.length+'):\n'+revH.map(function(h,i){return '  '+(i+1)+'. Revised to '+h.dateStr+' (on '+h.col+')';}).join('\n')+'\n':'\nNo revision history logged.\n';
   var subj='UAT Delay Notice - '+site+' - '+od+'d Overdue';
-  var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+15d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects';
-  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+15d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects\nCC: Vicky Bhardwaj, Head of Projects';
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
 
 // ═══ SLACK TAB ═══════════════════════════════════════════════════
@@ -3431,285 +3350,6 @@ function renderSlackTab(subTab){
   lns.push('Reply: Done / In Progress / Blocked');
   el.innerHTML=nav+pmSel+'<pre id="pm-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(lns.join('\n'))+'</pre>';
 }
-
-function satDelayMail(r){
-  var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
-  var poD=r['PO Date']||'--',ksD=r['Kickoff Date']||'--',wsD=r['Work Start Date']||'--';
-  var planD=r['Planned Completion']||'--';
-  var revD=r['Revised Completion']||'--';
-  var finalDate=revD!=='--'?revD:planD;
-  var revHist=fmtRevHistory(r);
-  var revLine=revHist?'\nRevision History:\n'+revHist+'\n':'';
-  var subj='SAT Delay Notice — Final Date Communicated — '+site;
-  var body='Dear '+vendor+' Team,\n\n'
-    +'This is a formal notice regarding the delayed SAT completion at '+site+'.\n\n'
-    +'Project Timeline:\n'
-    +'  PO Date: '+poD+'\n'
-    +'  Kickoff Date: '+ksD+'\n'
-    +'  Work Start Date: '+wsD+'\n'
-    +'  Original Planned SAT Date: '+planD+'\n'
-    +'  Revised / Final SAT Date: '+finalDate+'\n'
-    +revLine
-    +'\nPlease be informed that '+finalDate+' is the FINAL date for SAT completion. '
-    +'No further extensions will be granted. Failure to complete SAT by this date will result '
-    +'in penalty being levied as per the terms of the Purchase Order.\n\n'
-    +'You are requested to mobilise resources immediately and ensure site readiness by the final date.\n\n'
-    +'Regards,\n'+owner+'\nCARS24 Projects Team';
-  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
-}
-
-
-// ═══════════════════════════════════════════════════════════════
-// BD TRACKER MODULE
-// ═══════════════════════════════════════════════════════════════
-
-// Parse Temp Live Date from daily updates
-function getTempLiveDate(r){
-  var rx=/temp\s*live\s*date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
-  var latest=null, latestCol=null;
-  DATE_COLS.forEach(function(col){
-    var txt=(r[col]||'').trim(); if(!txt) return;
-    var m; rx.lastIndex=0;
-    while((m=rx.exec(txt))!==null){
-      var ds=m[1].replace(/\b(st|nd|rd|th)\b/gi,'').trim();
-      var d=pd(ds); if(!d) continue;
-      if(!latest||d>latest){latest=d;latestCol=col;}
-    }
-  });
-  return latest;
-}
-
-// BD site filter: Status = BD, Design, BOQ
-function isBDSite(r){
-  var st=(r['Status']||'').toLowerCase().trim();
-  return st==='bd'||st==='design'||st==='boq'||st==='b.d'||st==='to be started';
-}
-
-// Build team trigger Gmail draft
-function bdTeamMail(r,team,tempLiveD,finalLiveD){
-  var site=r['Site Name']||'Site';
-  var owner=r['Owner']||'PM';
-  var poDate=r['PO Date']||'--';
-  var vendor=r['Vendor']||'--';
-  var tls=tempLiveD?tempLiveD.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
-  var fls=finalLiveD?finalLiveD.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
-  var today=new Date(); today.setHours(0,0,0,0);
-  var daysToTL=tempLiveD?Math.round((tempLiveD-today)/86400000):null;
-  var teamSetup={
-    'IT':   {role:'IT infrastructure setup (network, systems, hardware, POS terminals)',deadline:'5 days before Temp Live'},
-    'NSO':  {role:'New Site Operations setup (SOPs, staffing, onboarding)',deadline:'5 days before Temp Live'},
-    'Admin':{role:'Admin setup (utilities, access cards, housekeeping, pantry)',deadline:'5 days before Temp Live'},
-    'HEM':  {role:'Equipment & facilities setup (inspection readiness, CCTV, boom barriers)',deadline:'5 days before Temp Live'}
-  };
-  var ts=teamSetup[team]||{role:'Setup',deadline:'5 days before Temp Live'};
-  var subj='Action Required: '+team+' Setup Initiation — '+site+' — Temp Live '+tls;
-  var body='Dear '+team+' Team,\n\n'
-    +'This is a formal request to initiate '+ts.role+' for the following new site.\n\n'
-    +'Site Details:\n'
-    +'  Site Name: '+site+'\n'
-    +'  Project Owner: '+owner+'\n'
-    +'  Vendor: '+vendor+'\n'
-    +'  PO Date: '+poDate+'\n\n'
-    +'Key Dates:\n'
-    +'  Temp Live Date: '+tls+(daysToTL!==null?' ('+daysToTL+' days away)':'')+'\n'
-    +'  Final Live Date: '+fls+'\n\n'
-    +'As per SOP, '+team+' team requires 30 days for setup. Please initiate immediately to ensure readiness by '+ts.deadline+'.\n\n'
-    +'Kindly confirm initiation and share your setup plan by return email.\n\n'
-    +'Regards,\n'+owner+'\nCARS24 Projects Team';
-  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
-}
-
-// BD Slack message generator
-function generateBDSlack(){
-  var bdSites=allData.filter(isBDSite);
-  if(!bdSites.length){toast('No BD/Design/BOQ sites found','err');return;}
-  var today=new Date(); today.setHours(0,0,0,0);
-  var dateStr=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var lines=['*🏗️ BD Pipeline Update — '+dateStr+'*','',
-    '_Sites in pre-WIP stages. Temp Live dates committed to business._',''];
-  bdSites.forEach(function(r){
-    var tld=getTempLiveDate(r);
-    var fld=pd(r['Planned Completion']);
-    var poD=pd(r['PO Date']);
-    var st=(r['Status']||'').toUpperCase();
-    var tlStr=tld?tld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'Not logged';
-    var flStr=fld?fld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
-    var daysToTL=tld?Math.round((tld-today)/86400000):null;
-    var risk=daysToTL!==null&&daysToTL<30?'🔴':daysToTL!==null&&daysToTL<60?'🟡':'🟢';
-    lines.push('*'+r['Site Name']+'* ['+st+'] '+risk);
-    lines.push('  Temp Live: '+tlStr+(daysToTL!==null?' ('+daysToTL+'d away)':' (date not logged)'));
-    lines.push('  Final Live: '+flStr);
-    lines.push('  Owner: '+slackHandle(r['Owner']||''));
-    // PO status
-    if(!poD) lines.push('  ⚠️ PO not yet released');
-    else {
-      var daysSincePO=Math.round((today-poD)/86400000);
-      lines.push('  PO: '+r['PO Date']+' ('+daysSincePO+'d ago)');
-    }
-    lines.push('');
-  });
-  lines.push('_Reply with updates or flag blockers_');
-  document.getElementById('slack-preview').textContent=lines.join('\n');
-  document.getElementById('slack-modal').style.display='flex';
-}
-
-// Render BD Tracker Tab
-function renderBDTab(){
-  var el=document.getElementById('bdv'); if(!el) return;
-  var today=new Date(); today.setHours(0,0,0,0);
-  var bdSites=allData.filter(isBDSite);
-
-  if(!bdSites.length){
-    el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--muted)">'
-      +'<div style="font-size:32px">🏗️</div>'
-      +'<div style="font-size:14px;font-weight:600">No BD / Design / BOQ sites in current data</div>'
-      +'<div style="font-size:12px">Sites with Status: BD, Design, or BOQ will appear here</div>'
-      +'</div>';
-    return;
-  }
-
-  // KPI tiles
-  var withTLD=bdSites.filter(function(r){return getTempLiveDate(r);}).length;
-  var atRisk=bdSites.filter(function(r){
-    var tld=getTempLiveDate(r); if(!tld) return false;
-    return Math.round((tld-today)/86400000)<30;
-  }).length;
-  var noPO=bdSites.filter(function(r){return !pd(r['PO Date']);}).length;
-  var trigger30=bdSites.filter(function(r){
-    var tld=getTempLiveDate(r); if(!tld) return false;
-    var d=Math.round((tld-today)/86400000);
-    return d>=0&&d<=30;
-  }).length;
-
-  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
-    +'<div style="font-size:14px;font-weight:700">🏗️ BD Pipeline Tracker</div>'
-    +'<button class="btn btn-o btn-sm" onclick="generateBDSlack()">📣 BD Slack Update</button>'
-    +'</div>';
-
-  // KPI row
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px">';
-  [
-    {label:'BD Sites',val:bdSites.length,color:'#1a73e8',bg:'#e8f0fe'},
-    {label:'Temp Live Logged',val:withTLD,color:'#16a34a',bg:'#f0fdf4'},
-    {label:'30-Day Trigger',val:trigger30,color:'#d97706',bg:'#fffbeb'},
-    {label:'At Risk (<30d)',val:atRisk,color:'#dc2626',bg:'#fef2f2'},
-    {label:'PO Pending',val:noPO,color:'#7c3aed',bg:'#f5f3ff'},
-  ].forEach(function(t){
-    html+='<div style="padding:12px;background:'+t.bg+';border-radius:8px;border:1px solid '+t.color+'22">'
-      +'<div style="font-size:20px;font-weight:800;color:'+t.color+'">'+t.val+'</div>'
-      +'<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-top:2px">'+t.label+'</div>'
-      +'</div>';
-  });
-  html+='</div>';
-
-  // Site cards
-  bdSites.forEach(function(r){
-    var tld=getTempLiveDate(r);
-    var fld=pd(r['Planned Completion']);
-    var poD=pd(r['PO Date']);
-    var idx=allData.indexOf(r);
-    var daysToTL=tld?Math.round((tld-today)/86400000):null;
-    var daysToFL=fld?Math.round((fld-today)/86400000):null;
-    var tlStr=tld?tld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'Not logged';
-    var flStr=fld?fld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
-
-    // Risk colour
-    var cardBorder=daysToTL!==null?(daysToTL<0?'#dc2626':daysToTL<30?'#f97316':daysToTL<60?'#d97706':'#16a34a'):'#e2e8f0';
-    var riskLabel=daysToTL!==null?(daysToTL<0?'🔴 OVERDUE':daysToTL<30?'🔴 <30d':daysToTL<60?'🟡 <60d':'🟢 On Track'):'⚪ No TL Date';
-    var riskColor=daysToTL!==null?(daysToTL<0?'#dc2626':daysToTL<30?'#f97316':daysToTL<60?'#d97706':'#16a34a'):'#94a3b8';
-
-    // Timeline backtrack from Temp Live
-    var chain=[];
-    if(tld){
-      var uatDue=new Date(tld.getTime()-7*86400000);
-      var satDue=new Date(tld.getTime()-17*86400000);
-      var poNeed=new Date(tld.getTime()-77*86400000);
-      var prNeed=new Date(tld.getTime()-91*86400000);
-      var boqNeed=new Date(tld.getTime()-93*86400000);
-      var layoutNeed=new Date(tld.getTime()-100*86400000);
-      var bdHandover=new Date(tld.getTime()-107*86400000);
-      function _fmtBDD(d){return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});}
-      function milestone(lbl,d,done){
-        var diff=Math.round((d-today)/86400000);
-        var col=done?'#16a34a':diff<0?'#dc2626':diff<7?'#d97706':'#64748b';
-        var icon=done?'✅':diff<0?'❌':'📅';
-        return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">'
-          +'<span>'+icon+'</span>'
-          +'<span style="color:var(--muted);min-width:130px">'+lbl+'</span>'
-          +'<span style="font-weight:600;color:'+col+'">'+_fmtBDD(d)+'</span>'
-          +(diff<0&&!done?'<span style="font-size:10px;color:#dc2626;margin-left:4px">'+Math.abs(diff)+'d overdue</span>':'')
-          +'</div>';
-      }
-      chain.push(milestone('BD → Design Handover',bdHandover,false));
-      chain.push(milestone('First Cut Layout',layoutNeed,false));
-      chain.push(milestone('BOQ Done',boqNeed,false));
-      chain.push(milestone('PR Raised',prNeed,false));
-      chain.push(milestone('PO Released',poNeed,!!poD));
-      chain.push(milestone('SAT (Temp: PO+15d)',new Date((poD||poNeed).getTime()+15*86400000),!!pd(r['SAT Date'])));
-      chain.push(milestone('SAT (Full: PO+60d)',new Date((poD||poNeed).getTime()+60*86400000),!!pd(r['SAT Date'])));
-      chain.push(milestone('UAT',uatDue,!!pd(r['UAT DATE'])));
-      chain.push(milestone('⭐ Temp Live',tld,false));
-    }
-
-    // 30-day team trigger buttons
-    var show30=daysToTL!==null&&daysToTL<=30;
-    var btnStyle='display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;white-space:nowrap;border:1px solid';
-    var activeBtnStyle=btnStyle+' #fde68a;background:#fffbeb;color:#d97706';
-    var inactiveBtnStyle=btnStyle+' var(--border);background:var(--surface);color:var(--muted)';
-
-    var teamBtns=['IT','NSO','Admin','HEM'].map(function(team){
-      var url=bdTeamMail(r,team,tld,fld);
-      var style=show30?activeBtnStyle:inactiveBtnStyle;
-      return '<a href="'+url+'" target="_blank" style="'+style+'">📧 '+team+'</a>';
-    }).join(' ');
-
-    html+='<div style="margin-bottom:12px;border:1.5px solid '+cardBorder+';border-radius:10px;overflow:hidden">';
-    // Card header
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);flex-wrap:wrap;gap:8px;cursor:pointer" onclick="openModal('+idx+')">'
-      +'<div>'
-      +'<div style="font-size:13px;font-weight:700">'+esc(r['Site Name']||'--')+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);margin-top:1px">'+esc(r['Owner']||'--')+' · '+esc(r['Vendor']||'--')+' · Status: '+esc(r['Status']||'--')+'</div>'
-      +'</div>'
-      +'<span style="font-size:11px;font-weight:700;color:'+riskColor+'">'+riskLabel+'</span>'
-      +'</div>';
-
-    // Key dates row
-    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;border-top:1px solid var(--border)">';
-    [
-      {label:'PO Date',val:r['PO Date']||'Pending',alert:!poD},
-      {label:'Temp Live',val:tlStr+(daysToTL!==null?' ('+daysToTL+'d)':''),alert:daysToTL!==null&&daysToTL<30},
-      {label:'Final Live',val:flStr+(daysToFL!==null?' ('+daysToFL+'d)':''),alert:false},
-      {label:'Completion %',val:r['Percentage Completion']||'--',alert:false},
-    ].forEach(function(d){
-      html+='<div style="padding:8px 12px;border-right:1px solid var(--border)">'
-        +'<div style="font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:2px">'+d.label+'</div>'
-        +'<div style="font-size:12px;font-weight:600;color:'+(d.alert?'#dc2626':'var(--text)')+'">'+esc(d.val)+'</div>'
-        +'</div>';
-    });
-    html+='</div>';
-
-    // Timeline
-    if(chain.length){
-      html+='<div style="padding:10px 14px;border-top:1px solid var(--border)">'
-        +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Timeline Backtrack from Temp Live</div>'
-        +chain.join('')+'</div>';
-    } else {
-      html+='<div style="padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">'
-        +'Log <b>Temp Live Date: DD Mon</b> in daily updates to see timeline backtrack.</div>';
-    }
-
-    // Team trigger buttons
-    html+='<div style="padding:8px 14px;border-top:1px solid var(--border);background:#fffbeb;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-      +'<span style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase">'+
-      (show30?'⚠️ 30-Day Setup Window Active — Initiate Now:':'Setup Triggers (activate within 30d of Temp Live):')+'</span>'
-      +teamBtns+'</div>';
-
-    html+='</div>';
-  });
-
-  el.innerHTML=html;
-}
-
 (function init(){
   allData=[...CSV_DATA];
   filteredData=[...allData];
@@ -3995,7 +3635,7 @@ function filterByZoneBU(z, b, status) {
 // REMOTE DATA + AUTHENTICATED UPLOAD (Cloudflare Worker)
 // ═══════════════════════════════════════════════════════════════
 // Fill in after deploying the Worker. Example: 'https://c24-tracker-uploader.<your-subdomain>.workers.dev'
-const WORKER_URL     = 'https://c24-tracker-auth.expansion-c24.workers.dev/';
+const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/'; // ← REPLACE after Worker deploy
 const TOOL_PATH      = 'projects-tracker';
 const SNAG_TOOL_PATH = 'projects-tracker-snag';
 
