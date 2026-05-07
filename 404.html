@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<title>404 — Page Not Found · CARS24 Internal Ops Tracker</title>
+<script src="/shared/c24-favicon.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box;margin:0;padding:0}
+  :root{
+    --primary:#4736FE;
+    --primary-rgb:71,54,254;
+    --bg:#0d0d12;
+    --bg-2:#15151c;
+    --text:#FFFFFF;
+    --muted:#9aa0a6;
+    --border:#2a2a35;
+  }
+  html,body{height:100%;overflow:hidden;background:var(--bg)}
+  body{
+    font-family:'Inter',sans-serif;
+    color:var(--text);
+    -webkit-font-smoothing:antialiased;
+    overscroll-behavior:none;
+    touch-action:none;
+  }
+  /* Particle canvas — full viewport, behind content */
+  #fx{
+    position:fixed;inset:0;
+    width:100%;height:100%;
+    display:block;
+    z-index:0;
+    /* Subtle radial vignette so the text panel reads cleanly */
+    background:radial-gradient(ellipse at center, transparent 0%, rgba(0,0,0,.55) 75%);
+  }
+  /* Brand chip in the corner — same vocabulary as the landing page */
+  .brand{
+    position:fixed;top:24px;left:24px;z-index:10;
+    display:flex;align-items:center;gap:12px;
+    pointer-events:none;
+  }
+  .brand-logo-chip{
+    background:var(--primary);
+    padding:7px 12px;border-radius:8px;
+    display:inline-flex;align-items:center;
+    box-shadow:0 6px 22px rgba(var(--primary-rgb),.35);
+  }
+  .brand-logo{height:18px;width:auto;display:block}
+  .brand-text{
+    font-size:11px;font-weight:600;color:var(--muted);
+    text-transform:uppercase;letter-spacing:1.4px;
+  }
+  /* Centered content stack */
+  .stage{
+    position:relative;z-index:5;
+    height:100%;width:100%;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:0 24px;
+    text-align:center;
+    pointer-events:none; /* let the canvas underneath catch hover; button re-enables */
+  }
+  .errcode{
+    font-size:clamp(120px,22vw,240px);
+    font-weight:900;
+    letter-spacing:-.04em;
+    line-height:.9;
+    background:linear-gradient(180deg, #FFFFFF 0%, #6b6b8a 100%);
+    -webkit-background-clip:text;
+    background-clip:text;
+    -webkit-text-fill-color:transparent;
+    text-shadow:0 0 80px rgba(var(--primary-rgb),.2);
+    margin-bottom:8px;
+    user-select:none;
+  }
+  .errcode span{color:var(--primary);-webkit-text-fill-color:var(--primary)}
+  .title{
+    font-size:clamp(18px,2.6vw,22px);
+    font-weight:600;
+    margin-bottom:10px;
+    letter-spacing:-.01em;
+  }
+  .subtitle{
+    font-size:13.5px;
+    color:var(--muted);
+    max-width:440px;
+    margin-bottom:32px;
+    line-height:1.6;
+  }
+  .home-btn{
+    pointer-events:auto;
+    display:inline-flex;align-items:center;gap:9px;
+    padding:13px 26px;border-radius:999px;
+    background:var(--primary);
+    color:#fff;
+    font-family:inherit;
+    font-size:13px;font-weight:600;letter-spacing:.3px;
+    text-decoration:none;
+    border:1px solid rgba(255,255,255,.08);
+    box-shadow:0 8px 28px rgba(var(--primary-rgb),.42), 0 0 0 0 rgba(var(--primary-rgb),.6);
+    cursor:pointer;
+    transition:transform .15s ease, box-shadow .25s ease, background .15s ease;
+  }
+  .home-btn:hover{
+    background:#5a4dff;
+    transform:translateY(-1px);
+    box-shadow:0 12px 36px rgba(var(--primary-rgb),.55), 0 0 0 6px rgba(var(--primary-rgb),.12);
+  }
+  .home-btn:active{transform:translateY(0)}
+  .home-btn svg{width:14px;height:14px}
+  @media (max-width:560px){
+    .brand{top:16px;left:16px}
+    .subtitle{font-size:12.5px}
+    .home-btn{padding:12px 22px;font-size:12.5px}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .home-btn,.home-btn:hover{transition:none}
+  }
+</style>
+</head>
+<body>
+
+<canvas id="fx" aria-hidden="true"></canvas>
+
+<div class="brand" aria-hidden="true">
+  <span class="brand-logo-chip">
+    <img class="brand-logo" src="/src/logo_white.webp" alt="">
+  </span>
+  <span class="brand-text">Internal Ops Tracker</span>
+</div>
+
+<main class="stage" role="main">
+  <div class="errcode" aria-label="Error 404">4<span>0</span>4</div>
+  <h1 class="title">This page took a wrong turn.</h1>
+  <p class="subtitle">The link you followed is broken or the page has moved. Head back to the Ops Hub to find what you need.</p>
+  <a class="home-btn" href="/" aria-label="Go to home">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+      <path d="M3 12 12 4l9 8"/><path d="M5 10v10h14V10"/>
+    </svg>
+    Go to Home
+  </a>
+</main>
+
+<script>
+(function(){
+  'use strict';
+  var canvas = document.getElementById('fx');
+  var ctx = canvas.getContext('2d', { alpha: true });
+  var reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  var W = 0, H = 0, DPR = Math.min(window.devicePixelRatio || 1, 2);
+  var particles = [];
+  var shockwaves = [];
+  var pointer = { x: -9999, y: -9999, active: false, lastMove: 0 };
+
+  // Tunables
+  var PRIMARY = [71, 54, 254]; // brand --primary
+  var LINK_DIST = 140;
+  var INTERACT_RADIUS = 180;
+  var INTERACT_PULL = 0.022;     // gentle attraction toward cursor
+  var SHOCK_SPEED = 480;         // px/s expansion
+  var SHOCK_THICKNESS = 80;      // band where push is applied
+  var SHOCK_PUSH = 7.5;          // peak push velocity (px/frame)
+  var SHOCK_LIFE = 1.4;          // seconds before fade
+  var DAMPING = 0.965;           // velocity damping per frame
+
+  function resize(){
+    var rect = canvas.getBoundingClientRect();
+    W = rect.width; H = rect.height;
+    canvas.width  = Math.floor(W * DPR);
+    canvas.height = Math.floor(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+
+  function spawn(){
+    // Density scales with viewport area, capped both ways.
+    var area = W * H;
+    var n = Math.round(Math.max(40, Math.min(95, area / 14000)));
+    particles = [];
+    for (var i = 0; i < n; i++){
+      particles.push({
+        x: Math.random() * W,
+        y: Math.random() * H,
+        vx: (Math.random() - 0.5) * 0.4,
+        vy: (Math.random() - 0.5) * 0.4,
+        r: 1.1 + Math.random() * 1.6,
+        // Slight hue jitter — most particles are brand blue, a few drift cooler.
+        hueShift: Math.random() * 0.25,
+      });
+    }
+  }
+
+  // ─── Pointer / touch input ────────────────────────────────────────────────
+  function onPointerMove(e){
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    pointer.active = true;
+    pointer.lastMove = performance.now();
+  }
+  function onPointerDown(e){
+    pointer.x = e.clientX;
+    pointer.y = e.clientY;
+    pointer.active = true;
+    shockwaves.push({ x: e.clientX, y: e.clientY, t: 0 });
+  }
+  function onPointerLeave(){ pointer.active = false; }
+  function onPointerUp(e){
+    // For touch, deactivate on lift (no "hover" without contact).
+    if (e.pointerType !== 'mouse') pointer.active = false;
+  }
+
+  window.addEventListener('pointermove', onPointerMove, { passive: true });
+  window.addEventListener('pointerdown', onPointerDown, { passive: true });
+  window.addEventListener('pointerup',   onPointerUp,   { passive: true });
+  document.addEventListener('mouseleave', onPointerLeave);
+  window.addEventListener('blur', onPointerLeave);
+
+  // ─── Animation loop ───────────────────────────────────────────────────────
+  var lastFrame = performance.now();
+
+  function step(now){
+    var dt = Math.min(0.05, (now - lastFrame) / 1000); // clamp huge gaps (tab background)
+    lastFrame = now;
+
+    // Clear with a slight trail for a smooth glow feel.
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.fillStyle = 'rgba(13,13,18,0.32)';
+    ctx.fillRect(0, 0, W, H);
+
+    // Update shockwaves and apply their force to particles.
+    for (var s = shockwaves.length - 1; s >= 0; s--){
+      var sw = shockwaves[s];
+      sw.t += dt;
+      if (sw.t > SHOCK_LIFE){ shockwaves.splice(s, 1); continue; }
+      var radius = sw.t * SHOCK_SPEED;
+      var lifeFrac = 1 - sw.t / SHOCK_LIFE;
+      // Visual: expanding ring.
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.beginPath();
+      ctx.arc(sw.x, sw.y, radius, 0, Math.PI * 2);
+      ctx.strokeStyle = 'rgba(' + PRIMARY[0] + ',' + PRIMARY[1] + ',' + PRIMARY[2] + ',' + (lifeFrac * 0.45) + ')';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+      // Apply radial push on particles inside the ring's band.
+      for (var pi = 0; pi < particles.length; pi++){
+        var p = particles[pi];
+        var dx = p.x - sw.x, dy = p.y - sw.y;
+        var d = Math.hypot(dx, dy) || 0.001;
+        var band = Math.abs(d - radius);
+        if (band < SHOCK_THICKNESS){
+          var f = (1 - band / SHOCK_THICKNESS) * SHOCK_PUSH * lifeFrac;
+          p.vx += (dx / d) * f;
+          p.vy += (dy / d) * f;
+        }
+      }
+    }
+
+    // Update particles.
+    // Treat the pointer as stale if there's been no movement for a while —
+    // covers the case where the mouse leaves the window without firing
+    // mouseleave (e.g. dragged to another monitor).
+    if (pointer.active && now - pointer.lastMove > 1200) pointer.active = false;
+    var hasPointer = pointer.active && pointer.x > -1000;
+    for (var i = 0; i < particles.length; i++){
+      var p = particles[i];
+
+      if (hasPointer && !reduced){
+        var pdx = pointer.x - p.x, pdy = pointer.y - p.y;
+        var pd  = Math.hypot(pdx, pdy);
+        if (pd < INTERACT_RADIUS && pd > 0.1){
+          var pullF = (1 - pd / INTERACT_RADIUS) * INTERACT_PULL;
+          p.vx += pdx * pullF;
+          p.vy += pdy * pullF;
+        }
+      }
+
+      p.vx *= DAMPING;
+      p.vy *= DAMPING;
+      p.x += p.vx;
+      p.y += p.vy;
+
+      // Wrap around edges with a small margin so particles re-enter smoothly.
+      var m = 12;
+      if (p.x < -m) p.x = W + m; else if (p.x > W + m) p.x = -m;
+      if (p.y < -m) p.y = H + m; else if (p.y > H + m) p.y = -m;
+    }
+
+    // Draw connections between nearby particles (constellation lines).
+    ctx.globalCompositeOperation = 'lighter';
+    var maxD2 = LINK_DIST * LINK_DIST;
+    for (var a = 0; a < particles.length; a++){
+      var pa = particles[a];
+      for (var b = a + 1; b < particles.length; b++){
+        var pb = particles[b];
+        var ddx = pa.x - pb.x;
+        var ddy = pa.y - pb.y;
+        var d2 = ddx * ddx + ddy * ddy;
+        if (d2 < maxD2){
+          var dist = Math.sqrt(d2);
+          var alpha = (1 - dist / LINK_DIST) * 0.32;
+          ctx.strokeStyle = 'rgba(' + PRIMARY[0] + ',' + PRIMARY[1] + ',' + PRIMARY[2] + ',' + alpha + ')';
+          ctx.lineWidth = 0.7;
+          ctx.beginPath();
+          ctx.moveTo(pa.x, pa.y);
+          ctx.lineTo(pb.x, pb.y);
+          ctx.stroke();
+        }
+      }
+    }
+
+    // Draw particles on top with additive blend for a soft glow.
+    for (var k = 0; k < particles.length; k++){
+      var pk = particles[k];
+      var glowR = pk.r * 4.2;
+      var grad = ctx.createRadialGradient(pk.x, pk.y, 0, pk.x, pk.y, glowR);
+      grad.addColorStop(0,   'rgba(255,255,255,0.85)');
+      grad.addColorStop(0.4, 'rgba(' + PRIMARY[0] + ',' + PRIMARY[1] + ',' + PRIMARY[2] + ',0.45)');
+      grad.addColorStop(1,   'rgba(' + PRIMARY[0] + ',' + PRIMARY[1] + ',' + PRIMARY[2] + ',0)');
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(pk.x, pk.y, glowR, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    requestAnimationFrame(step);
+  }
+
+  // ─── Init ────────────────────────────────────────────────────────────────
+  resize();
+  spawn();
+  window.addEventListener('resize', function(){ resize(); spawn(); });
+
+  if (reduced){
+    // Static scene only — draw once and skip the animation loop.
+    ctx.fillStyle = 'rgba(13,13,18,1)';
+    ctx.fillRect(0, 0, W, H);
+    for (var z = 0; z < particles.length; z++){
+      var pz = particles[z];
+      ctx.fillStyle = 'rgba(' + PRIMARY[0] + ',' + PRIMARY[1] + ',' + PRIMARY[2] + ',0.7)';
+      ctx.beginPath();
+      ctx.arc(pz.x, pz.y, pz.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else {
+    requestAnimationFrame(step);
+  }
+})();
+</script>
+
+</body>
+</html>
