@@ -3474,8 +3474,20 @@ function satDelayMail(r){
 // BD TRACKER MODULE
 // ═══════════════════════════════════════════════════════════════
 
-// Temp Live Date = PO Date + 15 days
+// Temp Live Date: explicit "Temp Live Date: DD Mon" in daily updates takes priority; fallback = PO Date + 15 days
 function getTempLiveDate(r){
+  var rx=/temp\s*live\s*date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
+  var latest=null;
+  DATE_COLS.forEach(function(col){
+    var txt=(r[col]||'').trim(); if(!txt) return;
+    var m; rx.lastIndex=0;
+    while((m=rx.exec(txt))!==null){
+      var ds=m[1].replace(/\b(st|nd|rd|th)\b/gi,'').trim();
+      var d=pd(ds); if(!d) continue;
+      if(!latest||d>latest) latest=d;
+    }
+  });
+  if(latest) return latest;
   var poDateStr=r['PO Date'];
   if(!poDateStr||poDateStr==='—'||poDateStr.toLowerCase().includes('pending')) return null;
   var poDate=pd(poDateStr);
