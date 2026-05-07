@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.46</title>
+<title>Cars24 Projects Tracker v3.47</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -990,9 +990,11 @@ function renderTable(){
     const staleMark=staleTag(r);
     const pctN=parseInt((r['Percentage Completion']||'').replace('%',''));
     const pctColor=pctN>=80?'#16a34a':pctN>=50?'#2563eb':'#d97706';
+    const _tLive=getTempLiveDate(r);
+    const tLiveBadge=_tLive?'<span class="badge b-bd" style="margin-left:5px;font-size:9px">T-Live: '+fmtD(_tLive)+'</span>':'';
     const cells=[
       '<td style="color:var(--muted);font-size:11px;text-align:center;white-space:nowrap">'+(r['S.No.']?parseInt(r['S.No.'])||r['S.No.']:idx+1)+'</td>',
-      '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
+      '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+tLiveBadge+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">'+esc(r.Owner||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(r.Vendor||'—')+'</td>',
       '<td>'+(!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>',
@@ -3472,20 +3474,15 @@ function satDelayMail(r){
 // BD TRACKER MODULE
 // ═══════════════════════════════════════════════════════════════
 
-// Parse Temp Live Date from daily updates
+// Temp Live Date = PO Date + 15 days
 function getTempLiveDate(r){
-  var rx=/temp\s*live\s*date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
-  var latest=null, latestCol=null;
-  DATE_COLS.forEach(function(col){
-    var txt=(r[col]||'').trim(); if(!txt) return;
-    var m; rx.lastIndex=0;
-    while((m=rx.exec(txt))!==null){
-      var ds=m[1].replace(/\b(st|nd|rd|th)\b/gi,'').trim();
-      var d=pd(ds); if(!d) continue;
-      if(!latest||d>latest){latest=d;latestCol=col;}
-    }
-  });
-  return latest;
+  var poDateStr=r['PO Date'];
+  if(!poDateStr||poDateStr==='—'||poDateStr.toLowerCase().includes('pending')) return null;
+  var poDate=pd(poDateStr);
+  if(!poDate) return null;
+  var tempLiveDate=new Date(poDate);
+  tempLiveDate.setDate(poDate.getDate()+15);
+  return tempLiveDate;
 }
 
 // BD site filter: Status = BD, Design, BOQ
