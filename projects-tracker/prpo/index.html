@@ -474,6 +474,24 @@ function processCSV(text, filename) {
   var now = new Date();
   document.getElementById('lastUpd').textContent = 'Updated ' + now.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + RAW_DATA.length + ' rows';
   toast('Loaded ' + RAW_DATA.length + ' records from ' + filename);
+
+  // persist CSV to localStorage so data survives refresh
+  try {
+    localStorage.setItem('prpo-raw-csv', text);
+    localStorage.setItem('prpo-csv-name', filename);
+    localStorage.setItem('prpo-csv-ts', now.toISOString());
+    // also store a per-location summary for the main dashboard to read
+    var locSummary = {};
+    RAW_DATA.forEach(function(r) {
+      var loc = (r['Location'] || '').trim();
+      if (!loc) return;
+      if (!locSummary[loc]) locSummary[loc] = {count:0, prVal:0, pending:0};
+      locSummary[loc].count++;
+      locSummary[loc].prVal += r._prBasic || 0;
+      if (!r._hasPO) locSummary[loc].pending++;
+    });
+    localStorage.setItem('prpo-summary', JSON.stringify(locSummary));
+  } catch(e) {}
 }
 
 // ─── POPULATE FILTER DROPDOWNS ────────────────────────────────────────────────
@@ -694,6 +712,38 @@ function renderTable() {
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 (function init(){
   document.getElementById('rowCount').textContent = '0 rows';
+
+  // restore last uploaded CSV from localStorage (no sign-in needed)
+  try {
+    var saved = localStorage.getItem('prpo-raw-csv');
+    var savedName = localStorage.getItem('prpo-csv-name') || 'saved.csv';
+    var savedTs = localStorage.getItem('prpo-csv-ts');
+    if (saved && saved.length > 100) {
+      processCSV(saved, savedName);
+      // override the timestamp label to show it was restored
+      if (savedTs) {
+        var d = new Date(savedTs);
+        var dtStr = d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) + ' ' + d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+        document.getElementById('lastUpd').textContent = 'Restored · Uploaded ' + dtStr + ' · ' + RAW_DATA.length + ' rows';
+      }
+    }
+  } catch(e) {}
+
+  // apply ?loc= URL param to pre-filter by location (deep-link from dashboard)
+  try {
+    var urlLoc = new URLSearchParams(location.search).get('loc');
+    if (urlLoc) {
+      var locSel = document.getElementById('locFilter');
+      if (locSel) {
+        // find closest option (exact match or partial)
+        var opts = Array.from(locSel.options);
+        var exact = opts.find(function(o){ return o.value === urlLoc; });
+        var partial = !exact && opts.find(function(o){ return o.value && (o.value.toLowerCase().includes(urlLoc.toLowerCase().split(' ')[0]) || urlLoc.toLowerCase().includes(o.value.toLowerCase().split(' ')[0])); });
+        if (exact) { locSel.value = urlLoc; applyFilters(); }
+        else if (partial) { locSel.value = partial.value; applyFilters(); }
+      }
+    }
+  } catch(e) {}
 })();
 </script>
 </body>

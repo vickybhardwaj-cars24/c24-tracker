@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.49</title>
+<title>Cars24 Projects Tracker v3.50</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1675,6 +1675,35 @@ function renderVendorRatings(){
 // ═══════════════════════════════════════════════════════════════
 // MODAL
 // ═══════════════════════════════════════════════════════════════
+function getPrPoSection(siteName){
+  var prpoUrl='/projects-tracker/prpo/?loc='+encodeURIComponent(siteName);
+  var infoHtml='<span style="font-size:11px;color:var(--muted)">Upload CSV in PR/PO tracker to see data here</span>';
+  try{
+    var summary=JSON.parse(localStorage.getItem('prpo-summary')||'{}');
+    var s=summary[siteName];
+    if(!s){
+      var keys=Object.keys(summary);
+      var sn=siteName.toLowerCase();
+      for(var ki=0;ki<keys.length;ki++){
+        var kl=keys[ki].toLowerCase();
+        if(kl.includes(sn.split(' ')[0])||sn.includes(kl.split(' ')[0])){
+          s=summary[keys[ki]];
+          prpoUrl='/projects-tracker/prpo/?loc='+encodeURIComponent(keys[ki]);
+          break;
+        }
+      }
+    }
+    if(s){
+      var prFmt=s.prVal>=10000000?(s.prVal/10000000).toFixed(2)+' Cr':s.prVal>=100000?(s.prVal/100000).toFixed(1)+' L':('₹'+s.prVal.toLocaleString('en-IN'));
+      infoHtml='<span style="font-size:11px;color:var(--muted)">'+s.count+' records · ₹'+prFmt+(s.pending?(' · <span style="color:#dc2626;font-weight:600">'+s.pending+' pending PO</span>'):'')+'</span>';
+    }
+  }catch(e){}
+  return '<div style="margin-bottom:12px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border-2);border-radius:8px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">'
+    +'<div><div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">PR / PO Tracker</div>'+infoHtml+'</div>'
+    +'<a href="'+prpoUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:5px;padding:6px 12px;background:var(--primary);color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;flex-shrink:0;white-space:nowrap">📋 View PRs &amp; POs →</a>'
+    +'</div>';
+}
+
 function openModal(idx){
   const r=allData[idx];if(!r) return;
   document.getElementById('mttl').textContent=r['Site Name']||'Site';
@@ -1709,6 +1738,7 @@ function openModal(idx){
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
+    ${getPrPoSection(r['Site Name']||'')}
     ${_kickoffBtn}
     ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}<div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
