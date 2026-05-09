@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cars24 PR/PO Tracker</title>
+<script src="/shared/c24-uploader.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f6fa;--white:#fff;--surface:#f0f1f5;--border:#e4e6ed;--border2:#d1d5de;
+  --text:#1a1d23;--muted:#7b8494;--subtle:#a0a9b8;--accent:#4736FE;
+  --sh:0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.04);
+  --sh-md:0 4px 12px rgba(0,0,0,.1);--r:10px;
+  --red:#dc2626;--red-bg:#fef2f2;--red-border:#fecaca;
+  --amber:#d97706;--amber-bg:#fffbeb;--amber-border:#fcd34d;
+  --green:#16a34a;--green-bg:#f0fdf4;--green-border:#86efac;
+}
+[data-theme="dark"]{
+  --bg:#1A1A1A;--white:#2a2a2a;--surface:#222;--border:#333;--border2:#444;
+  --text:#e8eaed;--muted:#9aa0ab;--subtle:#6b7280;
+  --red-bg:#3b1111;--red-border:#7f1d1d;--amber-bg:#2d2000;--amber-border:#78350f;
+  --green-bg:#052e16;--green-border:#14532d;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;display:flex;flex-direction:column}
+
+/* ---- HEADER ---- */
+header{background:var(--white);border-bottom:1px solid var(--border);padding:10px 18px;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;z-index:200;box-shadow:var(--sh);flex-shrink:0}
+.hdr-l{display:flex;align-items:center;gap:10px}
+.logo-chip{background:#4736FE;color:#fff;font-weight:800;font-size:13px;padding:4px 9px;border-radius:6px;letter-spacing:.5px;flex-shrink:0}
+.hdr-title{display:flex;flex-direction:column;gap:1px}
+.hdr-title h1{font-size:14px;font-weight:700;color:var(--text);line-height:1}
+.breadcrumb{font-size:11px;color:var(--accent);text-decoration:none;font-weight:500;display:inline-flex;align-items:center;gap:3px}
+.breadcrumb:hover{text-decoration:underline}
+.hdr-r{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:5px;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all .15s;line-height:1.4;white-space:nowrap}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{opacity:.88}
+.btn-o{background:var(--white);color:var(--text);border:1px solid var(--border2)}.btn-o:hover{background:var(--surface)}
+.btn-sm{padding:4px 10px;font-size:11px}
+.theme-btn{background:transparent;border:1px solid var(--border2);border-radius:6px;width:32px;height:32px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center;color:var(--muted);transition:background .15s}
+.theme-btn:hover{background:var(--surface)}
+.last-upd{font-size:11px;color:var(--muted);white-space:nowrap}
+
+/* ---- KPI BAR ---- */
+.kpi-bar{display:flex;gap:1px;background:var(--border);border-bottom:1px solid var(--border);overflow-x:auto;scrollbar-width:none;flex-shrink:0}
+.kpi-bar::-webkit-scrollbar{display:none}
+.kpi{background:var(--white);padding:9px 14px;flex:1;min-width:100px;text-align:center;cursor:pointer;transition:background .12s;position:relative}
+.kpi:hover{background:var(--surface)}
+.kpi.active{background:#eeeeff}
+[data-theme="dark"] .kpi.active{background:#1e1c44}
+.kpi-l{font-size:10px;color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:.5px;margin-bottom:3px}
+.kpi-v{font-size:19px;font-weight:700;line-height:1;color:var(--text)}
+.kpi-s{font-size:10px;color:var(--muted);margin-top:2px}
+
+/* ---- TOOLBAR ---- */
+.toolbar{background:var(--white);border-bottom:1px solid var(--border);padding:8px 18px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.sw{position:relative;flex:1;min-width:160px;max-width:280px}
+.sw svg{position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+input.search{width:100%;padding:6px 9px 6px 28px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;background:var(--bg);color:var(--text)}
+input.search:focus{border-color:var(--accent);background:var(--white)}
+input.search::placeholder{color:var(--subtle)}
+select.sel{padding:6px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;background:var(--bg);color:var(--text);cursor:pointer;max-width:160px}
+select.sel:focus{border-color:var(--accent)}
+.cchip{font-size:11px;color:var(--muted);white-space:nowrap;padding:5px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface)}
+.filter-clear{font-size:11px;color:var(--accent);cursor:pointer;padding:5px 8px;border-radius:5px;border:none;background:transparent;font-family:'Inter',sans-serif;font-weight:500}
+.filter-clear:hover{background:var(--surface)}
+
+/* ---- MAIN AREA ---- */
+.main-area{flex:1;overflow-y:auto;display:flex;flex-direction:column}
+.content{flex:1;overflow-x:auto}
+
+/* ---- TABLE ---- */
+table{width:100%;border-collapse:collapse;font-size:11px}
+thead{position:sticky;top:0;z-index:20}
+thead th{background:var(--surface);border-bottom:2px solid var(--border);padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;cursor:pointer;white-space:nowrap;user-select:none}
+thead th:hover{color:var(--text)}
+thead th.asc::after{content:' ↑';color:var(--accent)}
+thead th.desc::after{content:' ↓';color:var(--accent)}
+tbody tr{border-bottom:1px solid var(--border);transition:background .08s;background:var(--white)}
+tbody tr:hover td{background:#f8f9ff}
+[data-theme="dark"] tbody tr:hover td{background:#1f1f1f}
+td{padding:6px 10px;vertical-align:middle;color:var(--text)}
+tbody tr.row-pending{background:var(--red-bg);border-left:3px solid var(--red)}
+tbody tr.row-pending td{background:var(--red-bg)}
+tbody tr.row-pending:hover td{background:#fee2e2}
+[data-theme="dark"] tbody tr.row-pending td{background:#3b1111}
+[data-theme="dark"] tbody tr.row-pending:hover td{background:#4c1616}
+tbody tr.row-provision{background:var(--amber-bg);border-left:3px solid var(--amber)}
+tbody tr.row-provision td{background:var(--amber-bg)}
+tbody tr.row-provision:hover td{background:#fef3c7}
+[data-theme="dark"] tbody tr.row-provision td{background:#2d2000}
+[data-theme="dark"] tbody tr.row-provision:hover td{background:#3a2900}
+tbody tr.row-billed{background:var(--green-bg);border-left:3px solid var(--green)}
+tbody tr.row-billed td{background:var(--green-bg)}
+tbody tr.row-billed:hover td{background:#dcfce7}
+[data-theme="dark"] tbody tr.row-billed td{background:#052e16}
+[data-theme="dark"] tbody tr.row-billed:hover td{background:#073d1e}
+.val-mono{font-family:monospace;font-size:11px}
+.age-chip{display:inline-flex;align-items:center;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap}
+.age-ok{background:#f0fdf4;color:#16a34a}
+.age-warn{background:#fffbeb;color:#d97706}
+.age-over{background:#fef2f2;color:#dc2626}
+.age-na{background:var(--surface);color:var(--muted)}
+.badge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.b-open{background:#eff6ff;color:#2563eb}
+.b-closed{background:#f0fdf4;color:#16a34a}
+.b-cancelled{background:#f3f4f6;color:#6b7280}
+.b-partial{background:#fff7ed;color:#ea580c}
+.b-other{background:var(--surface);color:var(--muted)}
+.remarks-cell{max-width:160px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--muted)}
+
+/* ---- AGEING SECTION ---- */
+.ageing-section{flex-shrink:0;background:var(--white);border-top:1px solid var(--border);padding:12px 18px}
+.ageing-header{font-size:12px;font-weight:700;color:var(--text);margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.ageing-header span{font-weight:400;color:var(--muted);font-size:11px}
+.age-grid{display:flex;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:var(--r);overflow:hidden}
+.age-bucket{background:var(--white);padding:10px 16px;flex:1;min-width:120px;text-align:center}
+.age-bucket.bucket-ok{border-top:3px solid var(--green)}
+.age-bucket.bucket-warn{border-top:3px solid var(--amber)}
+.age-bucket.bucket-over{border-top:3px solid var(--red)}
+.age-bucket.bucket-hot{border-top:3px solid #7c3aed}
+.ab-label{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px}
+.ab-count{font-size:22px;font-weight:700;line-height:1;color:var(--text)}
+.ab-val{font-size:11px;color:var(--muted);margin-top:3px}
+
+/* ---- EMPTY STATE ---- */
+.empty-state{padding:60px 20px;text-align:center;color:var(--muted)}
+.empty-state .es-icon{font-size:40px;margin-bottom:12px;opacity:.5}
+.empty-state h3{font-size:14px;font-weight:600;margin-bottom:6px;color:var(--text)}
+.empty-state p{font-size:12px;line-height:1.6}
+.empty-upload-btn{display:inline-flex;align-items:center;gap:6px;margin-top:14px;padding:8px 18px;background:var(--accent);color:#fff;border-radius:7px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:'Inter',sans-serif}
+.empty-upload-btn:hover{opacity:.88}
+
+/* ---- TOAST ---- */
+#toast{position:fixed;bottom:20px;right:20px;background:#1a1d23;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;z-index:9999;opacity:0;transform:translateY(8px);transition:all .25s;pointer-events:none;max-width:300px}
+#toast.show{opacity:1;transform:translateY(0)}
+
+/* ---- UPLOAD HOVER STATE ---- */
+body.drag-over .content::after{content:'Drop CSV file here';position:fixed;inset:0;background:rgba(71,54,254,.12);border:3px dashed #4736FE;z-index:500;display:flex;align-items:center;justify-content:center;font-size:18px;font-weight:700;color:#4736FE;border-radius:12px;margin:20px;pointer-events:none}
+
+/* ---- SCROLLBAR ---- */
+::-webkit-scrollbar{width:6px;height:6px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* ---- RESPONSIVE ---- */
+@media(max-width:768px){
+  header{padding:8px 12px}
+  .kpi{min-width:80px;padding:8px 10px}
+  .kpi-v{font-size:16px}
+  .toolbar{padding:7px 12px}
+  .ageing-section{padding:10px 12px}
+  .age-grid{flex-wrap:wrap}
+  .age-bucket{min-width:calc(50% - 1px)}
+}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="hdr-l">
+    <div class="logo-chip">CARS24</div>
+    <div class="hdr-title">
+      <h1>PR / PO Bill Tracker</h1>
+      <a href="/projects-tracker/" class="breadcrumb">&#8592; Dashboard</a>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <span class="last-upd" id="lastUpd"></span>
+    <button class="btn btn-p btn-sm" onclick="triggerUpload()">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      Upload CSV
+    </button>
+    <button class="theme-btn" id="themeBtn" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+    <input type="file" id="fileInput" accept=".csv" style="display:none" onchange="handleFileSelect(event)">
+  </div>
+</header>
+
+<!-- KPI Bar -->
+<div class="kpi-bar" id="kpiBar">
+  <div class="kpi" id="kpi0">
+    <div class="kpi-l">Total Records</div>
+    <div class="kpi-v" id="kv0">—</div>
+    <div class="kpi-s">PR entries</div>
+  </div>
+  <div class="kpi" id="kpi1">
+    <div class="kpi-l">Total PR Value</div>
+    <div class="kpi-v" id="kv1">—</div>
+    <div class="kpi-s">Basic value</div>
+  </div>
+  <div class="kpi" id="kpi2">
+    <div class="kpi-l">Total PO Value</div>
+    <div class="kpi-v" id="kv2">—</div>
+    <div class="kpi-s">Basic value</div>
+  </div>
+  <div class="kpi" id="kpi3">
+    <div class="kpi-l">Pending POs</div>
+    <div class="kpi-v" id="kv3">—</div>
+    <div class="kpi-s">PR without PO</div>
+  </div>
+  <div class="kpi" id="kpi4">
+    <div class="kpi-l">Avg PR→PO</div>
+    <div class="kpi-v" id="kv4">—</div>
+    <div class="kpi-s">days (where PO exists)</div>
+  </div>
+  <div class="kpi" id="kpi5">
+    <div class="kpi-l">Bills Received</div>
+    <div class="kpi-v" id="kv5">—</div>
+    <div class="kpi-s">with bill date</div>
+  </div>
+</div>
+
+<!-- Toolbar / Filters -->
+<div class="toolbar" id="toolbar">
+  <div class="sw">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" class="search" id="searchInput" placeholder="Search location, vendor, PR/PO…" oninput="applyFilters()">
+  </div>
+  <select class="sel" id="catFilter" onchange="applyFilters()"><option value="">All Categories</option></select>
+  <select class="sel" id="typeFilter" onchange="applyFilters()"><option value="">All CAPEX/OPEX</option></select>
+  <select class="sel" id="statusFilter" onchange="applyFilters()"><option value="">All PO Status</option></select>
+  <select class="sel" id="locFilter" onchange="applyFilters()"><option value="">All Locations</option></select>
+  <select class="sel" id="monthFilter" onchange="applyFilters()"><option value="">All Months</option></select>
+  <button class="filter-clear" onclick="clearFilters()">✕ Clear</button>
+  <span class="cchip" id="rowCount">0 rows</span>
+</div>
+
+<!-- Main scrollable area -->
+<div class="main-area" id="mainArea">
+  <!-- Table content -->
+  <div class="content" id="tableContent">
+    <div class="empty-state" id="emptyState">
+      <div class="es-icon">📋</div>
+      <h3>No data loaded</h3>
+      <p>Upload a PR/PO tracker CSV file to get started.<br>The file should have a title row followed by headers in row 2.</p>
+      <button class="empty-upload-btn" onclick="triggerUpload()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        Upload CSV
+      </button>
+    </div>
+    <table id="mainTable" style="display:none">
+      <thead id="tableHead"></thead>
+      <tbody id="tableBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Ageing Section -->
+  <div class="ageing-section" id="ageingSection" style="display:none">
+    <div class="ageing-header">
+      PR→PO Ageing (Pending POs only) <span>oldest first</span>
+    </div>
+    <div class="age-grid" id="ageGrid"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─── DATA ─────────────────────────────────────────────────────────────────────
+var RAW_DATA = [];      // all parsed rows (objects)
+var FILTERED = [];     // after filters
+var SORT_COL = null;
+var SORT_DIR = 1;      // 1=asc, -1=desc
+var TODAY = new Date(); TODAY.setHours(0,0,0,0);
+
+// ─── CSV PARSER (RFC-4180) ─────────────────────────────────────────────────────
+function parseCSV(text) {
+  var rows = [];
+  var i = 0, len = text.length;
+  while (i < len) {
+    var row = [];
+    while (i < len) {
+      if (text[i] === '"') {
+        i++;
+        var cell = '';
+        while (i < len) {
+          if (text[i] === '"') {
+            if (text[i+1] === '"') { cell += '"'; i += 2; }
+            else { i++; break; }
+          } else { cell += text[i++]; }
+        }
+        row.push(cell);
+        if (text[i] === ',') i++;
+        else { if (text[i] === '\r') i++; if (text[i] === '\n') i++; break; }
+      } else {
+        var cell = '';
+        while (i < len && text[i] !== ',' && text[i] !== '\n' && text[i] !== '\r') { cell += text[i++]; }
+        row.push(cell.trim());
+        if (text[i] === ',') i++;
+        else { if (text[i] === '\r') i++; if (text[i] === '\n') i++; break; }
+      }
+    }
+    if (row.length > 1 || (row.length === 1 && row[0] !== '')) rows.push(row);
+  }
+  return rows;
+}
+
+// ─── DATE PARSING ─────────────────────────────────────────────────────────────
+var MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function parseDate(s) {
+  if (!s || !s.trim()) return null;
+  s = s.trim();
+  // "21 Sep 2022" or "10 October 22" or "10 October 2022"
+  var m = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{2,4})$/);
+  if (m) {
+    var mn = MONTHS[m[2].toLowerCase().slice(0,3)];
+    if (mn === undefined) return null;
+    var yr = parseInt(m[3]); if (yr < 100) yr += 2000;
+    return new Date(yr, mn, parseInt(m[1]));
+  }
+  // "17-Feb-25" or "21-Feb-2025"
+  m = s.match(/^(\d{1,2})-([A-Za-z]+)-(\d{2,4})$/);
+  if (m) {
+    var mn = MONTHS[m[2].toLowerCase().slice(0,3)];
+    if (mn === undefined) return null;
+    var yr = parseInt(m[3]); if (yr < 100) yr += 2000;
+    return new Date(yr, mn, parseInt(m[1]));
+  }
+  // "YYYY-MM-DD"
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (m) return new Date(parseInt(m[1]), parseInt(m[2])-1, parseInt(m[3]));
+  // "DD/MM/YYYY" or "DD/MM/YY"
+  m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (m) {
+    var yr = parseInt(m[3]); if (yr < 100) yr += 2000;
+    return new Date(yr, parseInt(m[2])-1, parseInt(m[1]));
+  }
+  return null;
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return d.getDate() + ' ' + months[d.getMonth()] + ' ' + d.getFullYear();
+}
+
+// ─── MONEY ────────────────────────────────────────────────────────────────────
+function parseMoney(s) {
+  if (!s && s !== 0) return NaN;
+  if (typeof s === 'number') return s;
+  var n = parseFloat(String(s).replace(/[₹,\s]/g,''));
+  return isNaN(n) ? NaN : n;
+}
+
+function fmtMoney(n) {
+  if (isNaN(n) || n === null || n === undefined) return '—';
+  if (n === 0) return '₹0';
+  if (Math.abs(n) >= 10000000) return '₹' + (n/10000000).toFixed(2) + ' Cr';
+  if (Math.abs(n) >= 100000) return '₹' + (n/100000).toFixed(2) + ' L';
+  return '₹' + n.toLocaleString('en-IN');
+}
+
+function fmtMoneyShort(n) {
+  if (isNaN(n) || n === null || n === undefined) return '—';
+  if (n === 0) return '₹0';
+  if (Math.abs(n) >= 10000000) return '₹' + (n/10000000).toFixed(1) + ' Cr';
+  if (Math.abs(n) >= 100000) return '₹' + (n/100000).toFixed(1) + ' L';
+  return '₹' + Math.round(n).toLocaleString('en-IN');
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+var _toastTimer;
+function toast(msg, dur) {
+  var el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(_toastTimer);
+  _toastTimer = setTimeout(function(){ el.classList.remove('show'); }, dur||2800);
+}
+
+// ─── THEME ────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  var isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+  document.documentElement.setAttribute('data-theme', isDark ? '' : 'dark');
+  document.getElementById('themeBtn').textContent = isDark ? '🌙' : '☀️';
+  localStorage.setItem('prpo-theme', isDark ? 'light' : 'dark');
+}
+(function(){
+  var t = localStorage.getItem('prpo-theme');
+  if (t === 'dark') {
+    document.documentElement.setAttribute('data-theme','dark');
+    document.getElementById('themeBtn').textContent = '☀️';
+  }
+})();
+
+// ─── FILE UPLOAD ──────────────────────────────────────────────────────────────
+function triggerUpload() { document.getElementById('fileInput').click(); }
+
+function handleFileSelect(e) {
+  var file = e.target.files[0];
+  if (!file) return;
+  var reader = new FileReader();
+  reader.onload = function(ev) {
+    try { processCSV(ev.target.result, file.name); }
+    catch(err) { toast('Error parsing CSV: ' + err.message); }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+}
+
+// Drag & Drop
+document.addEventListener('dragover', function(e){ e.preventDefault(); document.body.classList.add('drag-over'); });
+document.addEventListener('dragleave', function(e){ if(!e.relatedTarget) document.body.classList.remove('drag-over'); });
+document.addEventListener('drop', function(e){
+  e.preventDefault(); document.body.classList.remove('drag-over');
+  var file = e.dataTransfer.files[0];
+  if (!file || !file.name.endsWith('.csv')) { toast('Please drop a .csv file'); return; }
+  var reader = new FileReader();
+  reader.onload = function(ev){ try { processCSV(ev.target.result, file.name); } catch(err) { toast('Error: ' + err.message); } };
+  reader.readAsText(file);
+});
+
+// ─── PROCESS CSV ─────────────────────────────────────────────────────────────
+function processCSV(text, filename) {
+  var rows = parseCSV(text);
+  if (rows.length < 3) { toast('CSV too short — need at least title + header + data rows'); return; }
+
+  // Row 1 = title (skip), Row 2 = headers (index 1)
+  var headers = rows[1].map(function(h){ return h.trim(); });
+  var dataRows = rows.slice(2);
+
+  RAW_DATA = [];
+  for (var i = 0; i < dataRows.length; i++) {
+    var row = dataRows[i];
+    // skip if all empty
+    if (row.every(function(c){ return !c.trim(); })) continue;
+    var obj = {_idx: i+1};
+    for (var j = 0; j < headers.length; j++) {
+      obj[headers[j]] = (row[j] || '').trim();
+    }
+    // parsed numeric fields
+    obj._prBasic = parseMoney(obj['PR Basic Value']);
+    obj._prGst   = parseMoney(obj['PR Value with GST']);
+    obj._poBasic = parseMoney(obj['PO Basic Value']);
+    obj._poGst   = parseMoney(obj['PO with GST Value']);
+    obj._billBasic = parseMoney(obj['Bill Basic Value']);
+    obj._billGst   = parseMoney(obj['Bill with GST value']);
+    obj._cancelledBasic = parseMoney(obj['Cancelled Basic Value']);
+    // parsed dates
+    obj._prDate   = parseDate(obj['PR Date']);
+    obj._poDate   = parseDate(obj['PO Date']);
+    obj._billDate = parseDate(obj['Bill received Date']);
+    // computed ageing
+    var diffRaw = parseInt(obj['Diff.days Between PR & PO']);
+    if (!isNaN(diffRaw) && obj._poDate) {
+      obj._prPoAge = diffRaw;
+    } else if (obj._prDate && !obj._poDate) {
+      obj._prPoAge = Math.floor((TODAY - obj._prDate) / 86400000);
+    } else if (obj._prDate && obj._poDate) {
+      obj._prPoAge = Math.floor((obj._poDate - obj._prDate) / 86400000);
+    } else {
+      obj._prPoAge = null;
+    }
+    // flags
+    obj._hasPO     = !!(obj['PO Number'] && obj['PO Number'].trim() && obj['PO Number'].toLowerCase() !== 'na');
+    obj._hasBill   = !!(obj._billDate);
+    obj._hasProvision = !!(obj['Provision'] && obj['Provision'].trim() && obj['Provision'].toLowerCase() !== 'na' && obj['Provision'].trim() !== '');
+    RAW_DATA.push(obj);
+  }
+
+  populateFilters(headers);
+  applyFilters();
+  updateKPIs();
+  updateAgeing();
+
+  // show table & ageing
+  document.getElementById('emptyState').style.display = 'none';
+  document.getElementById('mainTable').style.display = '';
+  document.getElementById('ageingSection').style.display = '';
+
+  // timestamp
+  var now = new Date();
+  document.getElementById('lastUpd').textContent = 'Updated ' + now.toLocaleTimeString('en-IN', {hour:'2-digit',minute:'2-digit'}) + ' · ' + RAW_DATA.length + ' rows';
+  toast('Loaded ' + RAW_DATA.length + ' records from ' + filename);
+}
+
+// ─── POPULATE FILTER DROPDOWNS ────────────────────────────────────────────────
+function populateFilters(headers) {
+  function fillSel(id, field, allLabel) {
+    var sel = document.getElementById(id);
+    var vals = {};
+    RAW_DATA.forEach(function(r){ var v = (r[field]||'').trim(); if(v) vals[v]=1; });
+    var sorted = Object.keys(vals).sort();
+    var prev = sel.value;
+    sel.innerHTML = '<option value="">'+allLabel+'</option>';
+    sorted.forEach(function(v){ sel.innerHTML += '<option value="'+esc(v)+'">'+esc(v)+'</option>'; });
+    if (vals[prev]) sel.value = prev;
+  }
+  fillSel('catFilter',    'Budget Category',   'All Categories');
+  fillSel('typeFilter',   'CAPEX / OPEX / AMC','All CAPEX/OPEX');
+  fillSel('statusFilter', 'PO Status',         'All PO Status');
+  fillSel('locFilter',    'Location',          'All Locations');
+  fillSel('monthFilter',  'PR Month',          'All Months');
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ─── FILTERS ─────────────────────────────────────────────────────────────────
+function applyFilters() {
+  if (!RAW_DATA.length) return;
+  var search = document.getElementById('searchInput').value.toLowerCase().trim();
+  var cat    = document.getElementById('catFilter').value;
+  var type   = document.getElementById('typeFilter').value;
+  var status = document.getElementById('statusFilter').value;
+  var loc    = document.getElementById('locFilter').value;
+  var month  = document.getElementById('monthFilter').value;
+
+  FILTERED = RAW_DATA.filter(function(r){
+    if (search) {
+      var hay = [r['Location'], r['Vendor Name'], r['PR Number'], r['PO Number'], r['Cost Center'], r['EMSS POC']].join(' ').toLowerCase();
+      if (hay.indexOf(search) === -1) return false;
+    }
+    if (cat    && r['Budget Category']    !== cat)    return false;
+    if (type   && r['CAPEX / OPEX / AMC'] !== type)   return false;
+    if (status && r['PO Status']          !== status) return false;
+    if (loc    && r['Location']           !== loc)    return false;
+    if (month  && r['PR Month']           !== month)  return false;
+    return true;
+  });
+
+  if (SORT_COL !== null) sortFiltered();
+  renderTable();
+  document.getElementById('rowCount').textContent = FILTERED.length + ' row' + (FILTERED.length !== 1 ? 's' : '');
+}
+
+function clearFilters() {
+  document.getElementById('searchInput').value = '';
+  ['catFilter','typeFilter','statusFilter','locFilter','monthFilter'].forEach(function(id){
+    document.getElementById(id).value = '';
+  });
+  applyFilters();
+}
+
+// ─── KPIs ─────────────────────────────────────────────────────────────────────
+function updateKPIs() {
+  var total = RAW_DATA.length;
+  var prSum = 0, poSum = 0, pendingPO = 0, ageSum = 0, ageCnt = 0, billCnt = 0;
+  RAW_DATA.forEach(function(r){
+    if (!isNaN(r._prBasic) && r._prBasic > 0) prSum += r._prBasic;
+    if (!isNaN(r._poBasic) && r._poBasic > 0) poSum += r._poBasic;
+    if (!r._hasPO) pendingPO++;
+    if (r._hasPO && r._prPoAge !== null && !isNaN(r._prPoAge)) { ageSum += r._prPoAge; ageCnt++; }
+    if (r._hasBill) billCnt++;
+  });
+  document.getElementById('kv0').textContent = total;
+  document.getElementById('kv1').textContent = fmtMoneyShort(prSum);
+  document.getElementById('kv2').textContent = fmtMoneyShort(poSum);
+  document.getElementById('kv3').textContent = pendingPO;
+  document.getElementById('kv4').textContent = ageCnt ? Math.round(ageSum/ageCnt) + 'd' : '—';
+  document.getElementById('kv5').textContent = billCnt;
+}
+
+// ─── AGEING ───────────────────────────────────────────────────────────────────
+function updateAgeing() {
+  var buckets = [
+    {label:'No PO — 0-7d',  min:0,   max:7,   cls:'bucket-ok',   count:0, val:0},
+    {label:'No PO — 8-30d', min:8,   max:30,  cls:'bucket-warn', count:0, val:0},
+    {label:'No PO — 31-60d',min:31,  max:60,  cls:'bucket-over', count:0, val:0},
+    {label:'No PO — >60d',  min:61,  max:Infinity, cls:'bucket-hot', count:0, val:0},
+  ];
+  RAW_DATA.forEach(function(r){
+    if (r._hasPO) return; // only pending
+    if (r._prPoAge === null) return;
+    var age = r._prPoAge;
+    for (var i = 0; i < buckets.length; i++) {
+      if (age >= buckets[i].min && age <= buckets[i].max) {
+        buckets[i].count++;
+        if (!isNaN(r._prBasic)) buckets[i].val += r._prBasic;
+        break;
+      }
+    }
+  });
+  // sort oldest first = already ordered above (ascending buckets, render reversed for oldest-first display)
+  var html = '';
+  // show oldest first: reverse
+  var show = buckets.slice().reverse();
+  show.forEach(function(b){
+    html += '<div class="age-bucket '+b.cls+'">'
+      + '<div class="ab-label">'+esc(b.label)+'</div>'
+      + '<div class="ab-count">'+b.count+'</div>'
+      + '<div class="ab-val">'+fmtMoneyShort(b.val)+'</div>'
+      + '</div>';
+  });
+  document.getElementById('ageGrid').innerHTML = html;
+}
+
+// ─── SORT ─────────────────────────────────────────────────────────────────────
+var COL_KEYS = ['_sno','Location','Cost Center','Vendor Name','Budget Category','CAPEX / OPEX / AMC',
+  'PR Number','_prDate','_prBasic','PO Number','_poDate','_prPoAge','_poBasic',
+  '_billDate','_billBasic','PO Status','Remarks'];
+
+function sortBy(colIdx) {
+  var key = COL_KEYS[colIdx];
+  if (SORT_COL === key) { SORT_DIR *= -1; }
+  else { SORT_COL = key; SORT_DIR = 1; }
+  sortFiltered();
+  renderTable();
+  // update header arrows
+  var ths = document.querySelectorAll('#tableHead th');
+  ths.forEach(function(th,i){
+    th.classList.remove('asc','desc');
+    if (i === colIdx) th.classList.add(SORT_DIR === 1 ? 'asc' : 'desc');
+  });
+}
+
+function sortFiltered() {
+  var key = SORT_COL;
+  FILTERED.sort(function(a,b){
+    var av = a[key], bv = b[key];
+    if (av === null || av === undefined) av = SORT_DIR === 1 ? Infinity : -Infinity;
+    if (bv === null || bv === undefined) bv = SORT_DIR === 1 ? Infinity : -Infinity;
+    if (av instanceof Date && bv instanceof Date) return (av-bv)*SORT_DIR;
+    if (typeof av === 'number' && typeof bv === 'number') return (av-bv)*SORT_DIR;
+    return String(av||'').localeCompare(String(bv||''))*SORT_DIR;
+  });
+}
+
+// ─── RENDER TABLE ─────────────────────────────────────────────────────────────
+var COL_LABELS = ['S.No.','Location','Cost Center','Vendor Name','Category','Cap/Op',
+  'PR Number','PR Date','PR Value','PO Number','PO Date','PR→PO Days','PO Value',
+  'Bill Date','Bill Value','PO Status','Remarks'];
+
+function renderTable() {
+  var head = document.getElementById('tableHead');
+  var body = document.getElementById('tableBody');
+
+  if (!head.innerHTML) {
+    var htr = '<tr>';
+    COL_LABELS.forEach(function(lbl, i){
+      htr += '<th onclick="sortBy('+i+')" title="Sort by '+esc(lbl)+'">'+esc(lbl)+'</th>';
+    });
+    htr += '</tr>';
+    head.innerHTML = htr;
+  }
+
+  var html = '';
+  var sno = 1;
+  FILTERED.forEach(function(r){
+    var rowCls = '';
+    if (r._hasBill) rowCls = 'row-billed';
+    else if (r._hasPO && r._hasProvision) rowCls = 'row-provision';
+    else if (!r._hasPO) rowCls = 'row-pending';
+
+    // age chip
+    var ageCell = '—';
+    if (r._prPoAge !== null) {
+      if (r._hasPO) {
+        ageCell = '<span class="age-chip age-ok">'+r._prPoAge+'d</span>';
+      } else {
+        var cls = r._prPoAge > 60 ? 'age-over' : r._prPoAge > 30 ? 'age-warn' : 'age-ok';
+        ageCell = '<span class="age-chip '+cls+'">+'+r._prPoAge+'d</span>';
+      }
+    }
+
+    // PO status badge
+    var statusRaw = (r['PO Status']||'').toLowerCase().trim();
+    var statusCls = 'b-other';
+    if (statusRaw.indexOf('open') !== -1) statusCls = 'b-open';
+    else if (statusRaw.indexOf('clos') !== -1 || statusRaw.indexOf('done') !== -1) statusCls = 'b-closed';
+    else if (statusRaw.indexOf('cancel') !== -1) statusCls = 'b-cancelled';
+    else if (statusRaw.indexOf('partial') !== -1) statusCls = 'b-partial';
+    var statusBadge = r['PO Status'] ? '<span class="badge '+statusCls+'">'+esc(r['PO Status'])+'</span>' : '—';
+
+    html += '<tr class="'+rowCls+'">'
+      + '<td style="color:var(--muted);font-size:10px">'+sno+'</td>'
+      + '<td style="font-weight:500;white-space:nowrap">'+esc(r['Location']||'—')+'</td>'
+      + '<td style="white-space:nowrap;color:var(--muted)">'+esc(r['Cost Center']||'—')+'</td>'
+      + '<td style="white-space:nowrap">'+esc(r['Vendor Name']||'—')+'</td>'
+      + '<td style="white-space:nowrap;color:var(--muted)">'+esc(r['Budget Category']||'—')+'</td>'
+      + '<td style="white-space:nowrap;color:var(--muted)">'+esc(r['CAPEX / OPEX / AMC']||'—')+'</td>'
+      + '<td class="val-mono" style="white-space:nowrap">'+esc(r['PR Number']||'—')+'</td>'
+      + '<td style="white-space:nowrap;color:var(--muted)">'+fmtDate(r._prDate)+'</td>'
+      + '<td class="val-mono" style="white-space:nowrap">'+fmtMoney(r._prBasic)+'</td>'
+      + '<td class="val-mono" style="white-space:nowrap">'+(r._hasPO ? esc(r['PO Number']) : '<span style="color:var(--muted);font-style:italic">Pending</span>')+'</td>'
+      + '<td style="white-space:nowrap;color:var(--muted)">'+fmtDate(r._poDate)+'</td>'
+      + '<td>'+ageCell+'</td>'
+      + '<td class="val-mono" style="white-space:nowrap">'+(r._hasPO ? fmtMoney(r._poBasic) : '—')+'</td>'
+      + '<td style="white-space:nowrap;color:'+(r._hasBill ? 'var(--green)' : 'var(--muted)')+'">'+fmtDate(r._billDate)+'</td>'
+      + '<td class="val-mono" style="white-space:nowrap">'+(r._hasBill ? fmtMoney(r._billBasic) : '—')+'</td>'
+      + '<td>'+statusBadge+'</td>'
+      + '<td class="remarks-cell" title="'+esc(r['Remarks']||'')+'">'+esc(r['Remarks']||'')+'</td>'
+      + '</tr>';
+    sno++;
+  });
+
+  if (!html) {
+    html = '<tr><td colspan="'+COL_LABELS.length+'" style="padding:40px;text-align:center;color:var(--muted)">No records match the current filters.</td></tr>';
+  }
+  body.innerHTML = html;
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+(function init(){
+  document.getElementById('rowCount').textContent = '0 rows';
+})();
+</script>
+</body>
+</html>
