@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.47</title>
+<title>Cars24 Projects Tracker v3.48</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -568,6 +568,7 @@ let TICKET_DATA = [];
 const META_COLS = ['S.No.','BU','Site Name','Zone','Owner','Vendor','Vendor Rating','Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE','Planned Completion','Revised Completion'];
 let DATE_COLS = ['7 Apr','8 Apr','9 Apr','10 Apr','11 Apr','12 Apr','13 Apr','14 Apr','15 Apr','16 Apr','17 Apr','18 Apr','19 Apr','20 Apr','21 Apr','22 Apr','23 Apr','24 Apr','25 Apr','26 Apr','27 Apr','28 Apr','29 Apr','30 Apr','1 May','2 May','3 May','4 May','5 May','6 May','7 May','8 May'];
 let allData = [], filteredData = [], sortCol = '', sortDir = 1;
+const TICKET_CLOSED = new Set(); // session-only closed ticket IDs
 const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra'];
 const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
@@ -1361,14 +1362,18 @@ function renderSatUat(){
     +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:var(--surface)">'
     +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Site</th>'
     +'<th style="padding:6px 10px;text-align:left;font-size:10px;color:var(--muted)">Owner</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Planned</th>'
+    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Initial Plan</th>'
+    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Revised</th>'
     +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Overdue</th>'
-    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Action</th>'+'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Flag</th>'+'</tr></thead><tbody>'
+    +'<th style="padding:6px 10px;text-align:center;font-size:10px;color:var(--muted)">Action</th>'
+    +'</tr></thead><tbody>'
     +satDelayArr.map(function(u){
+      var hasRev=!!(u.r['Revised Completion']&&u.r['Revised Completion'].trim());
       return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'—')+'</td>'
         +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['Revised Completion']||u.r['Planned Completion']||'—')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+esc(u.r['Planned Completion']||'—')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+esc(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
         +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a></td>'
         +'</tr>';
@@ -1404,9 +1409,16 @@ function renderWarnings(container){
     const isNotified=notifiedSet.has(r['Site Name']);
     const upd=getLatestUpdate(r).substring(0,200);
     const lastCol=getLatestUpdateDate(r)||'—';
+    const satD=r['SAT Date']||'—';
+    const gap=r._gap||'';
+    const owner=r.Owner||'PM';
+    const site=r['Site Name']||'Site';
+    const warnSubj='UAT Delay Warning — '+site+' ('+gap+' days post SAT)';
+    const warnBody='Dear '+owner+',\n\nThis is a formal reminder that '+site+' completed SAT on '+satD+' and UAT has not been recorded after '+gap+' days, which exceeds the 15-day SLA.\n\nPlease initiate UAT immediately and share the UAT completion date at the earliest.\n\nAny further delay may result in a Show Cause Notice (SCN) as per CARS24 project compliance policy.\n\nRegards,\nVicky Bhardwaj\nHead of Projects, CARS24';
+    const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(warnSubj)+'&body='+encodeURIComponent(warnBody);
     const notifyBtn = isNotified
-      ? '<span class="notified-tag">✓ Warning sent this session</span>'
-      : '<button class="notify-btn" data-idx="'+idx+'" onclick="event.stopPropagation();markNotifiedByIdx(this)">🔔 Mark Warning Sent to '+esc(r.Owner||'PM')+'</button>';
+      ? '<span class="notified-tag">✓ Warning email sent this session</span>'
+      : '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation();notifiedSet.add(\''+site.replace(/'/g,"\\'")+'\');setTimeout(function(){renderWarnings();},200);">📧 Send Warning Email to '+esc(owner)+'</a>';
     return '<div class="warn-card'+(isCrit?'':' w-orange')+'" onclick="openModal('+idx+')">' +
       '<div class="warn-card-top">' +
       '<div>' +
@@ -1719,9 +1731,9 @@ function handleCSV(event){
     try{
       const parsed=parseCSV(e.target.result);
       if(!parsed.length){toast('No data found','err');return;}
-      allData=parsed;filteredData=[...allData];
+      allData=parsed.filter(function(r){return (r['Site Name']||'').trim();});filteredData=[...allData];
       buildFilters();renderKPIs();renderAll();
-      toast('✓ Loaded '+parsed.length+' sites','ok');
+      toast('✓ Loaded '+allData.length+' sites','ok');
     }catch(err){console.error(err);toast('Parse error: '+err.message,'err');}
   };
   reader.onerror=()=>toast('File read error','err');
@@ -2130,6 +2142,7 @@ function renderSnagTab(){
   wrap.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'+
       '<div class="reg-section-title" style="margin-bottom:0">🔧 Snag Tracker — '+Object.keys(SNAG_DATA).length+' sites · '+gTotal+' snags</div>'+
+      '<a href="https://docs.google.com/spreadsheets/d/1gkQnKl4z4sGd2Tq1K8gxftkOuouQ2tV1ausBAFLpT7o/edit?gid=1132329105#gid=1132329105" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:5px;padding:5px 12px;border:1px solid var(--border);border-radius:6px;font-weight:600;white-space:nowrap">📊 Open Snag Sheet</a>'+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px;margin-bottom:20px">'+
       snagKpi(gTotal,'Total Snags','#1a1d23')+
@@ -3148,11 +3161,15 @@ function renderTicketTab(){
   var fAssign=el._fAssign||'All';
   var fSearch=el._fSearch||'';
 
+  var showClosed2=el._showClosed||false;
   var filtered=data.filter(function(r){
+    var id=String(col(r,['ID'])||'');
     var pri=col(r,['Priority']);
     var store=col(r,['Store','store']);
     var assign=col(r,['Assigned To','assigned_to']);
     var title=col(r,['Title','title']);
+    var isClosed=TICKET_CLOSED.has(id);
+    if(isClosed&&!showClosed2) return false;
     if(fPri!=='All'&&pri!==fPri) return false;
     if(fSite!=='All'&&tickSiteName(store)!==fSite) return false;
     if(fAssign!=='All'&&assign!==fAssign) return false;
@@ -3190,19 +3207,22 @@ function renderTicketTab(){
   html+='</div>';
 
   // Filters bar
-  html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">';
+  var showClosed=el._showClosed||false;
+  html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:8px 10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">';
   html+='<input id="ticket-search" placeholder="Search tickets..." value="'+esc(fSearch)+'" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);flex:1;min-width:120px" oninput="(function(v){var el=document.getElementById(\'tickv\');el._fSearch=v;renderTicketTab();})(this.value)">';
   html+='<span style="font-size:10px;color:var(--muted)">Priority:</span>'+selOpt(priOpts,fPri,'Pri');
   html+='<span style="font-size:10px;color:var(--muted)">Site:</span>'+selOpt(siteOpts,fSite,'Site');
   html+='<span style="font-size:10px;color:var(--muted)">Assigned:</span>'+selOpt(assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);margin-left:4px">'+filtered.length+' tickets</span>';
-  html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="margin-left:auto;font-size:11px">📣 Slack Summary</button>';
+  html+='<button class="btn btn-o btn-sm" onclick="(function(){var el=document.getElementById(\'tickv\');el._showClosed=!el._showClosed;renderTicketTab();})()" style="font-size:11px;'+(showClosed?'background:#f0fdf4;border-color:#86efac;color:#16a34a':'')+'">'+( showClosed?'🙈 Hide Closed':'👁 Show Closed')+(TICKET_CLOSED.size?' ('+TICKET_CLOSED.size+')':'')+'</button>';
+  html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack Summary</button>';
+  html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600;white-space:nowrap">📊 Sheet</a>';
   html+='</div>';
 
   // Ticket table
   html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
   html+='<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">';
-  ['ID','Title','Site','Priority','Assigned To','TAT','Status','PM Remarks','PM Status'].forEach(function(h){
+  ['ID','Title','Site','Priority','Assigned To','TAT','Status','PM Remarks','PM Status','Action'].forEach(function(h){
     html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">'+h+'</th>';
   });
   html+='</tr></thead><tbody>';
@@ -3222,9 +3242,10 @@ function renderTicketTab(){
     var tatColor=tickTATColor(tat);
     var driveUrl=getDriveLink(site);
 
-    html+='<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="showTicketDetail(\''+id+'\')">';
+    var isTClosed=TICKET_CLOSED.has(String(id));
+    html+='<tr style="border-bottom:1px solid var(--border);cursor:pointer;'+(isTClosed?'opacity:.5;background:#f8fafb':'')+'\" onclick="showTicketDetail(\''+id+'\')">';
     html+='<td style="padding:7px 10px;font-size:11px;white-space:nowrap"><a href="https://processflows.ai/tickets/'+esc(id)+'" target="_blank" onclick="event.stopPropagation()" style="color:#003660;font-weight:700;text-decoration:none">#'+esc(id)+'</a></td>';
-    html+='<td style="padding:7px 10px;max-width:280px"><div style="font-size:12px;font-weight:500;line-height:1.3">'+esc(title)+'</div></td>';
+    html+='<td style="padding:7px 10px;max-width:280px"><div style="font-size:12px;font-weight:500;line-height:1.3'+(isTClosed?';text-decoration:line-through;color:var(--muted)':'')+'">'+esc(title)+'</div></td>';
     html+='<td style="padding:7px 10px;white-space:nowrap"><a href="'+driveUrl+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:var(--primary);text-decoration:none">📁 '+esc(site)+'</a></td>';
     html+='<td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+priStyle.split(';')[0].split(':')[1]+';color:'+priStyle.split(';')[1].split(':')[1]+'">'+esc(pri)+'</span></td>';
     html+='<td style="padding:7px 10px;font-size:11px">'+esc(assign)+'</td>';
@@ -3232,10 +3253,22 @@ function renderTicketTab(){
     html+='<td style="padding:7px 10px;font-size:11px">'+esc(status)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);max-width:160px">'+esc(pmRem.substring(0,60))+'</td>';
     html+='<td style="padding:7px 10px"><span style="font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;background:'+(pmSt.toLowerCase()==='closed'?'#f0fdf4':'pmSt?\'#fff7ed\':\'var(--surface)\'')+';color:'+(pmSt.toLowerCase()==='closed'?'#16a34a':'pmSt?\'#d97706\':\'var(--muted)\'')+'">'+esc(pmSt||'—')+'</span></td>';
+    html+='<td style="padding:7px 10px;white-space:nowrap">'+(isTClosed?'<button onclick="event.stopPropagation();markTicketOpen(\''+esc(id)+'\')" style="font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid #d1d5db;background:#f8fafb;cursor:pointer;color:var(--muted)">↩ Reopen</button>':'<button onclick="event.stopPropagation();markTicketClosed(\''+esc(id)+'\')" style="font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid #86efac;background:#f0fdf4;cursor:pointer;color:#16a34a;font-weight:600">✓ Close</button>')+'</td>';
     html+='</tr>';
   });
   html+='</tbody></table></div>';
   el.innerHTML=html;
+}
+
+function markTicketClosed(id){
+  TICKET_CLOSED.add(String(id));
+  toast('Ticket #'+id+' marked closed (this session)','ok');
+  renderTicketTab();
+}
+function markTicketOpen(id){
+  TICKET_CLOSED.delete(String(id));
+  toast('Ticket #'+id+' reopened','ok');
+  renderTicketTab();
 }
 
 function showTicketDetail(id){
@@ -3389,25 +3422,49 @@ function renderSlackTab(subTab){
   if(subTab==='crossfunc'){
     var bt={'IT':[],'Design':[],'Commercial':[],'HEM':[],'BD':[],'Other':[]};
     var be={'IT':'💻','Design':'🎨','Commercial':'💰','HEM':'🔍','BD':'📊','Other':'📌'};
+    function tagToKey(tag){
+      var t=tag.toUpperCase();
+      return t.includes('IT')?'IT':t.includes('DESIGN')?'Design':t.includes('HEM')?'HEM':t.includes('BD')?'BD':t.includes('COMM')?'Commercial':'Other';
+    }
     allData.forEach(function(r){
       var st=(r['Status']||'').toLowerCase();
       if(st.includes('uat done')||st.includes('completed')||!r['Site Name']) return;
-      var bl=extractBlockers(r),rfd=(r['Reason for Delay']||'').trim();
+      var bl=extractBlockers(r);
+      var rfd=(r['Reason for Delay']||'').trim();
       if((!bl||!bl.length)&&!rfd) return;
-      var tag=(bl&&bl.length?bl[0].tag||'Other':'Other').toUpperCase();
-      var key=tag.includes('IT')?'IT':tag.includes('DESIGN')?'Design':tag.includes('HEM')?'HEM':tag.includes('BD')?'BD':tag.includes('COMM')?'Commercial':'Other';
-      bt[key].push({site:r['Site Name'],handle:slackHandle(r['Owner']||''),note:(rfd||(bl&&bl[0]?bl[0].text||'':''))});
+      var site=r['Site Name'];
+      var handle=slackHandle(r['Owner']||'');
+      var pct=(r['Percentage Completion']||'').replace('%','').trim();
+      var statusLabel=(r['Status']||'').toUpperCase();
+      // Add to every relevant team bucket (not just first blocker)
+      var addedKeys=new Set();
+      if(bl&&bl.length){
+        bl.forEach(function(b){
+          var key=tagToKey(b.tag||'Other');
+          if(!addedKeys.has(key)){
+            addedKeys.add(key);
+            bt[key].push({site:site,handle:handle,pct:pct,status:statusLabel,note:(b.text||rfd||'').substring(0,100)});
+          }
+        });
+      } else if(rfd){
+        var key='Other';
+        bt[key].push({site:site,handle:handle,pct:pct,status:statusLabel,note:rfd.substring(0,100)});
+      }
     });
-    var lines=['*Cross-Functional Blockers & Dependencies -- '+ds+'*','','_Action required from other teams. Please update._',''];
+    var lines=['*🚦 Cross-Functional Blockers & Dependencies — '+ds+'*','','_Sites blocked pending action from other teams. Please update or tag relevant member._',''];
     var any=false;
     ['IT','Design','Commercial','HEM','BD','Other'].forEach(function(t){
       if(!bt[t].length) return; any=true;
-      lines.push(be[t]+' *'+t+' Team* ('+bt[t].length+' site'+(bt[t].length>1?'s':'')+')');
-      bt[t].forEach(function(x){lines.push('  - *'+x.site+'* -- '+x.handle+(x.note?' | '+x.note.substring(0,80):''));});
+      lines.push(be[t]+' *'+t+' Team Action Required* — '+bt[t].length+' site'+(bt[t].length>1?'s':''));
+      bt[t].forEach(function(x){
+        var meta=(x.status?x.status:'')+(x.pct?' · '+x.pct+'%':'');
+        lines.push('  • *'+x.site+'* '+x.handle+(meta?' ['+meta+']':''));
+        if(x.note) lines.push('    ↳ '+x.note);
+      });
       lines.push('');
     });
-    if(!any) lines.push('No active cross-functional blockers.');
-    lines.push('Reply with update or tag relevant team member');
+    if(!any) lines.push('✅ No active cross-functional blockers today.');
+    lines.push('_Please reply with status or tag the PM directly._');
     el.innerHTML=nav+'<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
       +'<button class="btn btn-p btn-sm" onclick="copyToClipboard(\'cf-prev\')">Copy for Slack</button></div>'
       +'<pre id="cf-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(lines.join('\n'))+'</pre>';
@@ -4030,7 +4087,7 @@ const TICKET_TOOL_PATH = 'tickets';
       var parsed = parseCSV(text);
       if (parsed && parsed.length) {
         __originLoaded = true;
-        allData = parsed;
+        allData = parsed.filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
         buildFilters();
         renderKPIs();
@@ -4219,7 +4276,7 @@ function handleLiveCSV(event){
     .then(function(){
       toast('✓ Data updated — live now', 'ok');
       try {
-        allData = parseCSV(csvText);
+        allData = parseCSV(csvText).filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
         buildFilters(); renderKPIs(); renderAll();
       } catch(_) {}
