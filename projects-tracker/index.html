@@ -1740,7 +1740,25 @@ function parseCSV(txt) {
   }
   if (cell || row.length > 0) { row.push(cell.trim()); if (row.some(c => c)) rows.push(row); }
   if (rows.length < 2) return [];
-  const hdrs = rows[0].map(h => h.replace(/^\uFEFF/, '').trim());
+  // Normalise headers: strip BOM, trim, then map known aliases to canonical META_COL names
+  const HDR_ALIASES = {
+    'vendor name':'Vendor','contractor':'Vendor','vendor/contractor':'Vendor',
+    'site name':'Site Name','sitename':'Site Name',
+    'owner name':'Owner','pm':'Owner','project manager':'Owner',
+    'vendor rating':'Vendor Rating','rating':'Vendor Rating',
+    'percentage completion':'Percentage Completion','% completion':'Percentage Completion','completion %':'Percentage Completion','% complete':'Percentage Completion',
+    'planned completion':'Planned Completion','planned date':'Planned Completion',
+    'revised completion':'Revised Completion','revised date':'Revised Completion',
+    'sat date':'SAT Date','uat date':'UAT DATE',
+    'kickoff date':'Kickoff Date','kick off date':'Kickoff Date',
+    'work start date':'Work Start Date','start date':'Work Start Date',
+    'po date':'PO Date',
+    'reason for delay':'Reason for Delay',
+  };
+  const hdrs = rows[0].map(h => {
+    const clean = h.replace(/^\uFEFF/, '').trim();
+    return HDR_ALIASES[clean.toLowerCase()] || clean;
+  });
   DATE_COLS.length = 0;
   hdrs.forEach(h => { if (!META_COLS.includes(h)) DATE_COLS.push(h); });
   return rows.slice(1).map(r => {
