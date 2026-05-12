@@ -3285,7 +3285,7 @@ function renderTicketTab(){
     var priStyle=tickPriClass(pri);
     var tatColor=tickTATColor(tat);
     var driveUrl=getDriveLink(site);
-    var vendor=(function(){var m=allData.find(function(d){return tickSiteName((d['Site Name']||'').trim())===site||(d['Site Name']||'').trim()===site;});return m?(m['Vendor']||''):'';})();
+    var vendor=(function(){if(!site||site==='—') return '';var sl=site.toLowerCase();var m=allData.find(function(d){var dn=(d['Site Name']||'').toLowerCase().trim();return dn===sl||dn.includes(sl)||sl.includes(dn);});return m?(m['Vendor']||''):'';})();
 
     var isTClosed=TICKET_CLOSED.has(String(id));
     html+='<tr style="border-bottom:1px solid var(--border);cursor:pointer;'+(isTClosed?'opacity:.5;background:#f8fafb':'')+'\" onclick="showTicketDetail(\''+id+'\')">';
