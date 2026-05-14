@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.49</title>
+<title>Cars24 Projects Tracker v3.50</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4261,10 +4261,14 @@ function pfFetch(url) {
 }
 
 // Manual sync button handler — fetches from API, saves to R2 if logged in, shows errors.
+function pfTicketsUrl() {
+  var today = new Date().toISOString().slice(0, 10);
+  return WORKER_URL + 'pf-tickets?start_date=2026-01-01&end_date=' + today;
+}
 function syncTicketsFromPF() {
   var btn = document.getElementById('pf-sync-btn');
   if (btn) { btn.textContent = '⟳ Syncing…'; btn.disabled = true; }
-  var url = WORKER_URL + 'pf-tickets';
+  var url = pfTicketsUrl();
 
   pfFetch(url)
     .then(function(text) {
@@ -4299,7 +4303,7 @@ function syncTicketsFromPF() {
 // Auto-fetch tickets from processflows on page load (silent on fail — falls back to R2).
 function loadTicketsFromPF() {
   if (location.protocol === 'file:') { loadTicketsFromOrigin(); return; }
-  var url = WORKER_URL + 'pf-tickets';
+  var url = pfTicketsUrl();
 
   pfFetch(url)
     .then(function(text) {
