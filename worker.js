@@ -312,7 +312,45 @@ async function readBodyCapped(request, limit) {
   return new TextDecoder('utf-8').decode(out);
 }
 
-// Legacy JSON-body handler. Kept ONE deploy cycle for safe ordering during
+// GET /pf-tickets?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
+// Server-side proxy to processflows.ai ticket API — bypasses browser CORS.
+// Optional env var PF_COOKIE: session cookie string for authenticated access.
+async function handlePFTickets(request, env) {
+  const url = new URL(request.url);
+  const startDate = url.searchParams.get('start_date') || '';
+  const endDate   = url.searchParams.get('end_date')   || '';
+  if (!startDate || !endDate) {
+    return json(400, { success: false, error: 'start_date and end_date query params are required' });
+  }
+
+  const pfUrl = `https://processflows.ai/api/ticket-list/?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
+
+  const fetchHeaders = {
+    'Referer':              'https://processflows.ai/ticket_dashboard/',
+    'User-Agent':           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
+    'Accept':               'application/json, text/plain, */*',
+    'sec-ch-ua':            '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
+    'sec-ch-ua-mobile':     '?0',
+    'sec-ch-ua-platform':   '"Windows"',
+  };
+  // Use session cookie from Worker env if configured (set via Cloudflare dashboard)
+  if (env.PF_COOKIE) fetchHeaders['Cookie'] = env.PF_COOKIE;
+
+  try {
+    const resp = await fetch(pfUrl, { headers: fetchHeaders });
+    const text = await resp.text();
+    if (!resp.ok) {
+      return json(resp.status, { success: false, error: `ProcessFlows API returned ${resp.status}`, detail: text.slice(0, 300) });
+    }
+    return new Response(text, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json; charset=utf-8', ...CORS_HEADERS },
+    });
+  } catch (e) {
+    return json(502, { success: false, error: 'Proxy fetch failed: ' + String(e && e.message || e) });
+  }
+}
+
 // the gzip migration. Will be removed in a follow-up commit.
 async function handlePostLegacy(request, env) {
   let payload;
@@ -356,13 +394,18 @@ export default {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
     }
-    if (request.method === 'GET') return handleGet(request, env);
+    if (request.method === 'GET') {
+      const gPath = new URL(request.url).pathname;
+      if (gPath === '/pf-tickets') return handlePFTickets(request, env);
+      return handleGet(request, env);
+    }
     if (request.method === 'POST') {
       const path = new URL(request.url).pathname;
       if (path === '/upload')   return handleUpload(request, env);
       if (path === '/verify')   return handleVerify(request, env);
       if (path === '/mappings') return handleMappings(request, env);
       if (path === '/')         return handlePostLegacy(request, env);
+
       return json(404, { success: false, error: 'Unknown POST endpoint' });
     }
     return json(405, { success: false, error: 'Method not allowed' });

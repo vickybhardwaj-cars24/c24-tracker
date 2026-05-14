@@ -3189,7 +3189,7 @@ function renderTicketTab(){
     el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--muted)">'
       +'<div style="font-size:32px">🎫</div>'
       +'<div style="font-size:14px;font-weight:600">No ticket data loaded</div>'
-      +'<div style="font-size:12px">Export CSV from processflows.ai and upload using the 🎫 button in the toolbar</div>'
+      +'<div style="font-size:12px">Fetching from processflows.ai… or upload a CSV manually below.</div>'
       +'<label class="btn btn-p" for="ticket-inp" style="margin-top:8px;cursor:pointer">Upload Tickets CSV</label>'
       +'</div>';
     return;
@@ -4190,8 +4190,65 @@ function loadSnagFromOrigin(){
 }
 loadSnagFromOrigin();
 
-// Fetch the canonical tickets dataset from R2 via the Worker. Same parser as
-// handleTicketUpload uses for local file uploads (parseTicketCSV).
+// Map a single processflows API ticket object → TICKET_DATA row format.
+// Handles the most common field names processflows uses.
+function pfTicketToRow(t) {
+  function f(obj) {
+    // Try multiple possible key names, return first non-empty match
+    for (var i = 1; i < arguments.length; i++) {
+      var v = obj[arguments[i]];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  }
+  return {
+    'ID':             f(t, 'id', 'ticket_id', 'pk'),
+    'Title':          f(t, 'title', 'subject', 'name', 'description'),
+    'Store':          f(t, 'store_name', 'store', 'location', 'site_name', 'site', 'hub_name', 'hub'),
+    'Status':         f(t, 'status', 'status_name', 'state'),
+    'Priority':       f(t, 'priority', 'priority_name', 'severity'),
+    'Assigned To':    f(t, 'assigned_to', 'assignee_name', 'assignee', 'assigned_user', 'owner'),
+    'Raised By':      f(t, 'raised_by', 'created_by', 'reporter', 'requester'),
+    'Created At':     f(t, 'created_at', 'creation_date', 'date_created', 'created_date', 'created'),
+    'Open Since Days':f(t, 'open_since_days', 'days_open', 'age_days', 'age'),
+    'TAT':            f(t, 'open_since_days', 'days_open', 'tat', 'age_days'),
+  };
+}
+
+// Fetch tickets live from processflows.ai API via the Worker proxy.
+// Falls back to loadTicketsFromOrigin() (R2-stored CSV) if the API is unreachable.
+function loadTicketsFromPF() {
+  if (location.protocol === 'file:') { loadTicketsFromOrigin(); return; }
+  var today = new Date();
+  var startDate = today.getFullYear() + '-01-01';
+  var endDate   = today.toISOString().slice(0, 10);
+  var url = WORKER_URL + 'pf-tickets?start_date=' + startDate + '&end_date=' + endDate;
+
+  C24Uploader.fetchText(url, { cache: 'no-store' })
+    .then(function(text) {
+      var payload;
+      try { payload = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON from pf-tickets proxy'); }
+      // Handle common envelope shapes: array, {results}, {data}, {tickets}
+      var items = Array.isArray(payload) ? payload
+        : (payload.results || payload.data || payload.tickets || payload.items || []);
+      if (!items.length) throw new Error('Empty ticket list from API');
+      var rows = items.map(pfTicketToRow).filter(function(r){ return r['ID'] || r['Title']; });
+      if (!rows.length) throw new Error('No mappable tickets in API response');
+      TICKET_DATA = rows;
+      var lbl = document.getElementById('ticket-local-lbl');
+      if (lbl) lbl.textContent = '🎫 Tickets (' + rows.length + ')';
+      stampCSV('tickets');
+      var el = document.getElementById('tickv');
+      if (el && el.style.display !== 'none') renderTicketTab();
+    })
+    .catch(function(err) {
+      // API unreachable or returned no data — fall back silently to R2 CSV
+      loadTicketsFromOrigin();
+    });
+}
+loadTicketsFromPF();
+
+// Fetch the canonical tickets dataset from R2 via the Worker (CSV fallback).
 function loadTicketsFromOrigin(){
   if (location.protocol === 'file:') return Promise.resolve();
   return C24Uploader.fetchText(WORKER_URL + TICKET_TOOL_PATH + '.csv', {cache: 'no-store'})
@@ -4209,7 +4266,6 @@ function loadTicketsFromOrigin(){
     })
     .catch(function(){ /* tickets are non-critical for first paint */ });
 }
-loadTicketsFromOrigin();
 
 // Standalone snag CSV parser — RFC-4180 quoting (handles "" escapes and embedded
 // newlines). Column contract matches handleSnagUpload's CSV branch.
