@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.49</title>
+<title>Cars24 Projects Tracker v3.58</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -410,9 +410,10 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <input type="file" id="live-csv-inp" accept=".csv" style="display:none" onchange="handleLiveCSV(event)">
     <button class="btn btn-o" id="login-btn" onclick="openLoginModal()" style="font-size:11px">🔐 Login</button>
     <button class="btn btn-o" id="logout-btn" onclick="doLogout()" style="font-size:11px;display:none">↪ Logout <span id="login-user" style="margin-left:4px;color:var(--muted);font-weight:400"></span></button>
-    <label class="btn btn-o" for="ticket-inp" id="ticket-local-lbl" style="font-size:11px">🎫 Upload Tickets (.csv)</label>
-    <input type="file" id="ticket-inp" accept=".csv" style="display:none" onchange="handleTicketUpload(event)">
+    <button class="btn btn-o" id="pf-sync-btn" onclick="syncTicketsFromPF()" style="font-size:11px">🔄 Sync Tickets</button>
     <span id="csv-ts-tickets" style="font-size:10px;color:var(--muted)"></span>
+    <label class="btn btn-o" for="ticket-inp" id="ticket-local-lbl" style="font-size:11px;display:none">🎫 Upload Tickets (.csv)</label>
+    <input type="file" id="ticket-inp" accept=".csv" style="display:none" onchange="handleTicketUpload(event)">
     <label class="btn btn-o" for="ticket-live-inp" id="ticket-live-lbl" style="cursor:pointer;font-size:11px;display:none">🎫 Upload Tickets CSV (Live)</label>
     <input type="file" id="ticket-live-inp" accept=".csv" style="display:none" onchange="handleLiveTicketCSV(event)">
     <label class="btn btn-o" for="snag-inp" id="snag-local-lbl" style="cursor:pointer;font-size:11px">📎 Upload Snag (.csv)</label>
@@ -3183,85 +3184,119 @@ function tickTATColor(days){
   return '#16a34a';
 }
 
+function tickSearchChange(v){
+  var e=document.getElementById('tickv'); if(!e) return;
+  e._fSearch=v; renderTicketTab();
+}
+function tickDDChange(sel){
+  var e=document.getElementById('tickv'); if(!e) return;
+  e['_f'+sel.dataset.sk]=sel.value; renderTicketTab();
+}
+function toggleProjectsOnly(){
+  var el=document.getElementById('tickv'); if(!el) return;
+  el._projectsOnly=el._projectsOnly===false?true:false; renderTicketTab();
+}
+function toggleTicketFilter(key,val){
+  var el=document.getElementById('tickv'); if(!el) return;
+  var arr=(el['_f'+key]||[]).slice();
+  var i=arr.indexOf(val); if(i===-1) arr.push(val); else arr.splice(i,1);
+  el['_f'+key]=arr; renderTicketTab();
+}
+function clearTicketFilter(key){
+  var el=document.getElementById('tickv'); if(!el) return;
+  el['_f'+key]=[]; renderTicketTab();
+}
+function cycleTicketTATSort(){
+  var el=document.getElementById('tickv'); if(!el) return;
+  var s=el._tatSort||''; el._tatSort=s==='asc'?'desc':s==='desc'?'':'asc'; renderTicketTab();
+}
+
 function renderTicketTab(){
   var el=document.getElementById('tickv'); if(!el) return;
   if(!TICKET_DATA.length){
     el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--muted)">'
       +'<div style="font-size:32px">🎫</div>'
       +'<div style="font-size:14px;font-weight:600">No ticket data loaded</div>'
-      +'<div style="font-size:12px">Export CSV from processflows.ai and upload using the 🎫 button in the toolbar</div>'
+      +'<div style="font-size:12px">Fetching from processflows.ai… or upload a CSV manually below.</div>'
       +'<label class="btn btn-p" for="ticket-inp" style="margin-top:8px;cursor:pointer">Upload Tickets CSV</label>'
       +'</div>';
     return;
   }
-  var data=TICKET_DATA;
-  // Detect column names flexibly
-  function col(row,names){
-    for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return row[names[i]]||'';}
-    return '';
+
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
+  function getTAT(r){
+    var cr=col(r,['Created At','created_at']);
+    if(cr){var d=new Date(cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
+    return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);
   }
-  // KPIs — computed after openData is defined below
-  // Open data — exclude CSV-closed statuses for KPI counts
-  var openData=data.filter(function(r){var s=(col(r,['Status','status'])||'').toLowerCase();return !s.includes('closed')&&!s.includes('resolved')&&!s.includes('cancelled')&&!s.includes('rejected');});
-  var total=openData.length;
-  var urgent=openData.filter(function(r){return (col(r,['Priority'])||'').toLowerCase()==='urgent';}).length;
-  var unassigned=openData.filter(function(r){var a=col(r,['Assigned To','assigned_to','AssignedTo']);return !a||a.toLowerCase()==='unassigned';}).length;
-  var tatVals=openData.map(function(r){return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);}).filter(function(v){return v>0;});
-  var avgTAT=tatVals.length?Math.round(tatVals.reduce(function(a,b){return a+b;},0)/tatVals.length):0;
-  var sites=new Set(openData.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
-  var over30=openData.filter(function(r){return (parseInt(col(r,['TAT','Open Since Days','Open Since'])||0))>30;}).length;
+  var CLOSED=['closed','resolved','cancelled','rejected'];
+  function isClosed(r){var s=(col(r,['Status','status'])||'').toLowerCase();return CLOSED.some(function(x){return s===x||s.startsWith(x);});}
 
-  // Filters state
-  var fPri=el._fPri||'All';
-  var fSite=el._fSite||'All';
-  var fAssign=el._fAssign||'All';
-  var fStatus=el._fStatus!==undefined?el._fStatus:'Open'; // default: open only
-  var fSearch=el._fSearch||'';
+  // Filter state — all default to 'All'/empty
+  var fDept    = el._fDept   ||'All';
+  var fSite    = el._fSite   ||'All';
+  var fAssign  = el._fAssign ||'All';
+  var fStatusArr = el._fStatusArr||[];
+  var fPriArr    = el._fPriArr   ||[];
+  var fSearch  = el._fSearch ||'';
+  var tatSort  = el._tatSort ||'';
 
-  var showClosed2=el._showClosed||false;
-  var CLOSED_STATUSES=['closed','resolved','cancelled','rejected'];
-  var filtered=data.filter(function(r){
-    var id=String(col(r,['ID'])||'');
-    var pri=col(r,['Priority']);
-    var store=col(r,['Store','store']);
-    var assign=col(r,['Assigned To','assigned_to']);
-    var title=col(r,['Title','title']);
-    var statusVal=(col(r,['Status','status'])||'').toLowerCase();
-    var isCsvClosed=CLOSED_STATUSES.some(function(s){return statusVal===s||statusVal.startsWith(s);});
-    var isClosed=TICKET_CLOSED.has(id);
-    if((isClosed||isCsvClosed)&&!showClosed2) return false;
-    if(fPri!=='All'&&pri!==fPri) return false;
-    if(fSite!=='All'&&tickSiteName(store)!==fSite) return false;
+  // Build filter option lists from actual data
+  var deptSet   =new Set(TICKET_DATA.map(function(r){return col(r,['Department','department','dept']);}).filter(Boolean));
+  var deptOpts  =['All'].concat([...deptSet].sort());
+  var siteSet   =new Set(TICKET_DATA.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
+  var siteOpts  =['All'].concat([...siteSet].sort());
+  var assignSet =new Set(TICKET_DATA.map(function(r){return col(r,['Assigned To','assigned_to'])||'Unassigned';}));
+  var assignOpts=['All'].concat([...assignSet].sort());
+  var statusSet =new Set(TICKET_DATA.map(function(r){return col(r,['Status','status']);}).filter(Boolean));
+  var allStatuses=[...statusSet].sort();
+  var priOpts=['Urgent','High','Medium','Low'];
+
+  // Apply filters
+  var filtered=TICKET_DATA.filter(function(r){
+    var dept  =col(r,['Department','department','dept']);
+    var store =col(r,['Store','store']);
+    var site  =tickSiteName(store);
+    var assign=col(r,['Assigned To','assigned_to'])||'Unassigned';
+    var status=col(r,['Status','status']);
+    var pri   =col(r,['Priority','priority']);
+    var title =col(r,['Title','title']);
+    if(fDept  !=='All'&&dept  !==fDept)   return false;
+    if(fSite  !=='All'&&site  !==fSite)   return false;
     if(fAssign!=='All'&&assign!==fAssign) return false;
-    if(fStatus==='Open'&&isCsvClosed) return false;
-    if(fStatus!=='All'&&fStatus!=='Open'){var sv=col(r,['Status','status']);if(sv!==fStatus) return false;}
+    if(fStatusArr.length&&fStatusArr.indexOf(status)===-1) return false;
+    if(fPriArr.length   &&fPriArr.indexOf(pri)   ===-1) return false;
     if(fSearch&&!(title+' '+store).toLowerCase().includes(fSearch.toLowerCase())) return false;
     return true;
   });
 
-  // Unique filter options
-  var priOpts=['All','Urgent','High','Medium','Low'];
-  var siteOpts=['All'].concat([...sites].sort());
-  var assignSet=new Set(openData.map(function(r){return col(r,['Assigned To','assigned_to'])||'Unassigned';}));
-  var assignOpts=['All'].concat([...assignSet].sort());
-  var statusSet=new Set(data.map(function(r){return col(r,['Status','status']);}));
-  var statusOpts=['All','Open'].concat([...statusSet].filter(function(s){return s&&s!=='Open';}).sort());
-
-  function selOpt(opts,val,key){
-    return '<select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._f'+key+'=v;renderTicketTab();})(this.value)">'
-      +opts.map(function(o){return '<option'+(o===val?' selected':'')+'>'+o+'</option>';}).join('')+'</select>';
+  // TAT sort
+  if(tatSort==='asc'||tatSort==='desc'){
+    filtered=filtered.slice().sort(function(a,b){
+      return tatSort==='asc'?getTAT(a)-getTAT(b):getTAT(b)-getTAT(a);
+    });
   }
 
+  // KPIs from all loaded (open) tickets
+  var openAll=TICKET_DATA.filter(function(r){return !isClosed(r);});
+  var kpiTotal   =filtered.length;
+  var kpiUrgent  =filtered.filter(function(r){return (col(r,['Priority'])||'').toLowerCase()==='urgent';}).length;
+  var kpiUnassign=filtered.filter(function(r){var a=col(r,['Assigned To','assigned_to']);return !a||a.toLowerCase()==='unassigned';}).length;
+  var tatVals    =filtered.filter(function(r){return !isClosed(r);}).map(getTAT).filter(function(v){return v>0;});
+  var avgTAT     =tatVals.length?Math.round(tatVals.reduce(function(a,b){return a+b;},0)/tatVals.length):0;
+  var affSites   =new Set(filtered.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
+  var over30     =filtered.filter(function(r){return getTAT(r)>30;}).length;
+
   var html='';
-  // KPI tiles
+
+  // KPI row
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px">';
-  [
-    {label:'Total Open',val:total,color:'#1a73e8',bg:'#e8f0fe'},
-    {label:'Urgent',val:urgent,color:'#dc2626',bg:'#fef2f2'},
-    {label:'Unassigned',val:unassigned,color:'#d97706',bg:'#fffbeb'},
-    {label:'Avg TAT (days)',val:avgTAT+'d',color:tickTATColor(avgTAT),bg:'#f8fafc'},
-    {label:'Over 30d',val:over30,color:'#dc2626',bg:'#fef2f2'},
-    {label:'Sites Affected',val:sites.size,color:'#7c3aed',bg:'#f5f3ff'},
+  [{label:'Showing',val:kpiTotal,color:'#1a73e8',bg:'#e8f0fe'},
+   {label:'Urgent',val:kpiUrgent,color:'#dc2626',bg:'#fef2f2'},
+   {label:'Unassigned',val:kpiUnassign,color:'#d97706',bg:'#fffbeb'},
+   {label:'Avg TAT',val:avgTAT+'d',color:tickTATColor(avgTAT),bg:'#f8fafc'},
+   {label:'Over 30d',val:over30,color:'#dc2626',bg:'#fef2f2'},
+   {label:'Sites',val:affSites.size,color:'#7c3aed',bg:'#f5f3ff'},
   ].forEach(function(t){
     html+='<div style="padding:12px;background:'+t.bg+';border-radius:8px;border:1px solid '+t.color+'22">'
       +'<div style="font-size:20px;font-weight:800;color:'+t.color+'">'+t.val+'</div>'
@@ -3270,69 +3305,102 @@ function renderTicketTab(){
   });
   html+='</div>';
 
-  // Filters bar
-  var showClosed=el._showClosed||false;
-  html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px;padding:8px 10px;background:var(--surface);border-radius:8px;border:1px solid var(--border)">';
-  html+='<input id="ticket-search" placeholder="Search tickets..." value="'+esc(fSearch)+'" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);flex:1;min-width:120px" oninput="(function(v){var el=document.getElementById(\'tickv\');el._fSearch=v;renderTicketTab();})(this.value)">';
-  html+='<span style="font-size:10px;color:var(--muted)">Status:</span>'+selOpt(statusOpts,fStatus,'Status');
-  html+='<span style="font-size:10px;color:var(--muted)">Priority:</span>'+selOpt(priOpts,fPri,'Pri');
-  html+='<span style="font-size:10px;color:var(--muted)">Site:</span>'+selOpt(siteOpts,fSite,'Site');
-  html+='<span style="font-size:10px;color:var(--muted)">Assigned:</span>'+selOpt(assignOpts,fAssign,'Assign');
-  html+='<span style="font-size:11px;color:var(--muted);margin-left:4px">'+filtered.length+' tickets</span>';
-  html+='<button class="btn btn-o btn-sm" onclick="(function(){var el=document.getElementById(\'tickv\');el._showClosed=!el._showClosed;renderTicketTab();})()" style="font-size:11px;'+(showClosed?'background:#f0fdf4;border-color:#86efac;color:#16a34a':'')+'">'+( showClosed?'🙈 Hide Closed':'👁 Show Closed')+(TICKET_CLOSED.size?' ('+TICKET_CLOSED.size+')':'')+'</button>';
-  html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack Summary</button>';
-  html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600;white-space:nowrap">📊 Sheet</a>';
+  // Dropdown helper
+  function dd(label,opts,val,stateKey){
+    var s='<span style="font-size:10px;color:var(--muted)">'+esc(label)+'</span>';
+    s+='<select data-sk="'+esc(stateKey)+'" onchange="tickDDChange(this)" style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)">';
+    opts.forEach(function(o){s+='<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>';});
+    s+='</select>';
+    return s;
+  }
+
+  // Chip helper
+  function chips(label,opts,arr,key){
+    var s='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">';
+    s+='<span style="font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap;min-width:52px;text-transform:uppercase;letter-spacing:.4px">'+esc(label)+'</span>';
+    var allOn=arr.length===0;
+    s+='<button data-tkey="'+esc(key)+'" onclick="clearTicketFilter(this.dataset.tkey)" style="font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;font-weight:600;border:1.5px solid '+(allOn?'var(--primary)':'var(--border-2)')+';background:'+(allOn?'var(--primary)':'transparent')+';color:'+(allOn?'#fff':'var(--text)')+'">All</button>';
+    opts.forEach(function(o){
+      var on=arr.indexOf(o)!==-1;
+      s+='<button data-tkey="'+esc(key)+'" data-tval="'+esc(o)+'" onclick="toggleTicketFilter(this.dataset.tkey,this.dataset.tval)" style="font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;font-weight:600;border:1.5px solid '+(on?'var(--primary)':'var(--border-2)')+';background:'+(on?'var(--primary)':'transparent')+';color:'+(on?'#fff':'var(--text)')+'">'+esc(o)+'</button>';
+    });
+    s+='</div>';
+    return s;
+  }
+
+  // Filter bar
+  html+='<div style="background:var(--surface);border-radius:8px;border:1px solid var(--border);padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:8px">';
+
+  // Row 1: search + dropdowns + actions
+  html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
+  html+='<input placeholder="Search..." value="'+esc(fSearch)+'" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);flex:1;min-width:140px" oninput="tickSearchChange(this.value)">';
+  html+=dd('Dept:',deptOpts,fDept,'Dept');
+  html+=dd('Site:',siteOpts,fSite,'Site');
+  html+=dd('Assigned:',assignOpts,fAssign,'Assign');
+  html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
+  html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack</button>';
+  html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
 
-  // Ticket table
+  // Row 2 & 3: chip filters
+  html+='<div style="padding-top:4px;border-top:1px solid var(--border)">';
+  html+=chips('Status:',allStatuses,fStatusArr,'StatusArr');
+  html+='</div>';
+  html+='<div style="padding-top:2px">';
+  html+=chips('Priority:',priOpts,fPriArr,'PriArr');
+  html+='</div>';
+  html+='</div>';
+
+  // Table
+  var tatArrow=tatSort==='asc'?' ▲':tatSort==='desc'?' ▼':' ⇅';
   html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
   html+='<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">';
-  ['ID','Title','Site','Priority','Assigned To','Raised By','TAT','Status','Action'].forEach(function(h){
+  ['ID','Title','Site','Dept','Priority','Status','Assigned To','Raised By'].forEach(function(h){
+    html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">'+h+'</th>';
+  });
+  html+='<th onclick="cycleTicketTATSort()" style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none">TAT'+tatArrow+'</th>';
+  ['Created At','Updated At'].forEach(function(h){
     html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">'+h+'</th>';
   });
   html+='</tr></thead><tbody>';
 
   filtered.forEach(function(r){
-    var id=col(r,['ID']);
-    var title=col(r,['Title','title']);
-    var store=col(r,['Store','store']);
-    var site=tickSiteName(store);
-    var pri=col(r,['Priority','priority']);
-    var assign=col(r,['Assigned To','assigned_to'])||'Unassigned';
-    var _cr=col(r,['Created At','created_at']);var tat=(function(){if(_cr){var d=new Date(_cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);})();
-    var status=col(r,['Status','status']);
-    var raisedBy=col(r,['Raised by','raised_by','Raised By','raisedBy'])||'—';
-    var priStyle=tickPriClass(pri);
-    var tatColor=tickTATColor(tat);
-    var driveUrl=getDriveLink(site);
-    var vendor=(function(){if(!site||site==='—') return '';var sl=site.toLowerCase();var m=allData.find(function(d){var dn=(d['Site Name']||'').toLowerCase().trim();return dn===sl||dn.includes(sl)||sl.includes(dn);});return m?(m['Vendor']||''):'';})();
+    var id       =col(r,['ID']);
+    var title    =col(r,['Title','title']);
+    var store    =col(r,['Store','store']);
+    var site     =tickSiteName(store);
+    var pri      =col(r,['Priority','priority']);
+    var assign   =col(r,['Assigned To','assigned_to'])||'Unassigned';
+    var status   =col(r,['Status','status']);
+    var raisedBy =col(r,['Raised by','raised_by','Raised By'])||'—';
+    var dept     =col(r,['Department','department','dept'])||'—';
+    var createdAt=col(r,['Created At','created_at'])||'—';
+    var updatedAt=col(r,['Updated At','updated_at'])||'—';
+    var tat      =getTAT(r);
+    var priStyle =tickPriClass(pri);
+    var priParts =priStyle.split(';');
+    var priBg    =priParts[0].split(':').slice(1).join(':');
+    var priClr   =priParts[1].split(':').slice(1).join(':');
+    var driveUrl =getDriveLink(site);
+    var closed   =isClosed(r);
 
-    var isTClosed=TICKET_CLOSED.has(String(id));
-    html+='<tr style="border-bottom:1px solid var(--border);cursor:pointer;'+(isTClosed?'opacity:.5;background:#f8fafb':'')+'\" onclick="showTicketDetail(\''+id+'\')">';
-    html+='<td style="padding:7px 10px;font-size:11px;white-space:nowrap"><a href="https://processflows.ai/tickets/'+esc(id)+'" target="_blank" onclick="event.stopPropagation()" style="color:#003660;font-weight:700;text-decoration:none">#'+esc(id)+'</a></td>';
-    html+='<td style="padding:7px 10px;max-width:280px"><div style="font-size:12px;font-weight:500;line-height:1.3'+(isTClosed?';text-decoration:line-through;color:var(--muted)':'')+'">'+esc(title)+'</div></td>';
-    html+='<td style="padding:7px 10px;white-space:nowrap"><a href="'+driveUrl+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:var(--primary);text-decoration:none">📁 '+esc(site)+'</a>'+(vendor?'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+esc(vendor)+'</div>':'')+'</td>';
-    html+='<td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+priStyle.split(';')[0].split(':')[1]+';color:'+priStyle.split(';')[1].split(':')[1]+'">'+esc(pri)+'</span></td>';
+    html+='<tr data-tid="'+esc(id)+'" onclick="showTicketDetail(this.dataset.tid)" style="border-bottom:1px solid var(--border);cursor:pointer;'+(closed?'opacity:.45':'')+(closed?';background:var(--surface-2)':'')+'">';
+    html+='<td style="padding:7px 10px;white-space:nowrap"><a href="https://processflows.ai/tickets/'+esc(id)+'" target="_blank" onclick="event.stopPropagation()" style="color:#003660;font-weight:700;font-size:11px;text-decoration:none">#'+esc(id)+'</a></td>';
+    html+='<td style="padding:7px 10px;max-width:260px"><div style="font-size:12px;font-weight:500;line-height:1.3">'+esc(title)+'</div></td>';
+    html+='<td style="padding:7px 10px;white-space:nowrap"><a href="'+driveUrl+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:var(--primary);text-decoration:none">📁 '+esc(site)+'</a></td>';
+    html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+esc(dept)+'</td>';
+    html+='<td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+priBg+';color:'+priClr+'">'+esc(pri)+'</span></td>';
+    html+='<td style="padding:7px 10px;font-size:11px">'+esc(status)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px">'+esc(assign)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+esc(raisedBy)+'</td>';
-    html+='<td style="padding:7px 10px;font-size:11px;font-weight:700;color:'+tatColor+'">'+tat+'d</td>';
-    html+='<td style="padding:7px 10px;font-size:11px">'+esc(status)+'</td>';
-    html+='<td style="padding:7px 10px;white-space:nowrap">'+(isTClosed?'<button onclick="event.stopPropagation();markTicketOpen(\''+esc(id)+'\')" style="font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid #d1d5db;background:#f8fafb;cursor:pointer;color:var(--muted)">↩ Reopen</button>':'<button onclick="event.stopPropagation();markTicketClosed(\''+esc(id)+'\')" style="font-size:10px;padding:2px 8px;border-radius:5px;border:1px solid #86efac;background:#f0fdf4;cursor:pointer;color:#16a34a;font-weight:600">✓ Close</button>')+'</td>';
+    html+='<td style="padding:7px 10px;font-size:11px;font-weight:700;color:'+tickTATColor(tat)+'">'+tat+'d</td>';
+    html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+esc(createdAt)+'</td>';
+    html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+esc(updatedAt)+'</td>';
     html+='</tr>';
   });
+
   html+='</tbody></table></div>';
   el.innerHTML=html;
-}
-
-function markTicketClosed(id){
-  TICKET_CLOSED.add(String(id));
-  toast('Ticket #'+id+' marked closed (this session)','ok');
-  renderTicketTab();
-}
-function markTicketOpen(id){
-  TICKET_CLOSED.delete(String(id));
-  toast('Ticket #'+id+' reopened','ok');
-  renderTicketTab();
 }
 
 function showTicketDetail(id){
@@ -4190,8 +4258,138 @@ function loadSnagFromOrigin(){
 }
 loadSnagFromOrigin();
 
-// Fetch the canonical tickets dataset from R2 via the Worker. Same parser as
-// handleTicketUpload uses for local file uploads (parseTicketCSV).
+// Map a single processflows API ticket object → TICKET_DATA row format.
+function pfTicketToRow(t) {
+  function f() {
+    for (var i = 1; i < arguments.length; i++) {
+      var v = arguments[0][arguments[i]];
+      if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
+    }
+    return '';
+  }
+  return {
+    'ID':             f(t, 'id', 'ticket_id', 'pk'),
+    'Title':          f(t, 'title', 'subject', 'name', 'description'),
+    'Store':          f(t, 'store_name', 'store', 'location', 'site_name', 'site', 'hub_name', 'hub'),
+    'Status':         f(t, 'status', 'status_name', 'state'),
+    'Priority':       f(t, 'priority', 'priority_name', 'severity'),
+    'Assigned To':    f(t, 'assigned_to', 'assignee_name', 'assignee', 'assigned_user', 'owner'),
+    'Raised By':      f(t, 'raised_by', 'created_by', 'reporter', 'requester'),
+    'Created At':     f(t, 'created_at', 'creation_date', 'date_created', 'created_date', 'created'),
+    'Updated At':     f(t, 'updated_at', 'update_date', 'date_updated', 'modified_at', 'modified', 'last_updated'),
+    'Department':     f(t, 'department', 'dept', 'department_name', 'team', 'category'),
+    'Open Since Days':f(t, 'open_since_days', 'days_open', 'age_days', 'age'),
+    'TAT':            f(t, 'open_since_days', 'days_open', 'tat', 'age_days'),
+  };
+}
+
+// Convert TICKET_DATA rows back to CSV text for R2 upload.
+function ticketDataToCSV(rows) {
+  var headers = ['ID','Title','Store','Status','Priority','Assigned To','Raised By','Created At','Updated At','Department','Open Since Days','TAT'];
+  function escCell(v) {
+    var s = String(v == null ? '' : v);
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  return [headers.join(',')].concat(rows.map(function(r){
+    return headers.map(function(h){ return escCell(r[h]||''); }).join(',');
+  })).join('\n');
+}
+
+// Parse processflows JSON payload → TICKET_DATA rows.
+function parsePFPayload(text) {
+  var payload = JSON.parse(text); // throws on bad JSON
+  var items = Array.isArray(payload) ? payload
+    : (payload.results || payload.data || payload.tickets || payload.items || null);
+  if (!items) throw new Error('Unexpected API response shape — no results array found');
+  if (!items.length) throw new Error('API returned 0 tickets for this date range');
+  var rows = items.map(pfTicketToRow).filter(function(r){ return r['ID'] || r['Title']; });
+  if (!rows.length) throw new Error('Could not map any tickets — field names may differ');
+  return rows;
+}
+
+// Fetch from the pf-tickets Worker proxy using native fetch so we can read
+// the full response body on errors (C24Uploader hides non-200 bodies).
+function pfFetch(url) {
+  return fetch(url, { cache: 'no-store' }).then(function(resp) {
+    return resp.text().then(function(body) {
+      if (!resp.ok) {
+        // Try to extract a detail message from our Worker's JSON error envelope
+        var detail = body;
+        try {
+          var j = JSON.parse(body);
+          detail = j.detail || j.error || body;
+        } catch(_) {}
+        var err = new Error('HTTP ' + resp.status + ': ' + String(detail).slice(0, 200));
+        err.status = resp.status;
+        throw err;
+      }
+      return body;
+    });
+  });
+}
+
+// Manual sync button handler — fetches from API, saves to R2 if logged in, shows errors.
+function pfTicketsUrl() {
+  var today = new Date().toISOString().slice(0, 10);
+  return WORKER_URL + 'pf-tickets?department=Project&start_date=2026-01-01&end_date=' + today;
+}
+function syncTicketsFromPF() {
+  var btn = document.getElementById('pf-sync-btn');
+  if (btn) { btn.textContent = '⟳ Syncing…'; btn.disabled = true; }
+  var url = pfTicketsUrl();
+
+  pfFetch(url)
+    .then(function(text) {
+      var rows = parsePFPayload(text);
+      TICKET_DATA = rows;
+      var ts = document.getElementById('csv-ts-tickets');
+      if (ts) ts.textContent = '';
+      stampCSV('tickets');
+      var el = document.getElementById('tickv');
+      if (el && el.style.display !== 'none') renderTicketTab();
+
+      // Save to R2 so data persists on Vercel for all users
+      if (__auth) {
+        var csvText = ticketDataToCSV(rows);
+        C24Uploader.upload({ csvText: csvText, workerUrl: WORKER_URL, toolPath: TICKET_TOOL_PATH, auth: __auth })
+          .then(function()  { toast('✓ ' + rows.length + ' tickets synced and saved live', 'ok'); })
+          .catch(function(e){ toast('Synced in-session but R2 save failed: ' + (e.message||e), 'err'); });
+      } else {
+        toast('✓ ' + rows.length + ' tickets loaded — log in to save live', 'ok');
+      }
+    })
+    .catch(function(err) {
+      var msg = err && err.message ? err.message : String(err);
+      toast('Sync failed: ' + msg, 'err');
+      console.error('[pf-tickets sync]', msg);
+    })
+    .finally(function() {
+      if (btn) { btn.textContent = '🔄 Sync Tickets'; btn.disabled = false; }
+    });
+}
+
+// Auto-fetch tickets from processflows on page load (silent on fail — falls back to R2).
+function loadTicketsFromPF() {
+  if (location.protocol === 'file:') { loadTicketsFromOrigin(); return; }
+  var url = pfTicketsUrl();
+
+  pfFetch(url)
+    .then(function(text) {
+      var rows = parsePFPayload(text);
+      TICKET_DATA = rows;
+      stampCSV('tickets');
+      var el = document.getElementById('tickv');
+      if (el && el.style.display !== 'none') renderTicketTab();
+    })
+    .catch(function() {
+      // Silently fall back to last saved R2 CSV on page load
+      loadTicketsFromOrigin().catch(function(){});
+    });
+}
+loadTicketsFromPF();
+
+// Fetch the canonical tickets dataset from R2 via the Worker (CSV fallback).
 function loadTicketsFromOrigin(){
   if (location.protocol === 'file:') return Promise.resolve();
   return C24Uploader.fetchText(WORKER_URL + TICKET_TOOL_PATH + '.csv', {cache: 'no-store'})
@@ -4207,9 +4405,8 @@ function loadTicketsFromOrigin(){
         if (el && el.style.display !== 'none') renderTicketTab();
       }
     })
-    .catch(function(){ /* tickets are non-critical for first paint */ });
+    .catch(function(err){ throw err; }); // re-throw so callers can chain
 }
-loadTicketsFromOrigin();
 
 // Standalone snag CSV parser — RFC-4180 quoting (handles "" escapes and embedded
 // newlines). Column contract matches handleSnagUpload's CSV branch.
