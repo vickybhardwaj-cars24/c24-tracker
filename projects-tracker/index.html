@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.56</title>
+<title>Cars24 Projects Tracker v3.57</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3316,13 +3316,13 @@ function renderTicketTab(){
 
   // Chip helper
   function chips(label,opts,arr,key){
-    var s='<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
-    s+='<span style="font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;min-width:50px">'+esc(label)+'</span>';
+    var s='<div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap">';
+    s+='<span style="font-size:10px;font-weight:700;color:var(--muted);white-space:nowrap;min-width:52px;text-transform:uppercase;letter-spacing:.4px">'+esc(label)+'</span>';
     var allOn=arr.length===0;
-    s+='<button data-tkey="'+esc(key)+'" onclick="clearTicketFilter(this.dataset.tkey)" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(allOn?'var(--primary)':'var(--border)')+';background:'+(allOn?'var(--primary)':'var(--surface-2)')+';color:'+(allOn?'#fff':'var(--muted)')+'">All</button>';
+    s+='<button data-tkey="'+esc(key)+'" onclick="clearTicketFilter(this.dataset.tkey)" style="font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;font-weight:600;border:1.5px solid '+(allOn?'var(--primary)':'var(--border-2)')+';background:'+(allOn?'var(--primary)':'transparent')+';color:'+(allOn?'#fff':'var(--text)')+'">All</button>';
     opts.forEach(function(o){
       var on=arr.indexOf(o)!==-1;
-      s+='<button data-tkey="'+esc(key)+'" data-tval="'+esc(o)+'" onclick="toggleTicketFilter(this.dataset.tkey,this.dataset.tval)" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(on?'var(--primary)':'var(--border)')+';background:'+(on?'var(--primary)':'var(--surface-2)')+';color:'+(on?'#fff':'var(--muted)')+'">'+esc(o)+'</button>';
+      s+='<button data-tkey="'+esc(key)+'" data-tval="'+esc(o)+'" onclick="toggleTicketFilter(this.dataset.tkey,this.dataset.tval)" style="font-size:10px;padding:3px 10px;border-radius:20px;cursor:pointer;font-weight:600;border:1.5px solid '+(on?'var(--primary)':'var(--border-2)')+';background:'+(on?'var(--primary)':'transparent')+';color:'+(on?'#fff':'var(--text)')+'">'+esc(o)+'</button>';
     });
     s+='</div>';
     return s;
@@ -3343,8 +3343,12 @@ function renderTicketTab(){
   html+='</div>';
 
   // Row 2 & 3: chip filters
+  html+='<div style="padding-top:4px;border-top:1px solid var(--border)">';
   html+=chips('Status:',allStatuses,fStatusArr,'StatusArr');
+  html+='</div>';
+  html+='<div style="padding-top:2px">';
   html+=chips('Priority:',priOpts,fPriArr,'PriArr');
+  html+='</div>';
   html+='</div>';
 
   // Table
