@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.51</title>
+<title>Cars24 Projects Tracker v3.52</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3290,7 +3290,7 @@ function renderTicketTab(){
     s+='<button onclick="clearTicketFilter(\''+key+'\')" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(allActive?'var(--primary)':'var(--border)')+';background:'+(allActive?'var(--primary)':'var(--surface-2)')+';color:'+(allActive?'#fff':'var(--muted)')+'">All</button>';
     opts.forEach(function(o){
       var active=arr.indexOf(o)!==-1;
-      s+='<button onclick="toggleTicketFilter(\''+key+'\','+JSON.stringify(o)+')" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(active?'var(--primary)':'var(--border)')+';background:'+(active?'var(--primary)':'var(--surface-2)')+';color:'+(active?'#fff':'var(--muted)')+'">'+esc(o)+'</button>';
+      s+='<button onclick="toggleTicketFilter(\''+key+'\','+esc(JSON.stringify(o))+')" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(active?'var(--primary)':'var(--border)')+';background:'+(active?'var(--primary)':'var(--surface-2)')+';color:'+(active?'#fff':'var(--muted)')+'">'+esc(o)+'</button>';
     });
     s+='</div>';
     return s;
