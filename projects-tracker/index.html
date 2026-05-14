@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.55</title>
+<title>Cars24 Projects Tracker v3.56</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3184,6 +3184,14 @@ function tickTATColor(days){
   return '#16a34a';
 }
 
+function tickSearchChange(v){
+  var e=document.getElementById('tickv'); if(!e) return;
+  e._fSearch=v; renderTicketTab();
+}
+function tickDDChange(sel){
+  var e=document.getElementById('tickv'); if(!e) return;
+  e['_f'+sel.dataset.sk]=sel.value; renderTicketTab();
+}
 function toggleProjectsOnly(){
   var el=document.getElementById('tickv'); if(!el) return;
   el._projectsOnly=el._projectsOnly===false?true:false; renderTicketTab();
@@ -3214,50 +3222,50 @@ function renderTicketTab(){
       +'</div>';
     return;
   }
-  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return row[names[i]]||'';}return '';}
+
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
   function getTAT(r){
-    var _cr=col(r,['Created At','created_at']);
-    if(_cr){var d=new Date(_cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
+    var cr=col(r,['Created At','created_at']);
+    if(cr){var d=new Date(cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
     return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);
   }
+  var CLOSED=['closed','resolved','cancelled','rejected'];
+  function isClosed(r){var s=(col(r,['Status','status'])||'').toLowerCase();return CLOSED.some(function(x){return s===x||s.startsWith(x);});}
 
-  var CLOSED_STATUSES=['closed','resolved','cancelled','rejected'];
-  function isCsvClosed(r){var s=(col(r,['Status','status'])||'').toLowerCase();return CLOSED_STATUSES.some(function(cs){return s===cs||s.startsWith(cs);});}
+  // Filter state — all default to 'All'/empty
+  var fDept    = el._fDept   ||'All';
+  var fSite    = el._fSite   ||'All';
+  var fAssign  = el._fAssign ||'All';
+  var fStatusArr = el._fStatusArr||[];
+  var fPriArr    = el._fPriArr   ||[];
+  var fSearch  = el._fSearch ||'';
+  var tatSort  = el._tatSort ||'';
 
-  // Filter state
-  var fStatusArr=el._fStatusArr||[];
-  var fPriArr=el._fPriArr||[];
-  var fSite=el._fSite||'All';
-  var fAssign=el._fAssign||'All';
-  var fSearch=el._fSearch||'';
-  var tatSort=el._tatSort||'';
-  var projectsOnly=el._projectsOnly!==false; // default ON
-
-  // Set of known project site names (lowercase) for fast lookup
-  var projectSiteNames=new Set(allData.map(function(d){return (d['Site Name']||'').trim().toLowerCase();}).filter(Boolean));
-  function isProjectSite(store){
-    var s=tickSiteName(store).toLowerCase();
-    return s&&projectSiteNames.has(s);
-  }
-
-  // Unique values for filters
-  var statusSet=new Set(TICKET_DATA.map(function(r){return col(r,['Status','status']);}).filter(Boolean));
+  // Build filter option lists from actual data
+  var deptSet   =new Set(TICKET_DATA.map(function(r){return col(r,['Department','department','dept']);}).filter(Boolean));
+  var deptOpts  =['All'].concat([...deptSet].sort());
+  var siteSet   =new Set(TICKET_DATA.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
+  var siteOpts  =['All'].concat([...siteSet].sort());
+  var assignSet =new Set(TICKET_DATA.map(function(r){return col(r,['Assigned To','assigned_to'])||'Unassigned';}));
+  var assignOpts=['All'].concat([...assignSet].sort());
+  var statusSet =new Set(TICKET_DATA.map(function(r){return col(r,['Status','status']);}).filter(Boolean));
   var allStatuses=[...statusSet].sort();
   var priOpts=['Urgent','High','Medium','Low'];
-  var siteSet=new Set(TICKET_DATA.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
-  var siteOpts=['All'].concat([...siteSet].sort());
-  var assignSet=new Set(TICKET_DATA.map(function(r){return col(r,['Assigned To','assigned_to'])||'Unassigned';}));
-  var assignOpts=['All'].concat([...assignSet].sort());
 
-  // Filtered rows
+  // Apply filters
   var filtered=TICKET_DATA.filter(function(r){
-    var store=col(r,['Store','store']);
-    if(projectsOnly&&!isProjectSite(store)) return false;
-    if(fStatusArr.length>0 && fStatusArr.indexOf(col(r,['Status','status']))===-1) return false;
-    if(fPriArr.length>0 && fPriArr.indexOf(col(r,['Priority','priority']))===-1) return false;
-    if(fSite!=='All' && tickSiteName(store)!==fSite) return false;
-    if(fAssign!=='All' && (col(r,['Assigned To','assigned_to'])||'Unassigned')!==fAssign) return false;
-    var title=col(r,['Title','title']);
+    var dept  =col(r,['Department','department','dept']);
+    var store =col(r,['Store','store']);
+    var site  =tickSiteName(store);
+    var assign=col(r,['Assigned To','assigned_to'])||'Unassigned';
+    var status=col(r,['Status','status']);
+    var pri   =col(r,['Priority','priority']);
+    var title =col(r,['Title','title']);
+    if(fDept  !=='All'&&dept  !==fDept)   return false;
+    if(fSite  !=='All'&&site  !==fSite)   return false;
+    if(fAssign!=='All'&&assign!==fAssign) return false;
+    if(fStatusArr.length&&fStatusArr.indexOf(status)===-1) return false;
+    if(fPriArr.length   &&fPriArr.indexOf(pri)   ===-1) return false;
     if(fSearch&&!(title+' '+store).toLowerCase().includes(fSearch.toLowerCase())) return false;
     return true;
   });
@@ -3269,25 +3277,26 @@ function renderTicketTab(){
     });
   }
 
-  // KPIs (open tickets only)
-  var openData=TICKET_DATA.filter(function(r){return !isCsvClosed(r);});
-  var total=openData.length;
-  var urgent=openData.filter(function(r){return (col(r,['Priority'])||'').toLowerCase()==='urgent';}).length;
-  var unassigned=openData.filter(function(r){var a=col(r,['Assigned To','assigned_to']);return !a||a.toLowerCase()==='unassigned';}).length;
-  var tatVals=openData.map(function(r){return getTAT(r);}).filter(function(v){return v>0;});
-  var avgTAT=tatVals.length?Math.round(tatVals.reduce(function(a,b){return a+b;},0)/tatVals.length):0;
-  var sites=new Set(openData.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
-  var over30=openData.filter(function(r){return getTAT(r)>30;}).length;
+  // KPIs from all loaded (open) tickets
+  var openAll=TICKET_DATA.filter(function(r){return !isClosed(r);});
+  var kpiTotal   =filtered.length;
+  var kpiUrgent  =filtered.filter(function(r){return (col(r,['Priority'])||'').toLowerCase()==='urgent';}).length;
+  var kpiUnassign=filtered.filter(function(r){var a=col(r,['Assigned To','assigned_to']);return !a||a.toLowerCase()==='unassigned';}).length;
+  var tatVals    =filtered.filter(function(r){return !isClosed(r);}).map(getTAT).filter(function(v){return v>0;});
+  var avgTAT     =tatVals.length?Math.round(tatVals.reduce(function(a,b){return a+b;},0)/tatVals.length):0;
+  var affSites   =new Set(filtered.map(function(r){return tickSiteName(col(r,['Store','store']));}).filter(Boolean));
+  var over30     =filtered.filter(function(r){return getTAT(r)>30;}).length;
 
   var html='';
-  // KPI tiles
+
+  // KPI row
   html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:14px">';
-  [{label:'Total Open',val:total,color:'#1a73e8',bg:'#e8f0fe'},
-   {label:'Urgent',val:urgent,color:'#dc2626',bg:'#fef2f2'},
-   {label:'Unassigned',val:unassigned,color:'#d97706',bg:'#fffbeb'},
-   {label:'Avg TAT (days)',val:avgTAT+'d',color:tickTATColor(avgTAT),bg:'#f8fafc'},
+  [{label:'Showing',val:kpiTotal,color:'#1a73e8',bg:'#e8f0fe'},
+   {label:'Urgent',val:kpiUrgent,color:'#dc2626',bg:'#fef2f2'},
+   {label:'Unassigned',val:kpiUnassign,color:'#d97706',bg:'#fffbeb'},
+   {label:'Avg TAT',val:avgTAT+'d',color:tickTATColor(avgTAT),bg:'#f8fafc'},
    {label:'Over 30d',val:over30,color:'#dc2626',bg:'#fef2f2'},
-   {label:'Sites Affected',val:sites.size,color:'#7c3aed',bg:'#f5f3ff'},
+   {label:'Sites',val:affSites.size,color:'#7c3aed',bg:'#f5f3ff'},
   ].forEach(function(t){
     html+='<div style="padding:12px;background:'+t.bg+';border-radius:8px;border:1px solid '+t.color+'22">'
       +'<div style="font-size:20px;font-weight:800;color:'+t.color+'">'+t.val+'</div>'
@@ -3296,17 +3305,24 @@ function renderTicketTab(){
   });
   html+='</div>';
 
-  // Chip helper — uses data-* attrs to avoid all quote-escaping issues
+  // Dropdown helper
+  function dd(label,opts,val,stateKey){
+    var s='<span style="font-size:10px;color:var(--muted)">'+esc(label)+'</span>';
+    s+='<select data-sk="'+esc(stateKey)+'" onchange="tickDDChange(this)" style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)">';
+    opts.forEach(function(o){s+='<option'+(o===val?' selected':'')+'>'+esc(o)+'</option>';});
+    s+='</select>';
+    return s;
+  }
+
+  // Chip helper
   function chips(label,opts,arr,key){
     var s='<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
-    s+='<span style="font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;min-width:44px">'+esc(label)+'</span>';
-    var allActive=arr.length===0;
-    var allSt='font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(allActive?'var(--primary)':'var(--border)')+';background:'+(allActive?'var(--primary)':'var(--surface-2)')+';color:'+(allActive?'#fff':'var(--muted)');
-    s+='<button data-tkey="'+esc(key)+'" onclick="clearTicketFilter(this.dataset.tkey)" style="'+allSt+'">All</button>';
+    s+='<span style="font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;min-width:50px">'+esc(label)+'</span>';
+    var allOn=arr.length===0;
+    s+='<button data-tkey="'+esc(key)+'" onclick="clearTicketFilter(this.dataset.tkey)" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(allOn?'var(--primary)':'var(--border)')+';background:'+(allOn?'var(--primary)':'var(--surface-2)')+';color:'+(allOn?'#fff':'var(--muted)')+'">All</button>';
     opts.forEach(function(o){
-      var active=arr.indexOf(o)!==-1;
-      var st='font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(active?'var(--primary)':'var(--border)')+';background:'+(active?'var(--primary)':'var(--surface-2)')+';color:'+(active?'#fff':'var(--muted)');
-      s+='<button data-tkey="'+esc(key)+'" data-tval="'+esc(o)+'" onclick="toggleTicketFilter(this.dataset.tkey,this.dataset.tval)" style="'+st+'">'+esc(o)+'</button>';
+      var on=arr.indexOf(o)!==-1;
+      s+='<button data-tkey="'+esc(key)+'" data-tval="'+esc(o)+'" onclick="toggleTicketFilter(this.dataset.tkey,this.dataset.tval)" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(on?'var(--primary)':'var(--border)')+';background:'+(on?'var(--primary)':'var(--surface-2)')+';color:'+(on?'#fff':'var(--muted)')+'">'+esc(o)+'</button>';
     });
     s+='</div>';
     return s;
@@ -3314,16 +3330,19 @@ function renderTicketTab(){
 
   // Filter bar
   html+='<div style="background:var(--surface);border-radius:8px;border:1px solid var(--border);padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:8px">';
+
+  // Row 1: search + dropdowns + actions
   html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
-  html+='<input id="ticket-search" placeholder="Search tickets..." value="'+esc(fSearch)+'" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);flex:1;min-width:160px" oninput="(function(v){var el=document.getElementById(\'tickv\');el._fSearch=v;renderTicketTab();})(this.value)">';
-  var projSiteOpts=['All'].concat(allData.map(function(d){return (d['Site Name']||'').trim();}).filter(Boolean).sort());
-  html+='<span style="font-size:10px;color:var(--muted)">Project:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fSite=v;renderTicketTab();})(this.value)">'+projSiteOpts.map(function(o){return '<option'+(o===fSite?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
-  html+='<span style="font-size:10px;color:var(--muted)">Assigned:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fAssign=v;renderTicketTab();})(this.value)">'+assignOpts.map(function(o){return '<option'+(o===fAssign?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
-  html+='<span style="font-size:11px;color:var(--muted)">'+filtered.length+' tickets</span>';
-  
+  html+='<input placeholder="Search..." value="'+esc(fSearch)+'" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);flex:1;min-width:140px" oninput="tickSearchChange(this.value)">';
+  html+=dd('Dept:',deptOpts,fDept,'Dept');
+  html+=dd('Site:',siteOpts,fSite,'Site');
+  html+=dd('Assigned:',assignOpts,fAssign,'Assign');
+  html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
   html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack</button>';
-  html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600;white-space:nowrap">📊 Sheet</a>';
+  html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
+
+  // Row 2 & 3: chip filters
   html+=chips('Status:',allStatuses,fStatusArr,'StatusArr');
   html+=chips('Priority:',priOpts,fPriArr,'PriArr');
   html+='</div>';
@@ -3332,48 +3351,50 @@ function renderTicketTab(){
   var tatArrow=tatSort==='asc'?' ▲':tatSort==='desc'?' ▼':' ⇅';
   html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">';
   html+='<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">';
-  ['ID','Title','Site','Priority','Status','Assigned To','Raised By','Dept'].forEach(function(h){
+  ['ID','Title','Site','Dept','Priority','Status','Assigned To','Raised By'].forEach(function(h){
     html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">'+h+'</th>';
   });
-  html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none" onclick="cycleTicketTATSort()">TAT'+tatArrow+'</th>';
+  html+='<th onclick="cycleTicketTATSort()" style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap;cursor:pointer;user-select:none">TAT'+tatArrow+'</th>';
   ['Created At','Updated At'].forEach(function(h){
     html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">'+h+'</th>';
   });
   html+='</tr></thead><tbody>';
 
   filtered.forEach(function(r){
-    var id=col(r,['ID']);
-    var title=col(r,['Title','title']);
-    var store=col(r,['Store','store']);
-    var site=tickSiteName(store);
-    var pri=col(r,['Priority','priority']);
-    var assign=col(r,['Assigned To','assigned_to'])||'Unassigned';
-    var status=col(r,['Status','status']);
-    var raisedBy=col(r,['Raised by','raised_by','Raised By','raisedBy'])||'—';
-    var dept=col(r,['Department','department','dept'])||'—';
+    var id       =col(r,['ID']);
+    var title    =col(r,['Title','title']);
+    var store    =col(r,['Store','store']);
+    var site     =tickSiteName(store);
+    var pri      =col(r,['Priority','priority']);
+    var assign   =col(r,['Assigned To','assigned_to'])||'Unassigned';
+    var status   =col(r,['Status','status']);
+    var raisedBy =col(r,['Raised by','raised_by','Raised By'])||'—';
+    var dept     =col(r,['Department','department','dept'])||'—';
     var createdAt=col(r,['Created At','created_at'])||'—';
     var updatedAt=col(r,['Updated At','updated_at'])||'—';
-    var tat=getTAT(r);
-    var priStyle=tickPriClass(pri);
-    var tatColor=tickTATColor(tat);
-    var driveUrl=getDriveLink(site);
-    var vendor=(function(){if(!site||site==='—') return '';var sl=site.toLowerCase();var m=allData.find(function(d){var dn=(d['Site Name']||'').toLowerCase().trim();return dn===sl||dn.includes(sl)||sl.includes(dn);});return m?(m['Vendor']||''):'';})();
-    var closed=isCsvClosed(r);
-    html+='<tr style="border-bottom:1px solid var(--border);cursor:pointer;'+(closed?'opacity:.5':'')+'\" onclick="showTicketDetail(\''+esc(id)+'\')">';
-    html+='<td style="padding:7px 10px;font-size:11px;white-space:nowrap"><a href="https://processflows.ai/tickets/'+esc(id)+'" target="_blank" onclick="event.stopPropagation()" style="color:#003660;font-weight:700;text-decoration:none">#'+esc(id)+'</a></td>';
+    var tat      =getTAT(r);
+    var priStyle =tickPriClass(pri);
+    var priParts =priStyle.split(';');
+    var priBg    =priParts[0].split(':').slice(1).join(':');
+    var priClr   =priParts[1].split(':').slice(1).join(':');
+    var driveUrl =getDriveLink(site);
+    var closed   =isClosed(r);
+
+    html+='<tr data-tid="'+esc(id)+'" onclick="showTicketDetail(this.dataset.tid)" style="border-bottom:1px solid var(--border);cursor:pointer;'+(closed?'opacity:.45':'')+(closed?';background:var(--surface-2)':'')+'">';
+    html+='<td style="padding:7px 10px;white-space:nowrap"><a href="https://processflows.ai/tickets/'+esc(id)+'" target="_blank" onclick="event.stopPropagation()" style="color:#003660;font-weight:700;font-size:11px;text-decoration:none">#'+esc(id)+'</a></td>';
     html+='<td style="padding:7px 10px;max-width:260px"><div style="font-size:12px;font-weight:500;line-height:1.3">'+esc(title)+'</div></td>';
-    html+='<td style="padding:7px 10px;white-space:nowrap"><a href="'+driveUrl+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:var(--primary);text-decoration:none">📁 '+esc(site)+'</a>'+(vendor?'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+esc(vendor)+'</div>':'')+'</td>';
-    var priParts=priStyle.split(';');var priBg=priParts[0].split(':')[1];var priColor=priParts[1].split(':')[1];
-    html+='<td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+priBg+';color:'+priColor+'">'+esc(pri)+'</span></td>';
+    html+='<td style="padding:7px 10px;white-space:nowrap"><a href="'+driveUrl+'" target="_blank" onclick="event.stopPropagation()" style="font-size:11px;color:var(--primary);text-decoration:none">📁 '+esc(site)+'</a></td>';
+    html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+esc(dept)+'</td>';
+    html+='<td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+priBg+';color:'+priClr+'">'+esc(pri)+'</span></td>';
     html+='<td style="padding:7px 10px;font-size:11px">'+esc(status)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px">'+esc(assign)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+esc(raisedBy)+'</td>';
-    html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+esc(dept)+'</td>';
-    html+='<td style="padding:7px 10px;font-size:11px;font-weight:700;color:'+tatColor+'">'+tat+'d</td>';
+    html+='<td style="padding:7px 10px;font-size:11px;font-weight:700;color:'+tickTATColor(tat)+'">'+tat+'d</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+esc(createdAt)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+esc(updatedAt)+'</td>';
     html+='</tr>';
   });
+
   html+='</tbody></table></div>';
   el.innerHTML=html;
 }
