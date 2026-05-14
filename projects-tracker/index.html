@@ -410,9 +410,10 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <input type="file" id="live-csv-inp" accept=".csv" style="display:none" onchange="handleLiveCSV(event)">
     <button class="btn btn-o" id="login-btn" onclick="openLoginModal()" style="font-size:11px">🔐 Login</button>
     <button class="btn btn-o" id="logout-btn" onclick="doLogout()" style="font-size:11px;display:none">↪ Logout <span id="login-user" style="margin-left:4px;color:var(--muted);font-weight:400"></span></button>
-    <label class="btn btn-o" for="ticket-inp" id="ticket-local-lbl" style="font-size:11px">🎫 Upload Tickets (.csv)</label>
-    <input type="file" id="ticket-inp" accept=".csv" style="display:none" onchange="handleTicketUpload(event)">
+    <button class="btn btn-o" id="pf-sync-btn" onclick="syncTicketsFromPF()" style="font-size:11px">🔄 Sync Tickets</button>
     <span id="csv-ts-tickets" style="font-size:10px;color:var(--muted)"></span>
+    <label class="btn btn-o" for="ticket-inp" id="ticket-local-lbl" style="font-size:11px;display:none">🎫 Upload Tickets (.csv)</label>
+    <input type="file" id="ticket-inp" accept=".csv" style="display:none" onchange="handleTicketUpload(event)">
     <label class="btn btn-o" for="ticket-live-inp" id="ticket-live-lbl" style="cursor:pointer;font-size:11px;display:none">🎫 Upload Tickets CSV (Live)</label>
     <input type="file" id="ticket-live-inp" accept=".csv" style="display:none" onchange="handleLiveTicketCSV(event)">
     <label class="btn btn-o" for="snag-inp" id="snag-local-lbl" style="cursor:pointer;font-size:11px">📎 Upload Snag (.csv)</label>
@@ -4191,12 +4192,10 @@ function loadSnagFromOrigin(){
 loadSnagFromOrigin();
 
 // Map a single processflows API ticket object → TICKET_DATA row format.
-// Handles the most common field names processflows uses.
 function pfTicketToRow(t) {
-  function f(obj) {
-    // Try multiple possible key names, return first non-empty match
+  function f() {
     for (var i = 1; i < arguments.length; i++) {
-      var v = obj[arguments[i]];
+      var v = arguments[0][arguments[i]];
       if (v !== undefined && v !== null && String(v).trim() !== '') return String(v).trim();
     }
     return '';
@@ -4215,8 +4214,69 @@ function pfTicketToRow(t) {
   };
 }
 
-// Fetch tickets live from processflows.ai API via the Worker proxy.
-// Falls back to loadTicketsFromOrigin() (R2-stored CSV) if the API is unreachable.
+// Convert TICKET_DATA rows back to CSV text for R2 upload.
+function ticketDataToCSV(rows) {
+  var headers = ['ID','Title','Store','Status','Priority','Assigned To','Raised By','Created At','Open Since Days','TAT'];
+  function escCell(v) {
+    var s = String(v == null ? '' : v);
+    return (s.includes(',') || s.includes('"') || s.includes('\n'))
+      ? '"' + s.replace(/"/g, '""') + '"' : s;
+  }
+  return [headers.join(',')].concat(rows.map(function(r){
+    return headers.map(function(h){ return escCell(r[h]||''); }).join(',');
+  })).join('\n');
+}
+
+// Parse processflows JSON payload → TICKET_DATA rows.
+function parsePFPayload(text) {
+  var payload = JSON.parse(text); // throws on bad JSON
+  var items = Array.isArray(payload) ? payload
+    : (payload.results || payload.data || payload.tickets || payload.items || null);
+  if (!items) throw new Error('Unexpected API response shape — no results array found');
+  if (!items.length) throw new Error('API returned 0 tickets for this date range');
+  var rows = items.map(pfTicketToRow).filter(function(r){ return r['ID'] || r['Title']; });
+  if (!rows.length) throw new Error('Could not map any tickets — field names may differ');
+  return rows;
+}
+
+// Manual sync button handler — fetches from API, saves to R2 if logged in, shows errors.
+function syncTicketsFromPF() {
+  var btn = document.getElementById('pf-sync-btn');
+  if (btn) { btn.textContent = '⟳ Syncing…'; btn.disabled = true; }
+  var today = new Date();
+  var startDate = today.getFullYear() + '-01-01';
+  var endDate   = today.toISOString().slice(0, 10);
+  var url = WORKER_URL + 'pf-tickets?start_date=' + startDate + '&end_date=' + endDate;
+
+  C24Uploader.fetchText(url, { cache: 'no-store' })
+    .then(function(text) {
+      var rows = parsePFPayload(text); // throws on parse error
+      TICKET_DATA = rows;
+      document.getElementById('csv-ts-tickets').textContent = ''; // clear old stamp
+      stampCSV('tickets');
+      var el = document.getElementById('tickv');
+      if (el && el.style.display !== 'none') renderTicketTab();
+
+      // Save to R2 so the data persists on Vercel for all users
+      if (__auth) {
+        var csvText = ticketDataToCSV(rows);
+        C24Uploader.upload({ csvText: csvText, workerUrl: WORKER_URL, toolPath: TICKET_TOOL_PATH, auth: __auth })
+          .then(function()  { toast('✓ ' + rows.length + ' tickets synced and saved live', 'ok'); })
+          .catch(function(e){ toast('Synced locally but R2 save failed: ' + (e.message||e), 'err'); });
+      } else {
+        toast('✓ ' + rows.length + ' tickets loaded — log in to save live', 'ok');
+      }
+    })
+    .catch(function(err) {
+      toast('Sync failed: ' + (err && err.message || String(err)), 'err');
+    })
+    .finally(function() {
+      if (btn) { btn.textContent = '🔄 Sync Tickets'; btn.disabled = false; }
+    });
+}
+
+// Auto-fetch tickets from processflows on page load.
+// Shows error toast if API fails AND there's also no R2 fallback data.
 function loadTicketsFromPF() {
   if (location.protocol === 'file:') { loadTicketsFromOrigin(); return; }
   var today = new Date();
@@ -4226,24 +4286,17 @@ function loadTicketsFromPF() {
 
   C24Uploader.fetchText(url, { cache: 'no-store' })
     .then(function(text) {
-      var payload;
-      try { payload = JSON.parse(text); } catch(e) { throw new Error('Invalid JSON from pf-tickets proxy'); }
-      // Handle common envelope shapes: array, {results}, {data}, {tickets}
-      var items = Array.isArray(payload) ? payload
-        : (payload.results || payload.data || payload.tickets || payload.items || []);
-      if (!items.length) throw new Error('Empty ticket list from API');
-      var rows = items.map(pfTicketToRow).filter(function(r){ return r['ID'] || r['Title']; });
-      if (!rows.length) throw new Error('No mappable tickets in API response');
+      var rows = parsePFPayload(text);
       TICKET_DATA = rows;
-      var lbl = document.getElementById('ticket-local-lbl');
-      if (lbl) lbl.textContent = '🎫 Tickets (' + rows.length + ')';
       stampCSV('tickets');
       var el = document.getElementById('tickv');
       if (el && el.style.display !== 'none') renderTicketTab();
     })
     .catch(function(err) {
-      // API unreachable or returned no data — fall back silently to R2 CSV
-      loadTicketsFromOrigin();
+      // Try R2 fallback; if that also fails surface the original API error
+      loadTicketsFromOrigin().catch(function() {
+        toast('Tickets API failed: ' + (err && err.message || String(err)), 'err');
+      });
     });
 }
 loadTicketsFromPF();
@@ -4264,7 +4317,7 @@ function loadTicketsFromOrigin(){
         if (el && el.style.display !== 'none') renderTicketTab();
       }
     })
-    .catch(function(){ /* tickets are non-critical for first paint */ });
+    .catch(function(err){ throw err; }); // re-throw so callers can chain
 }
 
 // Standalone snag CSV parser — RFC-4180 quoting (handles "" escapes and embedded
