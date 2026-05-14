@@ -4239,6 +4239,27 @@ function parsePFPayload(text) {
   return rows;
 }
 
+// Fetch from the pf-tickets Worker proxy using native fetch so we can read
+// the full response body on errors (C24Uploader hides non-200 bodies).
+function pfFetch(url) {
+  return fetch(url, { cache: 'no-store' }).then(function(resp) {
+    return resp.text().then(function(body) {
+      if (!resp.ok) {
+        // Try to extract a detail message from our Worker's JSON error envelope
+        var detail = body;
+        try {
+          var j = JSON.parse(body);
+          detail = j.detail || j.error || body;
+        } catch(_) {}
+        var err = new Error('HTTP ' + resp.status + ': ' + String(detail).slice(0, 200));
+        err.status = resp.status;
+        throw err;
+      }
+      return body;
+    });
+  });
+}
+
 // Manual sync button handler — fetches from API, saves to R2 if logged in, shows errors.
 function syncTicketsFromPF() {
   var btn = document.getElementById('pf-sync-btn');
@@ -4248,35 +4269,37 @@ function syncTicketsFromPF() {
   var endDate   = today.toISOString().slice(0, 10);
   var url = WORKER_URL + 'pf-tickets?start_date=' + startDate + '&end_date=' + endDate;
 
-  C24Uploader.fetchText(url, { cache: 'no-store' })
+  pfFetch(url)
     .then(function(text) {
-      var rows = parsePFPayload(text); // throws on parse error
+      var rows = parsePFPayload(text);
       TICKET_DATA = rows;
-      document.getElementById('csv-ts-tickets').textContent = ''; // clear old stamp
+      var ts = document.getElementById('csv-ts-tickets');
+      if (ts) ts.textContent = '';
       stampCSV('tickets');
       var el = document.getElementById('tickv');
       if (el && el.style.display !== 'none') renderTicketTab();
 
-      // Save to R2 so the data persists on Vercel for all users
+      // Save to R2 so data persists on Vercel for all users
       if (__auth) {
         var csvText = ticketDataToCSV(rows);
         C24Uploader.upload({ csvText: csvText, workerUrl: WORKER_URL, toolPath: TICKET_TOOL_PATH, auth: __auth })
           .then(function()  { toast('✓ ' + rows.length + ' tickets synced and saved live', 'ok'); })
-          .catch(function(e){ toast('Synced locally but R2 save failed: ' + (e.message||e), 'err'); });
+          .catch(function(e){ toast('Synced in-session but R2 save failed: ' + (e.message||e), 'err'); });
       } else {
         toast('✓ ' + rows.length + ' tickets loaded — log in to save live', 'ok');
       }
     })
     .catch(function(err) {
-      toast('Sync failed: ' + (err && err.message || String(err)), 'err');
+      var msg = err && err.message ? err.message : String(err);
+      toast('Sync failed: ' + msg, 'err');
+      console.error('[pf-tickets sync]', msg);
     })
     .finally(function() {
       if (btn) { btn.textContent = '🔄 Sync Tickets'; btn.disabled = false; }
     });
 }
 
-// Auto-fetch tickets from processflows on page load.
-// Shows error toast if API fails AND there's also no R2 fallback data.
+// Auto-fetch tickets from processflows on page load (silent on fail — falls back to R2).
 function loadTicketsFromPF() {
   if (location.protocol === 'file:') { loadTicketsFromOrigin(); return; }
   var today = new Date();
@@ -4284,7 +4307,7 @@ function loadTicketsFromPF() {
   var endDate   = today.toISOString().slice(0, 10);
   var url = WORKER_URL + 'pf-tickets?start_date=' + startDate + '&end_date=' + endDate;
 
-  C24Uploader.fetchText(url, { cache: 'no-store' })
+  pfFetch(url)
     .then(function(text) {
       var rows = parsePFPayload(text);
       TICKET_DATA = rows;
@@ -4292,11 +4315,9 @@ function loadTicketsFromPF() {
       var el = document.getElementById('tickv');
       if (el && el.style.display !== 'none') renderTicketTab();
     })
-    .catch(function(err) {
-      // Try R2 fallback; if that also fails surface the original API error
-      loadTicketsFromOrigin().catch(function() {
-        toast('Tickets API failed: ' + (err && err.message || String(err)), 'err');
-      });
+    .catch(function() {
+      // Silently fall back to last saved R2 CSV on page load
+      loadTicketsFromOrigin().catch(function(){});
     });
 }
 loadTicketsFromPF();
