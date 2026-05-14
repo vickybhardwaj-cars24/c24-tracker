@@ -323,10 +323,15 @@ async function handlePFTickets(request, env) {
   const startDate = url.searchParams.get('start_date') || '';
   const endDate   = url.searchParams.get('end_date')   || '';
 
-  // Build processflows URL — omit date params if not provided (matches page-load curl)
-  let pfUrl = 'https://processflows.ai/api/ticket-list/';
+  const department = url.searchParams.get('department') || '';
+
+  // Build processflows URL — forward date and department filters
+  let pfUrl = 'https://processflows.ai/api/ticket-list/?';
   if (startDate && endDate) {
-    pfUrl += `?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
+    pfUrl += `start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
+  }
+  if (department) {
+    pfUrl += `department=${encodeURIComponent(department)}&`;
   }
 
   // Build Cookie header from individual env vars

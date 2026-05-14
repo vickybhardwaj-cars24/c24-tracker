@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.54</title>
+<title>Cars24 Projects Tracker v3.55</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3316,10 +3316,11 @@ function renderTicketTab(){
   html+='<div style="background:var(--surface);border-radius:8px;border:1px solid var(--border);padding:10px 12px;margin-bottom:8px;display:flex;flex-direction:column;gap:8px">';
   html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">';
   html+='<input id="ticket-search" placeholder="Search tickets..." value="'+esc(fSearch)+'" style="font-size:11px;padding:3px 8px;border-radius:5px;border:1px solid var(--border);flex:1;min-width:160px" oninput="(function(v){var el=document.getElementById(\'tickv\');el._fSearch=v;renderTicketTab();})(this.value)">';
-  html+='<span style="font-size:10px;color:var(--muted)">Site:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fSite=v;renderTicketTab();})(this.value)">'+siteOpts.map(function(o){return '<option'+(o===fSite?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
+  var projSiteOpts=['All'].concat(allData.map(function(d){return (d['Site Name']||'').trim();}).filter(Boolean).sort());
+  html+='<span style="font-size:10px;color:var(--muted)">Project:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fSite=v;renderTicketTab();})(this.value)">'+projSiteOpts.map(function(o){return '<option'+(o===fSite?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
   html+='<span style="font-size:10px;color:var(--muted)">Assigned:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fAssign=v;renderTicketTab();})(this.value)">'+assignOpts.map(function(o){return '<option'+(o===fAssign?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
   html+='<span style="font-size:11px;color:var(--muted)">'+filtered.length+' tickets</span>';
-  html+='<button onclick="toggleProjectsOnly()" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:600;border:1px solid '+(projectsOnly?'var(--primary)':'var(--border)')+';background:'+(projectsOnly?'var(--primary)':'var(--surface-2)')+';color:'+(projectsOnly?'#fff':'var(--muted)')+'">🏗 '+(projectsOnly?'Projects Only':'All Tickets')+'</button>';
+  
   html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600;white-space:nowrap">📊 Sheet</a>';
   html+='</div>';
@@ -4306,7 +4307,7 @@ function pfFetch(url) {
 // Manual sync button handler — fetches from API, saves to R2 if logged in, shows errors.
 function pfTicketsUrl() {
   var today = new Date().toISOString().slice(0, 10);
-  return WORKER_URL + 'pf-tickets?start_date=2026-01-01&end_date=' + today;
+  return WORKER_URL + 'pf-tickets?start_date=2026-01-01&end_date=' + today + '&department=Projects';
 }
 function syncTicketsFromPF() {
   var btn = document.getElementById('pf-sync-btn');
