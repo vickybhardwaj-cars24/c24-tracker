@@ -546,7 +546,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 <div class="overlay" id="overlay" onclick="onOvClick(event)">
   <div class="modal">
     <div class="mhdr">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="mttl" id="mttl"></div><a id="mdrive" href="#" target="_blank" class="drive-btn" style="display:none">📁 Drive</a></div><div style="margin-top:4px" id="mstat"></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="mttl" id="mttl"></div><a id="mdrive" href="#" target="_blank" class="drive-btn" style="display:none">📁 Drive</a><a id="mprpo" href="#" target="_blank" class="drive-btn" style="display:none;background:#4736FE;color:#fff;border-color:#4736FE">📋 PR/PO</a></div><div style="margin-top:4px" id="mstat"></div>
       <button class="mcls" onclick="closeModal()">✕</button>
     </div>
     <div class="mbody" id="mbody"></div>
@@ -1647,6 +1647,8 @@ function openModal(idx){
   document.getElementById('mttl').textContent=r['Site Name']||'Site';
   var _dm=document.getElementById('mdrive');
   if(_dm){_dm.href=getDriveLink(r['Site Name']);_dm.style.display='';}
+  var _pm=document.getElementById('mprpo');
+  if(_pm){var _cc=r['Cost Center']||'';_pm.href='/pr-po-tracker/?costCenter='+encodeURIComponent(_cc);_pm.style.display=_cc?'':'none';}
   const today=new Date();today.setHours(0,0,0,0);
   const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']);
   const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
