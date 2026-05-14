@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.53</title>
+<title>Cars24 Projects Tracker v3.54</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3184,6 +3184,10 @@ function tickTATColor(days){
   return '#16a34a';
 }
 
+function toggleProjectsOnly(){
+  var el=document.getElementById('tickv'); if(!el) return;
+  el._projectsOnly=el._projectsOnly===false?true:false; renderTicketTab();
+}
 function toggleTicketFilter(key,val){
   var el=document.getElementById('tickv'); if(!el) return;
   var arr=(el['_f'+key]||[]).slice();
@@ -3227,6 +3231,14 @@ function renderTicketTab(){
   var fAssign=el._fAssign||'All';
   var fSearch=el._fSearch||'';
   var tatSort=el._tatSort||'';
+  var projectsOnly=el._projectsOnly!==false; // default ON
+
+  // Set of known project site names (lowercase) for fast lookup
+  var projectSiteNames=new Set(allData.map(function(d){return (d['Site Name']||'').trim().toLowerCase();}).filter(Boolean));
+  function isProjectSite(store){
+    var s=tickSiteName(store).toLowerCase();
+    return s&&projectSiteNames.has(s);
+  }
 
   // Unique values for filters
   var statusSet=new Set(TICKET_DATA.map(function(r){return col(r,['Status','status']);}).filter(Boolean));
@@ -3239,11 +3251,13 @@ function renderTicketTab(){
 
   // Filtered rows
   var filtered=TICKET_DATA.filter(function(r){
+    var store=col(r,['Store','store']);
+    if(projectsOnly&&!isProjectSite(store)) return false;
     if(fStatusArr.length>0 && fStatusArr.indexOf(col(r,['Status','status']))===-1) return false;
     if(fPriArr.length>0 && fPriArr.indexOf(col(r,['Priority','priority']))===-1) return false;
-    if(fSite!=='All' && tickSiteName(col(r,['Store','store']))!==fSite) return false;
+    if(fSite!=='All' && tickSiteName(store)!==fSite) return false;
     if(fAssign!=='All' && (col(r,['Assigned To','assigned_to'])||'Unassigned')!==fAssign) return false;
-    var title=col(r,['Title','title']); var store=col(r,['Store','store']);
+    var title=col(r,['Title','title']);
     if(fSearch&&!(title+' '+store).toLowerCase().includes(fSearch.toLowerCase())) return false;
     return true;
   });
@@ -3305,6 +3319,7 @@ function renderTicketTab(){
   html+='<span style="font-size:10px;color:var(--muted)">Site:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fSite=v;renderTicketTab();})(this.value)">'+siteOpts.map(function(o){return '<option'+(o===fSite?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
   html+='<span style="font-size:10px;color:var(--muted)">Assigned:</span><select style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)" onchange="(function(v){var el=document.getElementById(\'tickv\');el._fAssign=v;renderTicketTab();})(this.value)">'+assignOpts.map(function(o){return '<option'+(o===fAssign?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>';
   html+='<span style="font-size:11px;color:var(--muted)">'+filtered.length+' tickets</span>';
+  html+='<button onclick="toggleProjectsOnly()" style="font-size:11px;padding:3px 10px;border-radius:6px;cursor:pointer;font-weight:600;border:1px solid '+(projectsOnly?'var(--primary)':'var(--border)')+';background:'+(projectsOnly?'var(--primary)':'var(--surface-2)')+';color:'+(projectsOnly?'#fff':'var(--muted)')+'">🏗 '+(projectsOnly?'Projects Only':'All Tickets')+'</button>';
   html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600;white-space:nowrap">📊 Sheet</a>';
   html+='</div>';
