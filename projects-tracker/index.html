@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.52</title>
+<title>Cars24 Projects Tracker v3.53</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3282,15 +3282,17 @@ function renderTicketTab(){
   });
   html+='</div>';
 
-  // Chip helper
+  // Chip helper — uses data-* attrs to avoid all quote-escaping issues
   function chips(label,opts,arr,key){
     var s='<div style="display:flex;align-items:center;gap:4px;flex-wrap:wrap">';
     s+='<span style="font-size:10px;font-weight:600;color:var(--muted);white-space:nowrap;min-width:44px">'+esc(label)+'</span>';
     var allActive=arr.length===0;
-    s+='<button onclick="clearTicketFilter(\''+key+'\')" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(allActive?'var(--primary)':'var(--border)')+';background:'+(allActive?'var(--primary)':'var(--surface-2)')+';color:'+(allActive?'#fff':'var(--muted)')+'">All</button>';
+    var allSt='font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(allActive?'var(--primary)':'var(--border)')+';background:'+(allActive?'var(--primary)':'var(--surface-2)')+';color:'+(allActive?'#fff':'var(--muted)');
+    s+='<button data-tkey="'+esc(key)+'" onclick="clearTicketFilter(this.dataset.tkey)" style="'+allSt+'">All</button>';
     opts.forEach(function(o){
       var active=arr.indexOf(o)!==-1;
-      s+='<button onclick="toggleTicketFilter(\''+key+'\','+esc(JSON.stringify(o))+')" style="font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(active?'var(--primary)':'var(--border)')+';background:'+(active?'var(--primary)':'var(--surface-2)')+';color:'+(active?'#fff':'var(--muted)')+'">'+esc(o)+'</button>';
+      var st='font-size:10px;padding:2px 9px;border-radius:10px;cursor:pointer;font-weight:600;border:1px solid '+(active?'var(--primary)':'var(--border)')+';background:'+(active?'var(--primary)':'var(--surface-2)')+';color:'+(active?'#fff':'var(--muted)');
+      s+='<button data-tkey="'+esc(key)+'" data-tval="'+esc(o)+'" onclick="toggleTicketFilter(this.dataset.tkey,this.dataset.tval)" style="'+st+'">'+esc(o)+'</button>';
     });
     s+='</div>';
     return s;
