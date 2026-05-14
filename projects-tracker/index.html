@@ -4264,10 +4264,7 @@ function pfFetch(url) {
 function syncTicketsFromPF() {
   var btn = document.getElementById('pf-sync-btn');
   if (btn) { btn.textContent = '⟳ Syncing…'; btn.disabled = true; }
-  var today = new Date();
-  var startDate = today.getFullYear() + '-01-01';
-  var endDate   = today.toISOString().slice(0, 10);
-  var url = WORKER_URL + 'pf-tickets?start_date=' + startDate + '&end_date=' + endDate;
+  var url = WORKER_URL + 'pf-tickets';
 
   pfFetch(url)
     .then(function(text) {
@@ -4302,10 +4299,7 @@ function syncTicketsFromPF() {
 // Auto-fetch tickets from processflows on page load (silent on fail — falls back to R2).
 function loadTicketsFromPF() {
   if (location.protocol === 'file:') { loadTicketsFromOrigin(); return; }
-  var today = new Date();
-  var startDate = today.getFullYear() + '-01-01';
-  var endDate   = today.toISOString().slice(0, 10);
-  var url = WORKER_URL + 'pf-tickets?start_date=' + startDate + '&end_date=' + endDate;
+  var url = WORKER_URL + 'pf-tickets';
 
   pfFetch(url)
     .then(function(text) {

@@ -312,35 +312,48 @@ async function readBodyCapped(request, limit) {
   return new TextDecoder('utf-8').decode(out);
 }
 
-// GET /pf-tickets?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD
-// Server-side proxy to processflows.ai ticket API — bypasses browser CORS.
-// Optional env var PF_COOKIE: session cookie string for authenticated access.
+// GET /pf-tickets                              — fetch all tickets (page-load style)
+// GET /pf-tickets?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD  — date-filtered fetch
+// Server-side proxy to processflows.ai — bypasses browser CORS.
+// Env vars (set in Cloudflare dashboard → Settings → Variables and Secrets):
+//   PF_CSRFTOKEN  — value of the csrftoken cookie from a logged-in browser session
+//   PF_SESSIONID  — value of the sessionid cookie from a logged-in browser session
 async function handlePFTickets(request, env) {
   const url = new URL(request.url);
   const startDate = url.searchParams.get('start_date') || '';
   const endDate   = url.searchParams.get('end_date')   || '';
-  if (!startDate || !endDate) {
-    return json(400, { success: false, error: 'start_date and end_date query params are required' });
+
+  // Build processflows URL — omit date params if not provided (matches page-load curl)
+  let pfUrl = 'https://processflows.ai/api/ticket-list/';
+  if (startDate && endDate) {
+    pfUrl += `?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
   }
 
-  const pfUrl = `https://processflows.ai/api/ticket-list/?start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
+  // Build Cookie header from individual env vars
+  const cookieParts = [];
+  if (env.PF_CSRFTOKEN) cookieParts.push(`csrftoken=${env.PF_CSRFTOKEN}`);
+  if (env.PF_SESSIONID) cookieParts.push(`sessionid=${env.PF_SESSIONID}`);
 
   const fetchHeaders = {
+    'Accept':               '*/*',
+    'Accept-Language':      'en-US,en;q=0.9',
     'Referer':              'https://processflows.ai/ticket_dashboard/',
     'User-Agent':           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
-    'Accept':               'application/json, text/plain, */*',
     'sec-ch-ua':            '"Google Chrome";v="147", "Not.A/Brand";v="8", "Chromium";v="147"',
     'sec-ch-ua-mobile':     '?0',
     'sec-ch-ua-platform':   '"Windows"',
+    'sec-fetch-dest':       'empty',
+    'sec-fetch-mode':       'cors',
+    'sec-fetch-site':       'same-origin',
+    'priority':             'u=1, i',
   };
-  // Use session cookie from Worker env if configured (set via Cloudflare dashboard)
-  if (env.PF_COOKIE) fetchHeaders['Cookie'] = env.PF_COOKIE;
+  if (cookieParts.length) fetchHeaders['Cookie'] = cookieParts.join('; ');
 
   try {
     const resp = await fetch(pfUrl, { headers: fetchHeaders });
     const text = await resp.text();
     if (!resp.ok) {
-      return json(resp.status, { success: false, error: `ProcessFlows API returned ${resp.status}`, detail: text.slice(0, 300) });
+      return json(resp.status, { success: false, error: `ProcessFlows API returned ${resp.status}`, detail: text.slice(0, 500) });
     }
     return new Response(text, {
       status: 200,
