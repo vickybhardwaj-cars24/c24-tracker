@@ -325,13 +325,13 @@ async function handlePFTickets(request, env) {
 
   const department = url.searchParams.get('department') || '';
 
-  // Build processflows URL — forward date and department filters
+  // Build processflows URL — department first, then dates (matches API expectation)
   let pfUrl = 'https://processflows.ai/api/ticket-list/?';
-  if (startDate && endDate) {
-    pfUrl += `start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
-  }
   if (department) {
     pfUrl += `department=${encodeURIComponent(department)}&`;
+  }
+  if (startDate && endDate) {
+    pfUrl += `start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&`;
   }
 
   // Build Cookie header from individual env vars
