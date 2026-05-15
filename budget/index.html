@@ -36,12 +36,12 @@ body{font-family:'Inter',sans-serif;margin:0;padding:0}
 .tbl-wrap .s-col{position:sticky;left:0;z-index:4;border-right:1px solid rgba(99,99,140,0.18)}
 .tbl-wrap thead .s-col{z-index:15}
 /* sticky col backgrounds — match surrounding bg closely but slightly offset */
-.dark .tbl-wrap .s-col{background:#131317;color:#f1f5f9}
-.dark .tbl-wrap thead .s-col{background:#1a1a1f}
-.dark .tbl-wrap .city-row .s-col{background:#1a1a28}
+.dark .tbl-wrap .s-col{background:#181818}
+.dark .tbl-wrap thead .s-col{background:#1e1e1e}
+.dark .tbl-wrap .city-row .s-col{background:#1f1f25}
 html:not(.dark) .tbl-wrap .s-col{background:#ffffff}
 html:not(.dark) .tbl-wrap thead .s-col{background:#f3f4f6}
-html:not(.dark) .tbl-wrap .city-row .s-col{background:#f0f0f6}
+html:not(.dark) .tbl-wrap .city-row .s-col{background:#f3f3f8}
 td,th{overflow:hidden;text-overflow:ellipsis}
 .tooltip-box{pointer-events:none;z-index:9999;position:fixed}
 </style>
@@ -664,7 +664,7 @@ const HubRow = memo(function HubRow({r, visCols, showTip, hideTip, stageCls}) {
   const tdB = "px-2 py-2 text-xs";
   return (
     <tr className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-[#4736FE]/5">
-      <td className={`${tdB} s-col font-medium w-44 max-w-[176px] truncate text-gray-900 dark:text-gray-100`} title={r.hub}>{r.hub}</td>
+      <td className={`${tdB} s-col font-medium w-44 max-w-[176px] truncate`} title={r.hub}>{r.hub}</td>
       <td className={`${tdB} text-gray-400 whitespace-nowrap`}>{r.city}</td>
       <td className={`${tdB} text-gray-400`}>{r.zone}</td>
       <td className={tdB}><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
