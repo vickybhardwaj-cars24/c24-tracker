@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 NSO Tracker v1.0</title>
+<title>Cars24 NSO Tracker v1.1</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -141,6 +141,7 @@ select.sel:focus{border-color:var(--accent)}
     <button class="btn btn-o" id="logout-btn" onclick="doLogout()" style="display:none;font-size:11px">↪ Logout <span id="login-user" style="margin-left:4px;color:var(--muted);font-weight:400"></span></button>
     <label class="btn btn-o" id="live-nso-lbl" for="nso-live-inp" style="display:none;cursor:pointer;font-size:11px">↑ Upload CSV (Live)</label>
     <input type="file" id="nso-live-inp" accept=".csv" style="display:none" onchange="handleLiveNSOCSV(event)">
+    <button class="btn btn-o" id="load-server-btn" onclick="loadFromServer()" style="font-size:11px">↓ Load from Server</button>
     <button class="btn btn-o" onclick="exportNSOCSV()" style="font-size:11px">↓ Export</button>
   </div>
 </header>
@@ -1046,19 +1047,37 @@ function exportNSOCSV(){
 }
 
 // ─────────────────────────────────────────────────────────
-// AUTO-LOAD FROM WORKER
+// LOAD FROM WORKER (auto-load + manual button)
 // ─────────────────────────────────────────────────────────
-(function loadFromWorker(){
-  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0) return;
-  C24Uploader.fetchText(WORKER_URL+NSO_TOOL_PATH+'.csv',{cache:'no-store'})
+function loadFromServer(manual){
+  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0){
+    if(manual) toast('Worker URL not configured');
+    return;
+  }
+  var url=WORKER_URL.replace(/\/+$/,'')+'/'+NSO_TOOL_PATH+'.csv';
+  var btn=document.getElementById('load-server-btn');
+  if(btn){btn.disabled=true;btn.textContent='Loading…';}
+  C24Uploader.fetchText(url,{skeleton:false})
     .then(function(text){
-      if(!text||text.trim().length<10) return;
+      if(btn){btn.disabled=false;btn.textContent='↓ Load from Server';}
+      if(!text||text.trim().length<10){
+        toast('⚠ Worker returned empty data — is nso-tracker.csv uploaded?');
+        console.warn('[NSO] Worker returned empty/short response for',url);
+        return;
+      }
       loadNSOData(text);
-      toast('NSO data loaded from server');
+      toast('✓ NSO data loaded from server ('+allData.length+' sites)');
     })
-    .catch(function(){
-      // Silently fail — user can upload manually
+    .catch(function(err){
+      if(btn){btn.disabled=false;btn.textContent='↓ Load from Server';}
+      var msg=err&&err.message?err.message:'fetch failed';
+      toast('✗ Worker error: '+msg);
+      console.error('[NSO] Worker fetch failed:',url,err);
     });
+}
+
+(function autoLoad(){
+  loadFromServer(false);
 })();
 
 // ─────────────────────────────────────────────────────────
