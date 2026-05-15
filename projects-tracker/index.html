@@ -252,6 +252,7 @@ td{padding:7px 12px;vertical-align:middle}
 .uentry{border:1px solid var(--border);border-radius:7px;margin-bottom:6px;overflow:hidden}
 .ubar{background:var(--surface);padding:5px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
 .udlbl{font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px}
+.u-m{font-size:9px;font-weight:700;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;padding:1px 6px;border-radius:8px;margin-left:5px;text-transform:none;letter-spacing:0}
 .utxt{padding:8px 10px;font-size:12px;color:var(--muted);line-height:1.5;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;max-height:180px;overflow-y:auto}
 .uedit{display:none;padding:7px 10px}
 .uedit textarea{width:100%;border:1px solid var(--border2);border-radius:5px;padding:7px;font-size:12px;font-family:'Inter',sans-serif;resize:vertical;min-height:60px;outline:none;color:var(--text)}
@@ -1717,9 +1718,18 @@ function openModal(idx){
   ];
   const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';
   const sortedCols=[...DATE_COLS].reverse().filter(d=>(r[d]||'').length>2);
+  const siteEditsH=(HOTP_UPDATES[(r['Site Name']||'').trim()])||{};
   const updates=sortedCols.map((d,i)=>{
     const k=d.replace(/ /g,'_');
-    return `<div class="uentry"><div class="ubar"><span class="udlbl">${esc(d)}</span><button class="btn btn-o btn-sm" onclick="toggleU('${esc(d)}',${idx})">Edit</button></div><div class="utxt" id="utxt-${k}-${idx}">${esc(r[d])}</div><div class="uedit" id="ued-${k}-${idx}"><textarea id="uta-${k}-${idx}">${esc(r[d])}</textarea><div class="erow"><button class="btn btn-p btn-sm" onclick="saveU('${esc(d)}',${idx})">Save</button><button class="btn btn-o btn-sm" onclick="cancelU('${esc(d)}',${idx})">Cancel</button></div></div></div>`;
+    const isManual=siteEditsH[d]!==undefined;
+    const badge=isManual?'<span class="u-m">Manual</span>':'';
+    const clearBtn=isManual?`<button class="btn btn-o btn-sm" style="font-size:10px;padding:2px 7px;color:#dc2626;border-color:#fca5a5" onclick="clearHOTPUpd('${esc(d)}',${idx})">Clear</button>`:'';
+    return `<div class="uentry" style="${isManual?'border-color:#bfdbfe':''}"><div class="ubar" style="${isManual?'background:#eff6ff':''}">`
+      +`<span class="udlbl">${esc(d)}${badge}</span>`
+      +`<div style="display:flex;gap:5px">${clearBtn}<button class="btn btn-o btn-sm" onclick="toggleU('${esc(d)}',${idx})">Edit</button></div>`
+      +`</div><div class="utxt" id="utxt-${k}-${idx}">${esc(r[d])}</div>`
+      +`<div class="uedit" id="ued-${k}-${idx}"><textarea id="uta-${k}-${idx}">${esc(r[d])}</textarea>`
+      +`<div class="erow"><button class="btn btn-p btn-sm" onclick="saveU('${esc(d)}',${idx})">Save</button><button class="btn btn-o btn-sm" onclick="cancelU('${esc(d)}',${idx})">Cancel</button></div></div></div>`;
   }).join('')||'<div style="font-size:12px;color:var(--muted);padding:6px 0">No updates yet.</div>';
   const tc=getTodayCol();
   document.getElementById('mbody').innerHTML=`
@@ -1745,6 +1755,16 @@ function saveMeta(f,idx,el){
 }
 function toggleU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='none';if(e2)e2.style.display='block';}
 function cancelU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='block';if(e2)e2.style.display='none';}
+function clearHOTPUpd(d,idx){
+  const sn=(allData[idx]['Site Name']||'').trim();
+  if(HOTP_UPDATES[sn]){ delete HOTP_UPDATES[sn][d]; if(!Object.keys(HOTP_UPDATES[sn]).length) delete HOTP_UPDATES[sn]; }
+  // Revert allData row to whatever CSV had (now unknown — set empty so CSV re-upload restores it)
+  allData[idx][d]='';
+  saveHOTPUpdates();
+  toast('Manual update cleared','ok');
+  openModal(idx);
+  applyFilters();
+}
 function saveU(d,idx){
   const k=d.replace(/ /g,'_');
   const ta=document.getElementById(`uta-${k}-${idx}`);
