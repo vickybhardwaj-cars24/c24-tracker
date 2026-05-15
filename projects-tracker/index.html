@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.64</title>
+<title>Cars24 Projects Tracker v3.65</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4335,17 +4335,14 @@ function attachEmailTracking(){
   });
 }
 
-function clearEmailLog(siteName, emailType){
-  if (!EMAIL_LOG[siteName]) return;
-  delete EMAIL_LOG[siteName][emailType];
-  if (!Object.keys(EMAIL_LOG[siteName]).length) delete EMAIL_LOG[siteName];
+function clearEmailLog(btn, siteName, emailType){
+  if (EMAIL_LOG[siteName]) {
+    delete EMAIL_LOG[siteName][emailType];
+    if (!Object.keys(EMAIL_LOG[siteName]).length) delete EMAIL_LOG[siteName];
+  }
   saveEmailLog();
-  var suv = document.getElementById('suv');
-  if (suv && suv.classList.contains('show')) renderSatUat();
-  var bdv = document.getElementById('bdv');
-  if (bdv && bdv.classList.contains('show')) renderBDTab();
-  var inv = document.getElementById('inv');
-  if (inv && inv.classList.contains('show')) renderWarnings();
+  var badge = btn.parentElement;
+  if (badge) badge.remove();
 }
 
 function emailLogBadge(siteName, emailType){
@@ -4354,7 +4351,7 @@ function emailLogBadge(siteName, emailType){
   var d = e[emailType];
   return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600">'
     +'✓ Sent'+(d.count>1?' ×'+d.count:'')+' · '+d.lastSentDate
-    +'<button title="Clear sent history" onclick="event.stopPropagation();clearEmailLog('+JSON.stringify(siteName)+','+JSON.stringify(emailType)+')" style="margin-left:3px;background:none;border:none;cursor:pointer;color:#16a34a;font-size:10px;padding:0;line-height:1">×</button>'
+    +'<button title="Clear sent history" onclick="event.stopPropagation();clearEmailLog(this,'+JSON.stringify(siteName)+','+JSON.stringify(emailType)+')" style="margin-left:3px;background:none;border:none;cursor:pointer;color:#16a34a;font-size:10px;padding:0;line-height:1">×</button>'
     +'</span>';
 }
 
