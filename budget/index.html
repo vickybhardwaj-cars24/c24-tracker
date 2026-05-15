@@ -33,15 +33,15 @@ body{font-family:'Inter',sans-serif;margin:0;padding:0}
 .tbl-wrap thead tr th{position:sticky;top:0;z-index:10;white-space:nowrap}
 .tbl-wrap thead tr:nth-child(2) th{top:36px}
 .tbl-wrap thead tr:nth-child(3) th{top:72px}
-.tbl-wrap .s-col{position:sticky;left:0;z-index:4}
+.tbl-wrap .s-col{position:sticky;left:0;z-index:4;border-right:1px solid rgba(99,99,140,0.18)}
 .tbl-wrap thead .s-col{z-index:15}
-/* sticky col backgrounds */
-.dark .tbl-wrap .s-col{background:#111}
-.dark .tbl-wrap thead .s-col{background:#1a1a1a}
-.dark .tbl-wrap .city-row .s-col{background:#1c1c2e}
-.light-s{background:#f9fafb}
-html:not(.dark) .tbl-wrap .s-col{background:#f9fafb}
-html:not(.dark) .tbl-wrap thead .s-col{background:#f3f4f6}
+/* sticky col backgrounds — match surrounding bg closely but slightly offset */
+.dark .tbl-wrap .s-col{background:#18181b;color:#f4f4f5}
+.dark .tbl-wrap thead .s-col{background:#1c1c22}
+.dark .tbl-wrap .city-row .s-col{background:#1e1e2e}
+html:not(.dark) .tbl-wrap .s-col{background:#f5f5f7}
+html:not(.dark) .tbl-wrap thead .s-col{background:#ededf0}
+html:not(.dark) .tbl-wrap .city-row .s-col{background:#e8e8ee}
 td,th{overflow:hidden;text-overflow:ellipsis}
 .tooltip-box{pointer-events:none;z-index:9999;position:fixed}
 </style>
@@ -664,7 +664,7 @@ const HubRow = memo(function HubRow({r, visCols, showTip, hideTip, stageCls}) {
   const tdB = "px-2 py-2 text-xs";
   return (
     <tr className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-[#4736FE]/5">
-      <td className={`${tdB} s-col font-medium max-w-[220px] truncate`} title={r.hub}>{r.hub}</td>
+      <td className={`${tdB} s-col font-medium w-44 max-w-[176px] truncate text-gray-900 dark:text-gray-100`} title={r.hub}>{r.hub}</td>
       <td className={`${tdB} text-gray-400 whitespace-nowrap`}>{r.city}</td>
       <td className={`${tdB} text-gray-400`}>{r.zone}</td>
       <td className={tdB}><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
@@ -762,7 +762,7 @@ function GSHubsTab({ gsData }) {
   function CitySubtotal({rows}) {
     return (
       <tr className="city-row bg-[#1c1c2e] dark:bg-[#1c1c2e] text-xs font-semibold border-b border-gray-700">
-        <td className="px-2 py-2 s-col text-gray-400 whitespace-nowrap text-[10px]">Subtotal</td>
+        <td className="px-2 py-2 s-col w-44 text-gray-400 whitespace-nowrap text-[10px]">Subtotal</td>
         <td colSpan="6" className="px-2 py-2"></td>
         {visCols.map(col=>{
           const v=rows.reduce((s,r)=>s+(r[col.key]||0),0);
@@ -804,7 +804,7 @@ function GSHubsTab({ gsData }) {
             <thead>
               {/* Row 1: Totals */}
               <tr>
-                <th className={`${thB} s-col text-left`}><span className="text-[#4736FE] font-bold">TOTALS — {filtered.length}</span></th>
+                <th className={`${thB} s-col w-44 text-left`}><span className="text-[#4736FE] font-bold">TOTALS — {filtered.length}</span></th>
                 <th className={thB} colSpan="6"></th>
                 {visCols.map(col=>(
                   <th key={'t-'+col.key} className={`${thB} text-right whitespace-nowrap ${col.key==='grandTotal'?'text-[#4736FE] font-bold':''}`}>
@@ -815,7 +815,7 @@ function GSHubsTab({ gsData }) {
               </tr>
               {/* Row 2: Group labels with colSpan */}
               <tr>
-                <th className={`${thB} s-col`}></th>
+                <th className={`${thB} s-col w-44`}></th>
                 <th className={thB} colSpan="6"></th>
                 {COL_GROUPS.map(g=>{
                   const isOpen = openGroups.has(g.key);
@@ -834,7 +834,7 @@ function GSHubsTab({ gsData }) {
               {/* Row 3: Column names */}
               <tr>
                 {['Hub','City','Zone','Cat.','Stage','Parking','Slots'].map((h,i)=>(
-                  <th key={'c-'+h} className={`${thB} ${i===0?'s-col ':''} text-left whitespace-nowrap`}>{h}</th>
+                  <th key={'c-'+h} className={`${thB} ${i===0?'s-col w-44 ':''} text-left whitespace-nowrap`}>{h}</th>
                 ))}
                 {visCols.map(col=>{
                   if (col.isGroupHead) {
@@ -865,7 +865,7 @@ function GSHubsTab({ gsData }) {
                   <React.Fragment key={city}>
                     <tr className="bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/[0.09]"
                       onClick={()=>{const s=new Set(collapsedCities);collapsed?s.delete(city):s.add(city);setCollapsedCities(s);}}>
-                      <td className="px-2 py-2 s-col font-bold text-xs text-[#4736FE] whitespace-nowrap">
+                      <td className="px-2 py-2 s-col w-44 font-bold text-xs text-[#4736FE] whitespace-nowrap truncate">
                         {collapsed?'▶':'▼'} {city} <span className="text-gray-400 font-normal ml-1">({rows.length})</span>
                       </td>
                       <td colSpan="6" className="px-2 py-2"></td>
