@@ -52,7 +52,7 @@ td,th{overflow:hidden;text-overflow:ellipsis}
 const { useState, useEffect, useRef, useMemo, useCallback, memo } = React;
 
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
-const BUDGET_PATH = 'budget-fy2627';
+const BUDGET_PATH = 'budget-capex';
 
 // ── Hard-coded data (fallback) ─────────────────────────────────────────────
 
@@ -1241,7 +1241,7 @@ function App() {
   // Try to load from Cloudflare on mount
   useEffect(()=>{
     if (location.protocol==='file:') return;
-    window.C24Uploader.fetchText(WORKER_URL + BUDGET_PATH + '.json', {cache:'no-store'})
+    window.C24Uploader.fetchText(WORKER_URL + BUDGET_PATH + '.csv', {cache:'no-store'})
       .then(text=>{
         const j = JSON.parse(text);
         if (j.gs && j.gs.length) { setGsData(j.gs); setC2bData(j.c2b||HARDCODED_C2B); setDataSource('cloudflare'); toast('✓ Budget data loaded from Cloudflare','ok'); }
@@ -1274,7 +1274,7 @@ function App() {
         // Save to Cloudflare if authenticated
         if (auth) {
           const jsonText = JSON.stringify({gs:gsRows, c2b:c2bRows||HARDCODED_C2B, uploadedAt:new Date().toISOString()});
-          window.C24Uploader.upload({csvText:jsonText, workerUrl:WORKER_URL, toolPath:BUDGET_PATH+'.json', auth, contentType:'application/json'})
+          window.C24Uploader.upload({csvText:jsonText, workerUrl:WORKER_URL, toolPath:BUDGET_PATH, auth})
             .then(()=>{ setDataSource('cloudflare'); toast('✓ Saved to Cloudflare — all users will see updated data','ok'); })
             .catch(er=>{ if(er.status===401){toast('Session expired','err');}else toast('Parsed OK but CF save failed: '+(er.message||er),'err'); });
         }
