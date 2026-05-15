@@ -1,0 +1,1077 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Cars24 NSO Tracker v1.0</title>
+<script src="/shared/c24-favicon.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#f5f6fa;--white:#fff;--surface:#f0f1f5;--border:#e4e6ed;--border2:#d1d5de;
+  --text:#1a1d23;--muted:#7b8494;--subtle:#a0a9b8;--accent:#2563eb;
+  --success:#16a34a;--warn:#d97706;--danger:#dc2626;--purple:#7c3aed;
+  --sh:0 1px 3px rgba(0,0,0,.08);--sh-md:0 4px 12px rgba(0,0,0,.1);--r:10px;
+}
+html,body{height:100%;overflow:hidden}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;display:flex;flex-direction:column}
+header{background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;z-index:200;box-shadow:var(--sh);flex-shrink:0}
+.logo{display:flex;align-items:center;gap:10px}
+.logo-chip{background:#2563eb;padding:6px 12px;border-radius:6px;color:#fff;font-size:12px;font-weight:700;letter-spacing:.3px}
+.logo h1{font-size:14px;font-weight:700}.logo p{font-size:11px;color:var(--muted)}
+.hdr-r{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all .15s;line-height:1.4;text-decoration:none}
+.btn-p{background:var(--accent);color:#fff}.btn-p:hover{background:#1d4ed8}
+.btn-o{background:var(--white);color:var(--text);border:1px solid var(--border2)}.btn-o:hover{background:var(--surface)}
+.btn-sm{padding:4px 9px;font-size:11px}
+.btn-success{background:#f0fdf4;color:#16a34a;border:1px solid #86efac}
+.kpi-bar{display:flex;gap:10px;background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;overflow-x:auto;scrollbar-width:none;flex-shrink:0;flex-wrap:wrap}
+.kpi-bar::-webkit-scrollbar{display:none}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 16px;min-width:110px;text-align:center;cursor:pointer;transition:all .15s}
+.kpi:hover{border-color:var(--accent);background:#eff6ff}
+.kpi.active{border-color:var(--accent);background:#eff6ff}
+.kpi-l{font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px}
+.kpi-v{font-size:22px;font-weight:800;line-height:1}
+.toolbar{background:var(--white);border-bottom:1px solid var(--border);padding:8px 20px;display:flex;gap:7px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.sw{position:relative;flex:1;min-width:160px}
+.sw svg{position:absolute;left:9px;top:50%;transform:translateY(-50%);color:var(--muted);pointer-events:none}
+input.search{width:100%;padding:6px 9px 6px 28px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;background:var(--bg);color:var(--text)}
+input.search:focus{border-color:var(--accent)}
+select.sel{padding:6px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;background:var(--bg);color:var(--text);cursor:pointer}
+select.sel:focus{border-color:var(--accent)}
+.vtabs{display:flex;background:var(--surface);border-radius:7px;padding:2px;gap:1px;border:1px solid var(--border)}
+.vtab{padding:4px 11px;border-radius:5px;font-size:11px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--muted);font-family:'Inter',sans-serif;transition:all .15s}
+.vtab.active{background:var(--white);color:var(--text);box-shadow:var(--sh)}
+#main-scroll{flex:1;overflow-y:auto}
+#gridv{display:none}
+#gridv.show{display:block;padding:16px 20px}
+#listv{display:none}
+#listv.show{display:block;padding:0}
+/* Site cards */
+.site-card{background:var(--white);border:1.5px solid var(--border);border-radius:var(--r);margin:0 20px 12px;overflow:hidden;transition:border-color .15s}
+.site-card:hover{border-color:#93c5fd}
+.card-header{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);cursor:pointer;flex-wrap:wrap;gap:8px}
+.card-title{font-size:13px;font-weight:700}
+.card-sub{font-size:11px;color:var(--muted);margin-top:2px}
+.card-dates{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));border-top:1px solid var(--border)}
+.card-date-cell{padding:8px 12px;border-right:1px solid var(--border)}
+.cdc-label{font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:2px;letter-spacing:.5px}
+.cdc-val{font-size:12px;font-weight:600}
+/* Department grid */
+.dept-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px;padding:10px 12px;border-top:1px solid var(--border)}
+.dept-cell{padding:6px 10px;border-radius:6px;border:1px solid var(--border);background:var(--surface)}
+.dept-name{font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;margin-bottom:2px}
+.dept-status{font-size:11px;color:var(--muted);line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.dept-done{border-color:#86efac;background:#f0fdf4}.dept-done .dept-name{color:#16a34a}
+.dept-pending{border-color:#fde68a;background:#fffbeb}.dept-pending .dept-name{color:#d97706}
+.dept-empty{border-color:var(--border);opacity:.5}
+.dept-nso{border-color:#93c5fd;background:#eff6ff}.dept-nso .dept-name{color:#2563eb}
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600;white-space:nowrap}
+.b-live{background:#eff6ff;color:#2563eb}
+.b-warn{background:#fffbeb;color:#d97706}
+.b-danger{background:#fef2f2;color:#dc2626}
+.b-ok{background:#f0fdf4;color:#16a34a}
+.b-gray{background:var(--surface);color:var(--muted)}
+/* Modal */
+#modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:flex-start;justify-content:center;padding:20px}
+#modal-overlay.open{display:flex}
+#modal-box{background:var(--white);border-radius:var(--r);box-shadow:0 20px 60px rgba(0,0,0,.25);width:860px;max-width:96vw;max-height:90vh;overflow-y:auto;font-family:'Inter',sans-serif}
+.modal-header{position:sticky;top:0;background:var(--white);border-bottom:1px solid var(--border);padding:14px 20px;display:flex;align-items:center;justify-content:space-between;z-index:10}
+.modal-body{padding:20px}
+.modal-section{margin-bottom:20px}
+.modal-section-title{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+/* Timeline */
+.timeline-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:11px}
+.tl-icon{width:18px;text-align:center;flex-shrink:0}
+.tl-label{color:var(--muted);min-width:140px}
+.tl-date{font-weight:600}
+/* Editable update cell */
+.upd-cell{font-size:11px;color:var(--muted);padding:6px 8px;border-radius:4px;border:1px solid transparent;cursor:text;line-height:1.4;min-height:32px;white-space:pre-wrap;transition:border-color .15s}
+.upd-cell:focus{outline:none;border-color:var(--accent);background:var(--white);color:var(--text)}
+.upd-cell:hover{border-color:var(--border2)}
+/* Login modal */
+#login-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9999;align-items:center;justify-content:center}
+#login-modal.open{display:flex}
+/* Toast */
+#toast{position:fixed;bottom:20px;right:20px;z-index:99999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast-msg{background:#1a1d23;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:500;box-shadow:0 4px 12px rgba(0,0,0,.3);opacity:0;transform:translateY(8px);transition:all .2s;pointer-events:none}
+.toast-msg.show{opacity:1;transform:translateY(0)}
+/* Empty state */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:60px 20px;gap:12px;color:var(--muted)}
+.empty-icon{font-size:48px}
+.empty-title{font-size:15px;font-weight:600;color:var(--text)}
+.empty-sub{font-size:12px;text-align:center;max-width:320px}
+/* Date column table */
+.upd-table{width:100%;border-collapse:collapse}
+.upd-table th{padding:6px 10px;background:var(--surface);border:1px solid var(--border);font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;white-space:nowrap}
+.upd-table td{padding:6px 8px;border:1px solid var(--border);vertical-align:top}
+/* NSO status pill */
+.nso-pill{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:12px;font-size:10px;font-weight:700}
+.nso-done{background:#dcfce7;color:#15803d}
+.nso-pending{background:#fef9c3;color:#854d0e}
+.nso-na{background:var(--surface);color:var(--muted)}
+/* Responsive */
+@media(max-width:600px){
+  header{padding:8px 12px}
+  .hdr-r{gap:5px}
+  .site-card{margin:0 8px 10px}
+  .modal-body{padding:12px}
+}
+</style>
+</head>
+<body>
+<script src="/shared/c24-uploader.js"></script>
+
+<header>
+  <div class="logo">
+    <div class="logo-chip">NSO</div>
+    <div>
+      <h1>NSO Tracker — FY 26/27</h1>
+      <p>New Site Operations · CARS24 Expansion</p>
+    </div>
+  </div>
+  <div class="hdr-r">
+    <span id="date-chip" style="font-size:11px;font-weight:600;color:var(--accent);background:#eff6ff;border:1px solid #bfdbfe;padding:4px 10px;border-radius:6px"></span>
+    <a class="btn btn-o" href="/projects-tracker/" style="font-size:11px">← Projects</a>
+    <label class="btn btn-p" for="nso-csv-inp" style="cursor:pointer;font-size:11px">↑ Upload NSO CSV</label>
+    <input type="file" id="nso-csv-inp" accept=".csv" style="display:none" onchange="handleNSOUpload(event)">
+    <button class="btn btn-o" id="login-btn" onclick="openLoginModal()" style="font-size:11px">🔐 Login</button>
+    <button class="btn btn-o" id="logout-btn" onclick="doLogout()" style="display:none;font-size:11px">↪ Logout <span id="login-user" style="margin-left:4px;color:var(--muted);font-weight:400"></span></button>
+    <label class="btn btn-o" id="live-nso-lbl" for="nso-live-inp" style="display:none;cursor:pointer;font-size:11px">↑ Upload CSV (Live)</label>
+    <input type="file" id="nso-live-inp" accept=".csv" style="display:none" onchange="handleLiveNSOCSV(event)">
+    <button class="btn btn-o" onclick="exportNSOCSV()" style="font-size:11px">↓ Export</button>
+  </div>
+</header>
+
+<div class="kpi-bar" id="kpi-bar">
+  <div class="empty-state" style="padding:10px 0;flex-direction:row;gap:16px;color:var(--muted)">
+    <span>Upload NSO CSV to begin tracking →</span>
+    <label class="btn btn-p btn-sm" for="nso-csv-inp" style="cursor:pointer">↑ Upload CSV</label>
+  </div>
+</div>
+
+<div class="toolbar">
+  <div class="sw">
+    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+    <input class="search" id="search" type="text" placeholder="Search sites, cost centre, status…" oninput="applyFilters()">
+  </div>
+  <select class="sel" id="f-status" onchange="applyFilters()"><option value="">All Statuses</option></select>
+  <select class="sel" id="f-dept" onchange="applyFilters()">
+    <option value="">All Departments</option>
+    <option value="NSO">NSO</option>
+    <option value="BD">BD</option>
+    <option value="CS">CS</option>
+    <option value="IT">IT</option>
+    <option value="Admin">Admin</option>
+    <option value="GMB">GMB</option>
+    <option value="B2C">B2C</option>
+    <option value="Projects">Projects</option>
+    <option value="Design">Design</option>
+    <option value="VM">VM</option>
+    <option value="Logistic">Logistic</option>
+    <option value="Marketing">Marketing</option>
+    <option value="CDM &amp; VAS">CDM &amp; VAS</option>
+    <option value="HEM">HEM</option>
+  </select>
+  <select class="sel" id="f-nso" onchange="applyFilters()">
+    <option value="">NSO: All</option>
+    <option value="done">929 Done</option>
+    <option value="pending">929 Pending</option>
+  </select>
+  <select class="sel" id="f-itform" onchange="applyFilters()">
+    <option value="">IT Form: All</option>
+    <option value="yes">Filled</option>
+    <option value="no">Pending</option>
+  </select>
+  <div class="vtabs">
+    <button class="vtab active" onclick="setView('listv',this)">📋 Sites</button>
+    <button class="vtab" onclick="setView('gridv',this)">🗂 Grid</button>
+    <button class="vtab" onclick="setView('deptv',this)">🏢 By Department</button>
+    <button class="vtab" onclick="setView('tlv',this)">📅 Timeline</button>
+  </div>
+  <span style="font-size:11px;color:var(--muted);margin-left:auto" id="count-chip"></span>
+</div>
+
+<div id="main-scroll">
+  <div id="listv" class="show">
+    <div id="site-list"></div>
+  </div>
+  <div id="gridv">
+    <div id="dept-summary"></div>
+  </div>
+  <div id="deptv" style="display:none;padding:16px 20px">
+    <div id="dept-view"></div>
+  </div>
+  <div id="tlv" style="display:none;padding:16px 20px">
+    <div id="timeline-view"></div>
+  </div>
+</div>
+
+<!-- Site Detail Modal -->
+<div id="modal-overlay" onclick="if(event.target===this)closeModal()">
+  <div id="modal-box">
+    <div class="modal-header">
+      <div>
+        <div id="modal-title" style="font-size:15px;font-weight:700"></div>
+        <div id="modal-sub" style="font-size:11px;color:var(--muted);margin-top:2px"></div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <a id="modal-proj-link" href="/projects-tracker/" target="_blank" class="btn btn-o btn-sm" style="text-decoration:none">→ Projects</a>
+        <button onclick="closeModal()" style="background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;line-height:1">×</button>
+      </div>
+    </div>
+    <div class="modal-body" id="modal-body"></div>
+  </div>
+</div>
+
+<!-- Login Modal -->
+<div id="login-modal" onclick="if(event.target===this)closeLoginModal()">
+  <div style="background:var(--white);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:340px;max-width:92vw;padding:22px 22px 18px">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+      <h2 style="font-size:15px;font-weight:700">🔐 NSO Tracker Login</h2>
+      <button onclick="closeLoginModal()" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer">×</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);margin:0 0 14px">Required for live CSV uploads.</p>
+    <form onsubmit="event.preventDefault();doLogin()">
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Username</label>
+      <input id="login-username" type="text" autocomplete="username" required style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;margin-bottom:10px;outline:none;font-family:'Inter',sans-serif">
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
+      <input id="login-password" type="password" autocomplete="current-password" required style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;margin-bottom:14px;outline:none;font-family:'Inter',sans-serif">
+      <div id="login-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;margin-bottom:10px"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button type="button" class="btn btn-o" onclick="closeLoginModal()">Cancel</button>
+        <button type="submit" class="btn btn-p" id="login-submit">Login</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// CONSTANTS
+// ─────────────────────────────────────────────────────────
+const NSO_DATA = [];   // populated by CSV upload — never embed raw data
+const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
+const NSO_TOOL_PATH = 'nso-tracker';
+
+const META_COLS = ['S. No.','Cost Center','Site Name','Replacement','Status',
+  'Temp Furniture','Temp Live Date','Final Live Date','Revised Temp Date',
+  'Revised Live Date','IT form Filled'];
+
+const DEPTS = ['BD','CS','NSO','IT','Admin','Ops','GMB','B2C','Projects',
+  'Design','VM','Logistic','Marketing','CDM & VAS','HEM'];
+
+const DEPT_COLOR = {
+  BD:       {bg:'#dbeafe',color:'#1d4ed8',border:'#bfdbfe'},
+  CS:       {bg:'#fce7f3',color:'#be185d',border:'#fbcfe8'},
+  NSO:      {bg:'#eff6ff',color:'#2563eb',border:'#93c5fd'},
+  IT:       {bg:'#f0fdf4',color:'#15803d',border:'#86efac'},
+  Admin:    {bg:'#fdf4ff',color:'#7e22ce',border:'#e9d5ff'},
+  Ops:      {bg:'#fff7ed',color:'#c2410c',border:'#fed7aa'},
+  GMB:      {bg:'#fefce8',color:'#854d0e',border:'#fef08a'},
+  B2C:      {bg:'#ecfdf5',color:'#065f46',border:'#a7f3d0'},
+  Projects: {bg:'#f0f9ff',color:'#0369a1',border:'#bae6fd'},
+  Design:   {bg:'#fdf2f8',color:'#9d174d',border:'#fbcfe8'},
+  VM:       {bg:'#fff1f2',color:'#be123c',border:'#fecdd3'},
+  Logistic: {bg:'#f0fdfa',color:'#0f766e',border:'#99f6e4'},
+  Marketing:{bg:'#fef3c7',color:'#92400e',border:'#fde68a'},
+  'CDM & VAS':{bg:'#f5f3ff',color:'#6d28d9',border:'#c4b5fd'},
+  HEM:      {bg:'#fff8f1',color:'#b45309',border:'#fcd34d'},
+};
+
+var __auth = null;
+var allData = [...NSO_DATA];
+var filteredData = [...allData];
+var dateCols = [];
+var currentModalIdx = -1;
+
+// ─────────────────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────────────────
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function toast(msg, dur){
+  var el=document.getElementById('toast');
+  var d=document.createElement('div');
+  d.className='toast-msg';d.textContent=msg;el.appendChild(d);
+  requestAnimationFrame(function(){d.classList.add('show')});
+  setTimeout(function(){d.classList.remove('show');setTimeout(function(){el.removeChild(d)},300)},dur||2500);
+}
+
+function pd(s){
+  if(!s||!s.trim()||s.trim()==='--') return null;
+  var m=s.trim().match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/);
+  if(m){var yr=m[3].length===2?2000+parseInt(m[3]):parseInt(m[3]);return new Date(yr,parseInt(m[2])-1,parseInt(m[1]));}
+  var months={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+  m=s.trim().match(/(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]+)(?:\s+(\d{2,4}))?/i);
+  if(m){
+    var mon=months[m[2].toLowerCase().slice(0,3)];
+    if(mon===undefined) return null;
+    var yr2=m[3]?(m[3].length===2?2000+parseInt(m[3]):parseInt(m[3])):2026;
+    return new Date(yr2,mon,parseInt(m[1]));
+  }
+  return null;
+}
+
+function fmtDate(d){
+  if(!d) return '--';
+  return d.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'2-digit'});
+}
+
+function fmtDateShort(d){
+  if(!d) return '--';
+  return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+}
+
+function daysFrom(d){
+  if(!d) return null;
+  var t=new Date(); t.setHours(0,0,0,0);
+  return Math.round((d-t)/86400000);
+}
+
+// ─────────────────────────────────────────────────────────
+// CSV PARSING
+// ─────────────────────────────────────────────────────────
+function parseCSV(txt){
+  var lines=[], cur='', inQ=false;
+  for(var i=0;i<txt.length;i++){
+    var c=txt[i];
+    if(c==='"'){ inQ=!inQ; }
+    else if(c==='\n'&&!inQ){ lines.push(cur); cur=''; }
+    else{ cur+=c; }
+  }
+  if(cur) lines.push(cur);
+
+  function splitRow(row){
+    var fields=[], cur2='', inQ2=false;
+    for(var i=0;i<row.length;i++){
+      var c=row[i];
+      if(c==='"'){ inQ2=!inQ2; }
+      else if(c===','&&!inQ2){ fields.push(cur2.trim()); cur2=''; }
+      else{ cur2+=c; }
+    }
+    fields.push(cur2.trim());
+    return fields;
+  }
+
+  // Find header row (contains "Site Name")
+  var headerIdx=-1, headers=[];
+  for(var li=0;li<Math.min(lines.length,5);li++){
+    var f=splitRow(lines[li]);
+    var hasHdr=f.some(function(x){return x.toLowerCase().replace(/\s/g,'').indexOf('sitename')>=0;});
+    if(hasHdr){headerIdx=li; headers=f; break;}
+  }
+  if(headerIdx<0) return [];
+
+  // Clean headers — normalise "S. No." variants
+  headers=headers.map(function(h){
+    h=h.replace(/^"|"$/g,'').trim();
+    if(/^s[\s.]*no/i.test(h)) return 'S. No.';
+    return h;
+  });
+
+  var rows=[];
+  for(var li2=headerIdx+1;li2<lines.length;li2++){
+    if(!lines[li2].trim()) continue;
+    var f2=splitRow(lines[li2]);
+    var obj={};
+    headers.forEach(function(h,i){ obj[h]=(f2[i]||'').replace(/^"|"$/g,'').trim(); });
+    if(!(obj['Site Name']||'').trim()) continue;
+    rows.push(obj);
+  }
+  return rows;
+}
+
+function detectDateCols(headers){
+  return headers.filter(function(h){
+    return /^\d{1,2}\s+[A-Za-z]+$/.test(h.trim()) || /^[A-Za-z]+\s+\d{1,2}$/.test(h.trim());
+  });
+}
+
+// ─────────────────────────────────────────────────────────
+// DEPARTMENT PARSING
+// ─────────────────────────────────────────────────────────
+function parseDeptStatuses(row){
+  // For each dept, find the latest non-empty status across all date columns
+  var result={};
+  DEPTS.forEach(function(dept){ result[dept]=''; });
+
+  // Build sorted date columns (latest first)
+  var cols=dateCols.slice().reverse();
+  cols.forEach(function(col){
+    var txt=(row[col]||'').trim();
+    if(!txt) return;
+    DEPTS.forEach(function(dept){
+      if(result[dept]) return; // already found latest
+      // Match "DEPT:" or "DEPT :" pattern (case insensitive)
+      var re=new RegExp('(?:^|\\n)'+escRe(dept)+'\\s*:\\s*([^\\n]*(?:\\n(?!'+DEPTS.map(escRe).join('|')+'\\s*:)[^\\n]*)*)','im');
+      var m=txt.match(re);
+      if(m) result[dept]=(m[1]||'').trim();
+    });
+  });
+  return result;
+}
+
+function escRe(s){ return s.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+
+function getNSOStatus(row){
+  var deptMap=parseDeptStatuses(row);
+  var nsoTxt=deptMap['NSO']||'';
+  if(!nsoTxt) return {status:'empty',text:''};
+  var lower=nsoTxt.toLowerCase();
+  if(lower.indexOf('929 done')>=0||lower.indexOf('929done')>=0) return {status:'done',text:nsoTxt};
+  if(lower.indexOf('929')>=0) return {status:'pending',text:nsoTxt};
+  return {status:'other',text:nsoTxt};
+}
+
+function getTempLive(row){
+  // 1. From the "Temp Live Date" column
+  var tld=pd(row['Temp Live Date']||'');
+  if(tld) return tld;
+  // 2. From daily updates: "Temp Live Date: DD Mon" pattern
+  for(var i=0;i<dateCols.length;i++){
+    var txt=row[dateCols[i]]||'';
+    var m=txt.match(/temp\s+live\s+date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+(?:\s+\d{2,4})?)/i);
+    if(m){var d=pd(m[1]); if(d) return d;}
+  }
+  return null;
+}
+
+function getRevisedTempLive(row){
+  return pd(row['Revised Temp Date']||'') || null;
+}
+
+function getFinalLive(row){
+  return pd(row['Final Live Date']||'') || pd(row['Revised Live Date']||'') || null;
+}
+
+function getEffectiveTempLive(row){
+  return getRevisedTempLive(row) || getTempLive(row);
+}
+
+// ─────────────────────────────────────────────────────────
+// UPLOAD HANDLERS
+// ─────────────────────────────────────────────────────────
+function handleNSOUpload(event){
+  var file=event.target.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    loadNSOData(e.target.result);
+    toast('NSO CSV loaded: '+allData.length+' sites');
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+function loadNSOData(csvText){
+  var parsed=parseCSV(csvText);
+  if(!parsed.length){toast('No valid data found in CSV');return;}
+  // Detect date cols from first row keys
+  var keys=Object.keys(parsed[0]);
+  dateCols=detectDateCols(keys);
+  allData=parsed;
+  filteredData=[...allData];
+  buildFilters();
+  renderKPIs();
+  renderCurrentView();
+}
+
+function handleLiveNSOCSV(event){
+  if(!__auth){toast('Please login first');return;}
+  var file=event.target.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var csvText=e.target.result;
+    C24Uploader.upload({
+      csvText:csvText,
+      workerUrl:WORKER_URL,
+      toolPath:NSO_TOOL_PATH,
+      auth:__auth,
+      onSuccess:function(){
+        toast('NSO CSV uploaded to server');
+        loadNSOData(csvText);
+      },
+      onError:function(err){toast('Upload failed: '+err);}
+    });
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+// ─────────────────────────────────────────────────────────
+// AUTH
+// ─────────────────────────────────────────────────────────
+function openLoginModal(){document.getElementById('login-modal').classList.add('open');}
+function closeLoginModal(){document.getElementById('login-modal').classList.remove('open');}
+
+function doLogin(){
+  var u=document.getElementById('login-username').value.trim();
+  var p=document.getElementById('login-password').value;
+  var btn=document.getElementById('login-submit');
+  var err=document.getElementById('login-error');
+  btn.textContent='Logging in…';btn.disabled=true;err.style.display='none';
+  C24Uploader.verify({workerUrl:WORKER_URL,auth:{username:u,password:p}})
+    .then(function(){
+      __auth={username:u,password:p};
+      closeLoginModal();
+      document.getElementById('login-btn').style.display='none';
+      document.getElementById('logout-btn').style.display='';
+      document.getElementById('login-user').textContent=u;
+      document.getElementById('live-nso-lbl').style.display='';
+      toast('Logged in as '+u);
+    })
+    .catch(function(e){
+      err.textContent=e&&e.message?e.message:'Invalid credentials';
+      err.style.display='';
+    })
+    .finally(function(){btn.textContent='Login';btn.disabled=false;});
+}
+
+function doLogout(){
+  __auth=null;
+  document.getElementById('login-btn').style.display='';
+  document.getElementById('logout-btn').style.display='none';
+  document.getElementById('live-nso-lbl').style.display='none';
+  toast('Logged out');
+}
+
+// ─────────────────────────────────────────────────────────
+// FILTERS
+// ─────────────────────────────────────────────────────────
+function buildFilters(){
+  var statuses=[...new Set(allData.map(function(r){return (r['Status']||'').trim();}).filter(Boolean))].sort();
+  var fStatus=document.getElementById('f-status');
+  fStatus.innerHTML='<option value="">All Statuses</option>';
+  statuses.forEach(function(s){ fStatus.innerHTML+='<option value="'+esc(s)+'">'+esc(s)+'</option>'; });
+}
+
+function applyFilters(){
+  var q=(document.getElementById('search').value||'').toLowerCase();
+  var fStatus=document.getElementById('f-status').value;
+  var fDept=document.getElementById('f-dept').value;
+  var fNso=document.getElementById('f-nso').value;
+  var fIt=document.getElementById('f-itform').value;
+
+  filteredData=allData.filter(function(r){
+    var sn=(r['Site Name']||'').toLowerCase();
+    var cc=(r['Cost Center']||'').toLowerCase();
+    var st=(r['Status']||'').toLowerCase();
+    if(q&&sn.indexOf(q)<0&&cc.indexOf(q)<0&&st.indexOf(q)<0){
+      // Also search in latest update
+      var anyMatch=dateCols.some(function(c){return (r[c]||'').toLowerCase().indexOf(q)>=0;});
+      if(!anyMatch) return false;
+    }
+    if(fStatus&&(r['Status']||'').trim()!==fStatus) return false;
+    if(fDept){
+      var dm=parseDeptStatuses(r);
+      if(!(dm[fDept]||'').trim()) return false;
+    }
+    if(fNso){
+      var ns=getNSOStatus(r);
+      if(fNso==='done'&&ns.status!=='done') return false;
+      if(fNso==='pending'&&ns.status==='done') return false;
+    }
+    if(fIt){
+      var itFilled=(r['IT form Filled']||'').toLowerCase();
+      if(fIt==='yes'&&itFilled!=='yes') return false;
+      if(fIt==='no'&&itFilled==='yes') return false;
+    }
+    return true;
+  });
+  document.getElementById('count-chip').textContent=filteredData.length+' / '+allData.length+' sites';
+  renderCurrentView();
+}
+
+// ─────────────────────────────────────────────────────────
+// KPIs
+// ─────────────────────────────────────────────────────────
+function renderKPIs(){
+  if(!allData.length) return;
+  var today=new Date(); today.setHours(0,0,0,0);
+  var total=allData.length;
+  var nsoDone=allData.filter(function(r){return getNSOStatus(r).status==='done';}).length;
+  var itDone=allData.filter(function(r){return (r['IT form Filled']||'').toLowerCase()==='yes';}).length;
+  var withTL=allData.filter(function(r){return !!getEffectiveTempLive(r);}).length;
+  var atRisk=allData.filter(function(r){
+    var d=daysFrom(getEffectiveTempLive(r));
+    return d!==null&&d<30&&d>=0;
+  }).length;
+  var overdue=allData.filter(function(r){
+    var d=daysFrom(getEffectiveTempLive(r));
+    return d!==null&&d<0;
+  }).length;
+
+  var tiles=[
+    {label:'Total Sites',val:total,color:'#2563eb'},
+    {label:'NSO 929 Done',val:nsoDone,color:'#16a34a'},
+    {label:'IT Form Filled',val:itDone,color:'#0891b2'},
+    {label:'Temp Live Logged',val:withTL,color:'#7c3aed'},
+    {label:'<30d to T-Live',val:atRisk,color:'#d97706'},
+    {label:'Overdue',val:overdue,color:'#dc2626'},
+  ];
+
+  var html=tiles.map(function(t){
+    return '<div class="kpi" style="min-width:100px">'
+      +'<div class="kpi-l">'+esc(t.label)+'</div>'
+      +'<div class="kpi-v" style="color:'+t.color+'">'+t.val+'</div>'
+      +'</div>';
+  }).join('');
+  document.getElementById('kpi-bar').innerHTML=html;
+}
+
+// ─────────────────────────────────────────────────────────
+// VIEWS
+// ─────────────────────────────────────────────────────────
+function setView(v,btn){
+  document.querySelectorAll('.vtab').forEach(function(b){b.classList.remove('active');});
+  if(btn) btn.classList.add('active');
+  ['listv','gridv','deptv','tlv'].forEach(function(id){
+    var el=document.getElementById(id);
+    if(!el) return;
+    if(id===v){el.style.display='';el.classList.add('show');}
+    else{el.style.display='none';el.classList.remove('show');}
+  });
+  renderCurrentView();
+}
+
+function renderCurrentView(){
+  var active=document.querySelector('.vtab.active');
+  var lbl=active?active.textContent:'';
+  if(lbl.indexOf('Sites')>=0||document.getElementById('listv').classList.contains('show')) renderSiteList();
+  else if(lbl.indexOf('Grid')>=0||document.getElementById('gridv').style.display!=='none') renderDeptSummaryGrid();
+  else if(lbl.indexOf('Department')>=0) renderDeptView();
+  else if(lbl.indexOf('Timeline')>=0) renderTimelineView();
+}
+
+// ─────────────────────────────────────────────────────────
+// SITE LIST (main view)
+// ─────────────────────────────────────────────────────────
+function renderSiteList(){
+  var el=document.getElementById('site-list');
+  if(!el) return;
+  if(!allData.length){
+    el.innerHTML='<div class="empty-state">'
+      +'<div class="empty-icon">📋</div>'
+      +'<div class="empty-title">No NSO Data Loaded</div>'
+      +'<div class="empty-sub">Upload the NSO Tracker CSV to start tracking department readiness and site timelines.</div>'
+      +'<label class="btn btn-p" for="nso-csv-inp" style="margin-top:8px;cursor:pointer">↑ Upload NSO CSV</label>'
+      +'</div>';
+    return;
+  }
+  if(!filteredData.length){
+    el.innerHTML='<div class="empty-state"><div class="empty-icon">🔍</div><div class="empty-title">No sites match filters</div></div>';
+    return;
+  }
+
+  var html='';
+  filteredData.forEach(function(r,i){
+    var idx=allData.indexOf(r);
+    var tl=getEffectiveTempLive(r);
+    var fl=getFinalLive(r);
+    var d=daysFrom(tl);
+    var nsoSt=getNSOStatus(r);
+    var itFilled=(r['IT form Filled']||'').toLowerCase()==='yes';
+    var deptMap=parseDeptStatuses(r);
+
+    // Risk color for card border
+    var border='var(--border)';
+    if(d!==null){ border=d<0?'#fca5a5':d<30?'#fde68a':d<60?'#fef08a':'#86efac'; }
+
+    // NSO status pill
+    var nsoPill='';
+    if(nsoSt.status==='done') nsoPill='<span class="nso-pill nso-done">✓ 929 Done</span>';
+    else if(nsoSt.status==='pending') nsoPill='<span class="nso-pill nso-pending">⏳ 929 Pending</span>';
+    else nsoPill='<span class="nso-pill nso-na" style="background:var(--surface);color:var(--muted)">— NSO</span>';
+
+    // IT form badge
+    var itBadge=itFilled?'<span class="badge b-ok" style="font-size:10px">✓ IT Form</span>':'<span class="badge b-warn" style="font-size:10px">⏳ IT Form</span>';
+
+    // T-live days label
+    var tlLabel='';
+    if(d!==null){
+      if(d<0) tlLabel='<span class="badge b-danger">'+Math.abs(d)+'d overdue</span>';
+      else if(d<30) tlLabel='<span class="badge b-warn">'+d+'d to T-Live</span>';
+      else tlLabel='<span class="badge b-live">'+d+'d to T-Live</span>';
+    }
+
+    html+='<div class="site-card" style="border-color:'+border+'" data-idx="'+idx+'">';
+
+    // Card header — site name WITHOUT T-Live prefix
+    html+='<div class="card-header" onclick="openModal('+idx+')">'
+      +'<div>'
+      +'<div class="card-title">'+esc(r['Site Name']||'--')+'</div>'
+      +'<div class="card-sub">'
+      +(r['Cost Center']?'CC: '+esc(r['Cost Center'])+' · ':'')
+      +(r['Status']?'Status: '+esc(r['Status'])+' · ':'')
+      +(r['Replacement']?'Repl: '+esc(r['Replacement']):'')
+      +'</div>'
+      +'</div>'
+      +'<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">'
+      +nsoPill+' '+itBadge+' '+tlLabel
+      +'</div>'
+      +'</div>';
+
+    // Key dates row
+    html+='<div class="card-dates">';
+    [
+      {label:'Temp Live',val:tl?fmtDate(tl):'Not Set',alert:!tl},
+      {label:'Revised T-Live',val:getRevisedTempLive(r)?fmtDate(getRevisedTempLive(r)):'--',alert:false},
+      {label:'Final Live',val:fl?fmtDate(fl):'--',alert:false},
+      {label:'IT Form',val:itFilled?'Filled':'Pending',alert:!itFilled},
+    ].forEach(function(dc){
+      html+='<div class="card-date-cell">'
+        +'<div class="cdc-label">'+esc(dc.label)+'</div>'
+        +'<div class="cdc-val" style="color:'+(dc.alert?'#d97706':'var(--text)')+'">'+esc(dc.val)+'</div>'
+        +'</div>';
+    });
+    html+='</div>';
+
+    // Department status grid (latest only)
+    html+='<div class="dept-grid">';
+    DEPTS.forEach(function(dept){
+      var status=(deptMap[dept]||'').trim();
+      var clr=DEPT_COLOR[dept]||{bg:'var(--surface)',color:'var(--muted)',border:'var(--border)'};
+      var cls=status?'':'dept-empty';
+      html+='<div class="dept-cell '+cls+'" style="background:'+clr.bg+';border-color:'+clr.border+'">'
+        +'<div class="dept-name" style="color:'+clr.color+'">'+esc(dept)+'</div>'
+        +'<div class="dept-status">'+(status?esc(status):'—')+'</div>'
+        +'</div>';
+    });
+    html+='</div>';
+
+    html+='</div>';
+  });
+
+  el.innerHTML=html;
+  document.getElementById('count-chip').textContent=filteredData.length+' / '+allData.length+' sites';
+}
+
+// ─────────────────────────────────────────────────────────
+// DEPT SUMMARY GRID VIEW
+// ─────────────────────────────────────────────────────────
+function renderDeptSummaryGrid(){
+  var el=document.getElementById('dept-summary');
+  if(!el||!allData.length) return;
+  var html='<div style="padding:16px 20px">';
+  html+='<div style="font-size:13px;font-weight:700;margin-bottom:12px">Department Readiness Overview</div>';
+  html+='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;min-width:800px">';
+  html+='<thead><tr><th style="padding:8px 12px;background:var(--surface);border:1px solid var(--border);font-size:11px;text-align:left;position:sticky;left:0;z-index:5">Site</th>';
+  DEPTS.forEach(function(d){
+    html+='<th style="padding:6px 8px;background:var(--surface);border:1px solid var(--border);font-size:10px;text-align:center;white-space:nowrap">'+esc(d)+'</th>';
+  });
+  html+='</tr></thead><tbody>';
+
+  filteredData.forEach(function(r,i){
+    var idx=allData.indexOf(r);
+    var deptMap=parseDeptStatuses(r);
+    html+='<tr style="cursor:pointer" onclick="openModal('+idx+')" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">';
+    html+='<td style="padding:7px 12px;border:1px solid var(--border);font-weight:600;position:sticky;left:0;background:var(--white);z-index:2">'+esc(r['Site Name']||'--')+'</td>';
+    DEPTS.forEach(function(dept){
+      var status=(deptMap[dept]||'').trim();
+      var clr=DEPT_COLOR[dept]||{bg:'',color:'var(--muted)',border:''};
+      var cell=status
+        ?'<div title="'+esc(status)+'" style="width:18px;height:18px;border-radius:50%;background:'+clr.color+';margin:auto" title="'+esc(status)+'"></div>'
+        :'<div style="width:18px;height:18px;border-radius:50%;background:var(--border);margin:auto;opacity:.3"></div>';
+      html+='<td style="padding:6px 8px;border:1px solid var(--border);text-align:center">'+cell+'</td>';
+    });
+    html+='</tr>';
+  });
+  html+='</tbody></table></div></div>';
+  el.innerHTML=html;
+}
+
+// ─────────────────────────────────────────────────────────
+// DEPT VIEW
+// ─────────────────────────────────────────────────────────
+function renderDeptView(){
+  var el=document.getElementById('dept-view');
+  if(!el||!allData.length){return;}
+  var html='';
+  DEPTS.forEach(function(dept){
+    var clr=DEPT_COLOR[dept]||{bg:'var(--surface)',color:'var(--muted)',border:'var(--border)'};
+    var sites=filteredData.filter(function(r){return !!(parseDeptStatuses(r)[dept]||'').trim();});
+    html+='<div style="margin-bottom:20px;border:1px solid '+clr.border+';border-radius:8px;overflow:hidden">';
+    html+='<div style="padding:10px 14px;background:'+clr.bg+';display:flex;align-items:center;justify-content:space-between">'
+      +'<div style="font-size:13px;font-weight:700;color:'+clr.color+'">'+esc(dept)+'</div>'
+      +'<span style="font-size:11px;color:'+clr.color+';opacity:.7">'+sites.length+' sites with updates</span>'
+      +'</div>';
+    if(!sites.length){
+      html+='<div style="padding:12px 14px;font-size:11px;color:var(--muted)">No updates yet</div>';
+    } else {
+      html+='<table style="width:100%;border-collapse:collapse">';
+      html+='<thead><tr><th style="padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border);font-size:10px;text-align:left">Site</th><th style="padding:6px 12px;background:var(--surface);border-bottom:1px solid var(--border);font-size:10px;text-align:left">Latest Status</th></tr></thead>';
+      html+='<tbody>';
+      sites.forEach(function(r){
+        var idx=allData.indexOf(r);
+        var status=(parseDeptStatuses(r)[dept]||'').trim();
+        html+='<tr onclick="openModal('+idx+')" style="cursor:pointer;border-bottom:1px solid var(--border)" onmouseover="this.style.background=\'#f8f9ff\'" onmouseout="this.style.background=\'\'">'
+          +'<td style="padding:7px 12px;font-weight:600;font-size:12px">'+esc(r['Site Name']||'--')+'</td>'
+          +'<td style="padding:7px 12px;font-size:11px;color:var(--muted)">'+esc(status)+'</td>'
+          +'</tr>';
+      });
+      html+='</tbody></table>';
+    }
+    html+='</div>';
+  });
+  el.innerHTML=html;
+}
+
+// ─────────────────────────────────────────────────────────
+// TIMELINE VIEW
+// ─────────────────────────────────────────────────────────
+function renderTimelineView(){
+  var el=document.getElementById('timeline-view');
+  if(!el||!allData.length) return;
+  var today=new Date(); today.setHours(0,0,0,0);
+
+  // Sort by effective temp live date
+  var sorted=filteredData.slice().sort(function(a,b){
+    var da=getEffectiveTempLive(a), db=getEffectiveTempLive(b);
+    if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
+    return da-db;
+  });
+
+  var html='<div style="font-size:13px;font-weight:700;margin-bottom:14px">📅 Site Timeline — Sorted by Temp Live Date</div>';
+
+  sorted.forEach(function(r){
+    var idx=allData.indexOf(r);
+    var tl=getEffectiveTempLive(r);
+    var fl=getFinalLive(r);
+    var d=daysFrom(tl);
+    var satDate=null; // not in NSO CSV but can be derived: TL + 45d or from Projects
+    var uatDate=null; // SAT + 10
+
+    var color=d===null?'#94a3b8':d<0?'#dc2626':d<30?'#f97316':d<60?'#d97706':'#16a34a';
+    var label=d===null?'No T-Live':d<0?'OVERDUE '+Math.abs(d)+'d':d+'d to T-Live';
+
+    html+='<div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:16px;cursor:pointer" onclick="openModal('+idx+')">';
+    // Colour strip
+    html+='<div style="width:4px;border-radius:2px;background:'+color+';min-height:60px;flex-shrink:0"></div>';
+    html+='<div style="flex:1;background:var(--white);border:1px solid var(--border);border-radius:8px;padding:10px 14px">';
+    html+='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">'
+      +'<div style="font-size:13px;font-weight:700">'+esc(r['Site Name']||'--')+'</div>'
+      +'<span style="font-size:11px;font-weight:700;color:'+color+'">'+esc(label)+'</span>'
+      +'</div>';
+    // Mini milestone row
+    html+='<div style="display:flex;gap:14px;flex-wrap:wrap;margin-top:8px">';
+    function tlCell(lbl,d){
+      return '<div style="font-size:10px"><div style="color:var(--muted);font-weight:600;margin-bottom:1px">'+esc(lbl)+'</div>'
+        +'<div style="font-weight:700;color:var(--text)">'+esc(d?fmtDateShort(d):'--')+'</div></div>';
+    }
+    html+=tlCell('T-Live',tl);
+    html+=tlCell('Revised T-Live',getRevisedTempLive(r));
+    html+=tlCell('Final Live',fl);
+    if(tl){
+      var sat=new Date(tl.getTime()+45*86400000);
+      var uat=new Date(sat.getTime()+10*86400000);
+      html+=tlCell('Est. SAT',sat);
+      html+=tlCell('Est. UAT',uat);
+    }
+    html+='</div>';
+    html+='</div></div>';
+  });
+
+  el.innerHTML=html;
+}
+
+// ─────────────────────────────────────────────────────────
+// MODAL
+// ─────────────────────────────────────────────────────────
+function openModal(idx){
+  currentModalIdx=idx;
+  var r=allData[idx];
+  if(!r) return;
+
+  // Title — NO T-Live prefix in site name
+  document.getElementById('modal-title').textContent=r['Site Name']||'--';
+  var subParts=[];
+  if(r['Cost Center']) subParts.push('CC: '+r['Cost Center']);
+  if(r['Status']) subParts.push('Status: '+r['Status']);
+  if(r['Replacement']) subParts.push('Replacement: '+r['Replacement']);
+  document.getElementById('modal-sub').textContent=subParts.join(' · ');
+
+  var tl=getEffectiveTempLive(r);
+  var fl=getFinalLive(r);
+  var sat=tl?new Date(tl.getTime()+45*86400000):null;
+  var uat=sat?new Date(sat.getTime()+10*86400000):null;
+  var d=daysFrom(tl);
+  var deptMap=parseDeptStatuses(r);
+  var nsoSt=getNSOStatus(r);
+  var itFilled=(r['IT form Filled']||'').toLowerCase()==='yes';
+
+  var html='';
+
+  // ── Key Info section (T-Live shown prominently here in modal)
+  html+='<div class="modal-section">';
+  html+='<div class="modal-section-title">Site Overview</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">';
+  function infoCell(lbl,val,alert){
+    return '<div style="padding:10px;background:var(--surface);border-radius:8px;border:1px solid '+(alert?'#fca5a5':'var(--border)')+'">'
+      +'<div style="font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px">'+esc(lbl)+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:'+(alert?'#dc2626':'var(--text)')+'">'+esc(val)+'</div>'
+      +'</div>';
+  }
+  html+=infoCell('T-Live',tl?fmtDate(tl):'Not Set',!tl);
+  html+=infoCell('Revised T-Live',getRevisedTempLive(r)?fmtDate(getRevisedTempLive(r)):'--',false);
+  html+=infoCell('Final Live',fl?fmtDate(fl):'--',false);
+  html+=infoCell('Est. SAT (T-Live+45d)',sat?fmtDate(sat):'--',false);
+  html+=infoCell('Est. UAT (SAT+10d)',uat?fmtDate(uat):'--',false);
+  html+=infoCell('Days to T-Live',d!==null?(d<0?Math.abs(d)+'d overdue':d+'d away'):'Unknown',d!==null&&d<0);
+  html+=infoCell('IT Form',itFilled?'Filled':'Pending',!itFilled);
+  html+=infoCell('Temp Furniture',r['Temp Furniture']||'--',false);
+  html+='</div>';
+  html+='</div>';
+
+  // ── NSO Status
+  html+='<div class="modal-section">';
+  html+='<div class="modal-section-title">NSO Status (929 Checklist)</div>';
+  var nsoBg=nsoSt.status==='done'?'#f0fdf4':nsoSt.status==='pending'?'#fffbeb':'var(--surface)';
+  var nsoClr=nsoSt.status==='done'?'#16a34a':nsoSt.status==='pending'?'#d97706':'var(--muted)';
+  html+='<div style="padding:12px;border-radius:8px;background:'+nsoBg+';border:1px solid '+(nsoSt.status==='done'?'#86efac':nsoSt.status==='pending'?'#fde68a':'var(--border)')+'">'
+    +'<div style="font-size:12px;font-weight:700;color:'+nsoClr+';margin-bottom:4px">'
+    +(nsoSt.status==='done'?'✅ 929 Done':nsoSt.status==='pending'?'⏳ 929 Pending':'— No NSO Update')
+    +'</div>'
+    +(nsoSt.text?'<div style="font-size:11px;color:var(--muted)">'+esc(nsoSt.text)+'</div>':'')
+    +'</div>';
+  html+='</div>';
+
+  // ── Department Status
+  html+='<div class="modal-section">';
+  html+='<div class="modal-section-title">Department Status (Latest Updates)</div>';
+  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">';
+  DEPTS.forEach(function(dept){
+    var status=(deptMap[dept]||'').trim();
+    var clr=DEPT_COLOR[dept]||{bg:'var(--surface)',color:'var(--muted)',border:'var(--border)'};
+    html+='<div style="padding:8px 12px;border-radius:7px;background:'+clr.bg+';border:1px solid '+clr.border+';opacity:'+(status?1:.6)+'">'
+      +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+clr.color+';margin-bottom:4px">'+esc(dept)+'</div>'
+      +'<div style="font-size:11px;color:var(--text);line-height:1.4">'+(status?esc(status):'<span style="color:var(--muted)">No update yet</span>')+'</div>'
+      +'</div>';
+  });
+  html+='</div>';
+  html+='</div>';
+
+  // ── Daily Updates (editable)
+  html+='<div class="modal-section">';
+  html+='<div class="modal-section-title" style="display:flex;align-items:center;justify-content:space-between">'
+    +'<span>Daily Updates</span>'
+    +'<span style="font-size:10px;color:var(--muted);font-weight:400">Click any cell to edit · Changes save locally</span>'
+    +'</div>';
+
+  if(dateCols.length){
+    html+='<div style="overflow-x:auto"><table class="upd-table">';
+    html+='<thead><tr><th style="text-align:left;position:sticky;left:0;z-index:2">Date</th><th>Update</th></tr></thead>';
+    html+='<tbody>';
+    dateCols.slice().reverse().forEach(function(col){
+      var val=(r[col]||'').trim();
+      html+='<tr>'
+        +'<td style="font-size:11px;font-weight:600;white-space:nowrap;padding:6px 10px;vertical-align:top;color:var(--muted);min-width:80px">'+esc(col)+'</td>'
+        +'<td style="padding:4px">'
+        +'<div class="upd-cell" contenteditable="true" data-col="'+esc(col)+'" data-idx="'+idx+'" '
+        +'onblur="saveUpdate(this)" onkeydown="if(event.key===\'Escape\')this.blur()"'
+        +'>'+esc(val)+'</div>'
+        +'</td>'
+        +'</tr>';
+    });
+    html+='</tbody></table></div>';
+  } else {
+    html+='<div style="font-size:11px;color:var(--muted)">No date columns detected in the uploaded CSV.</div>';
+  }
+  html+='</div>';
+
+  // ── Manual T-Live entry
+  html+='<div class="modal-section">';
+  html+='<div class="modal-section-title">Manual Temp Live Date Entry</div>';
+  html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
+  html+='<input type="text" id="manual-tlive" placeholder="e.g. 15 Jul 26" value="'+esc(r['Temp Live Date']||'')+'" '
+    +'style="padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:\'Inter\',sans-serif;outline:none;width:160px">';
+  html+='<button class="btn btn-p btn-sm" onclick="saveManualTLive('+idx+')">Save T-Live</button>';
+  html+='<span style="font-size:11px;color:var(--muted)">Updates the "Temp Live Date" field for this site locally.</span>';
+  html+='</div>';
+  html+='</div>';
+
+  document.getElementById('modal-body').innerHTML=html;
+  document.getElementById('modal-overlay').classList.add('open');
+}
+
+function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
+
+// Editable update cell save
+function saveUpdate(el){
+  var col=el.getAttribute('data-col');
+  var idx=parseInt(el.getAttribute('data-idx'));
+  var newVal=el.textContent||'';
+  if(!allData[idx]) return;
+  allData[idx][col]=newVal;
+  // Re-parse filtered, re-render KPIs (don't close modal)
+  applyFilters();
+  renderKPIs();
+  toast('Update saved locally — re-upload CSV to persist');
+}
+
+function saveManualTLive(idx){
+  var inp=document.getElementById('manual-tlive');
+  if(!inp||!allData[idx]) return;
+  var val=inp.value.trim();
+  allData[idx]['Temp Live Date']=val;
+  applyFilters();
+  renderKPIs();
+  toast('Temp Live Date set to: '+(val||'cleared'));
+  // Re-open modal to refresh display
+  openModal(idx);
+}
+
+// ─────────────────────────────────────────────────────────
+// EXPORT
+// ─────────────────────────────────────────────────────────
+function exportNSOCSV(){
+  if(!allData.length){toast('No data to export');return;}
+  var keys=Object.keys(allData[0]);
+  var rows=[keys.join(',')];
+  allData.forEach(function(r){
+    rows.push(keys.map(function(k){
+      var v=(r[k]||'').replace(/"/g,'""');
+      return '"'+v+'"';
+    }).join(','));
+  });
+  var blob=new Blob([rows.join('\n')],{type:'text/csv'});
+  var a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='NSO_Tracker_Export_'+new Date().toISOString().slice(0,10)+'.csv';
+  a.click();
+  toast('Exported '+allData.length+' sites');
+}
+
+// ─────────────────────────────────────────────────────────
+// AUTO-LOAD FROM WORKER
+// ─────────────────────────────────────────────────────────
+(function loadFromWorker(){
+  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0) return;
+  C24Uploader.fetchText(WORKER_URL+NSO_TOOL_PATH+'.csv',{cache:'no-store'})
+    .then(function(text){
+      if(!text||text.trim().length<10) return;
+      loadNSOData(text);
+      toast('NSO data loaded from server');
+    })
+    .catch(function(){
+      // Silently fail — user can upload manually
+    });
+})();
+
+// ─────────────────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────────────────
+(function init(){
+  document.getElementById('date-chip').textContent=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  allData=[...NSO_DATA];
+  filteredData=[...allData];
+  if(allData.length){ buildFilters(); renderKPIs(); }
+  renderCurrentView();
+  document.getElementById('count-chip').textContent=allData.length+' sites';
+})();
+</script>
+</body>
+</html>
