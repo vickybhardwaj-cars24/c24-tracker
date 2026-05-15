@@ -629,12 +629,22 @@ const notifiedSet = new Set(); // track notified sites in session
 // ═══════════════════════════════════════════════════════════════
 // GEMINI AI
 // ═══════════════════════════════════════════════════════════════
-const GEMINI_KEY = 'AIzaSyCS71XvHPW3efjOkIBpkSg19N51WpOntkQ';
+const GEMINI_KEY = '';
+
+function getGeminiKey() {
+  let k = localStorage.getItem('c24_gemini_key') || '';
+  if (!k) {
+    k = prompt('Enter your Gemini API key (saved locally in your browser, never sent to any server except Google):');
+    if (k && k.trim()) localStorage.setItem('c24_gemini_key', k.trim());
+  }
+  return (k || '').trim();
+}
 
 async function askGemini(prompt) {
-  if (!GEMINI_KEY || GEMINI_KEY === 'YOUR_GEMINI_KEY_HERE') throw new Error('Gemini API key not set. Replace GEMINI_KEY in the source.');
+  const key = getGeminiKey();
+  if (!key) throw new Error('No Gemini API key provided.');
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_KEY}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,
     { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
   );
@@ -1700,7 +1710,7 @@ function showInvTab(tab,btn){
 
 function renderInsights(){
   const aiCard=document.getElementById('ai-digest-wrap');
-  if(aiCard) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions</div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
+  if(aiCard) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions · <span style="cursor:pointer;text-decoration:underline" onclick="localStorage.removeItem('c24_gemini_key');toast('API key cleared','ok')">Reset key</span></div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
   const g=document.getElementById('igg');
   const sMap={},oMap={},vMap={};
   allData.forEach(r=>{
