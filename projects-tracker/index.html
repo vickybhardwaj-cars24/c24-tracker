@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.58</title>
+<title>Cars24 Projects Tracker v3.59</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1461,7 +1461,7 @@ function renderSatUat(){
         +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+esc(u.r['Planned Completion']||'—')+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+esc(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
-        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a></td>'
+        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation();markEmailSent('+JSON.stringify(u.r['Site Name']||'')+',\'sat_delay\',\''+satDelayMail(u.r)+'\');return false;" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>':'';
   el.innerHTML=_snav+_ndH+_sdH+_dH+_wH+_oH+(
@@ -4273,13 +4273,60 @@ const WORKER_URL       = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
 const TICKET_TOOL_PATH = 'tickets';
+const EMAIL_LOG_PATH   = 'projects-tracker-email-log';
+
+// In-memory email sent log: { siteName: { sat_delay: {sentAt, count}, uat_delay: {...}, ... } }
+var EMAIL_LOG = {};
+
+function loadEmailLog(){
+  if (location.protocol === 'file:') return Promise.resolve();
+  return fetch(WORKER_URL + EMAIL_LOG_PATH + '-mappings.json', {cache:'no-store'})
+    .then(function(r){ return r.ok ? r.json() : {}; })
+    .then(function(data){ EMAIL_LOG = data || {}; })
+    .catch(function(){ EMAIL_LOG = {}; });
+}
+
+function saveEmailLog(){
+  if (location.protocol === 'file:') return;
+  fetch(WORKER_URL + 'mappings', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Tool-Path': EMAIL_LOG_PATH },
+    body: JSON.stringify(EMAIL_LOG)
+  }).catch(function(){});
+}
+
+function markEmailSent(siteName, emailType, mailUrl){
+  window.open(mailUrl, '_blank');
+  var entry = EMAIL_LOG[siteName] || {};
+  var prev = entry[emailType] || {};
+  entry[emailType] = {
+    sentAt: new Date().toISOString(),
+    count: (prev.count || 0) + 1,
+    lastSentDate: new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+  };
+  EMAIL_LOG[siteName] = entry;
+  saveEmailLog();
+  // Refresh the SAT/UAT tab so button updates immediately
+  var suv = document.getElementById('suv');
+  if (suv && suv.classList.contains('show')) renderSatUat();
+}
+
+function emailLogBadge(siteName, emailType){
+  var e = EMAIL_LOG[siteName];
+  if (!e || !e[emailType]) return '';
+  var d = e[emailType];
+  return '<span title="Sent '+d.count+'x, last: '+d.lastSentDate+'" style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600">✓ Sent'+(d.count>1?' ×'+d.count:'')+'</span>';
+}
 
 // Fetch the canonical dataset from same origin (GitHub-backed CSV).
 // This is the only source of truth — there is no embedded fallback dataset.
 (function loadFromOrigin(){
   if (location.protocol === 'file:') return;
-  C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'})
-    .then(function(text){
+  Promise.all([
+    C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
+    loadEmailLog()
+  ]).then(function(results){
+      var text = results[0];
       var parsed = parseCSV(text);
       if (parsed && parsed.length) {
         __originLoaded = true;
