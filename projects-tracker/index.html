@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.1</title>
+<title>Cars24 Projects Tracker v4.2</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -561,7 +561,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="inv-tab" onclick="showInvTab('delay',this)">⏳ Delay Analysis</button>
     <button class="inv-tab" onclick="showInvTab('warn',this)">⚠ UAT Warnings</button>
   </div>
-  <div class="inv-content" id="inv-ov"><div class="ig-grid" id="igg"></div></div>
+  <div class="inv-content" id="inv-ov"><div id="ai-digest-wrap" style="margin-bottom:4px"></div><div class="ig-grid" id="igg"></div></div>
   <div class="inv-content" id="inv-kpis" style="display:none"></div>
   <div class="inv-content" id="inv-vr" style="display:none"></div>
   <div class="inv-content" id="inv-reg" style="display:none"></div>
@@ -625,6 +625,83 @@ const TICKET_CLOSED = new Set(); // session-only closed ticket IDs
 const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra'];
 const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
+
+// ═══════════════════════════════════════════════════════════════
+// GEMINI AI
+// ═══════════════════════════════════════════════════════════════
+const GEMINI_KEY = 'YOUR_GEMINI_KEY_HERE';
+
+async function askGemini(prompt) {
+  if (!GEMINI_KEY || GEMINI_KEY === 'YOUR_GEMINI_KEY_HERE') throw new Error('Gemini API key not set. Replace GEMINI_KEY in the source.');
+  const res = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_KEY}`,
+    { method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
+  );
+  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
+  const data = await res.json();
+  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
+}
+
+async function runAIDigest() {
+  const btn = document.getElementById('ai-digest-btn');
+  const out = document.getElementById('ai-digest-out');
+  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
+  btn.disabled = true; btn.textContent = '⏳ Thinking…';
+  out.style.display = 'none';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const rows = allData.map(r => {
+    const stale = daysSinceUpdate(r);
+    const update = (getLatestUpdate(r) || '').substring(0, 150);
+    const satD = pd(r['SAT Date']), uatD = pd(r['UAT DATE']);
+    const uatOverdue = satD && !uatD && Math.round((today - satD) / 86400000) > 10;
+    return `- ${r['Site Name'] || '?'} | Status: ${r['Status'] || '?'} | ${r['Percentage Completion'] || '?'}% | Owner: ${r['Owner'] || '?'}${stale >= 5 ? ` | STALE ${stale}d` : ''}${uatOverdue ? ' | UAT OVERDUE' : ''} | Latest: ${update}`;
+  }).join('\n');
+  const prompt = `You are a project analyst for CARS24, a used-car company in India. Below is live data for ${allData.length} construction/fit-out sites across India. Each line: Site | Status | Completion | Owner | flags | latest update.\n\n${rows}\n\nRespond with a concise weekly digest in exactly this format (use plain text, no markdown symbols):\n\nPORTFOLIO HEALTH: [one line overall assessment]\n\nTOP 3 AT-RISK SITES:\n1. [site] – [reason]\n2. [site] – [reason]\n3. [site] – [reason]\n\nKEY BLOCKERS ACROSS PORTFOLIO:\n- [blocker type]: [sites affected]\n\nSITES READY FOR NEXT MILESTONE:\n- [site] – [what milestone]\n\nRECOMMENDED ACTIONS FOR THIS WEEK:\n1. [action]\n2. [action]\n3. [action]`;
+  try {
+    const text = await askGemini(prompt);
+    out.innerHTML = text.split('\n').map(line => {
+      line = line.trim(); if (!line) return '';
+      if (line.endsWith(':') || line === line.toUpperCase()) return `<div style="font-weight:700;color:#1e3a5f;margin-top:10px;margin-bottom:2px;font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc(line)}</div>`;
+      return `<div style="font-size:12px;padding:2px 0 2px 8px;border-left:2px solid #c7d7f0;margin-bottom:3px">${esc(line)}</div>`;
+    }).join('');
+    out.style.display = 'block';
+  } catch(e) {
+    out.innerHTML = `<div style="color:#dc2626;font-size:12px">⚠ ${esc(e.message)}</div>`;
+    out.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = '✨ Regenerate AI Digest';
+}
+
+async function runSiteAI(idx) {
+  const r = allData[idx]; if (!r) return;
+  const btn = document.getElementById(`site-ai-btn-${idx}`);
+  const out = document.getElementById(`site-ai-out-${idx}`);
+  btn.disabled = true; btn.textContent = '⏳ Thinking…';
+  out.style.display = 'none';
+  const updates = [...DATE_COLS].reverse().filter(d => (r[d] || '').length > 2).slice(0, 5).map(d => `  [${d}] ${r[d]}`).join('\n');
+  const revH = getRevHistory(r).map((h, i) => `  ${i+1}. First logged ${h.col} → Revised to ${h.dateStr}`).join('\n');
+  const stale = daysSinceUpdate(r);
+  const prompt = `You are a project analyst for CARS24. Analyse this single construction/fit-out site and give a concise PM-level assessment.\n\nSITE: ${r['Site Name'] || '?'}\nOwner: ${r['Owner'] || '?'} | Vendor: ${r['Vendor'] || '?'} | Status: ${r['Status'] || '?'} | Completion: ${r['Percentage Completion'] || '?'}%\nPO Date: ${r['PO Date'] || '—'} | Kickoff: ${r['Kickoff Date'] || '—'} | Work Start: ${r['Work Start Date'] || '—'}\nSAT Date: ${r['SAT Date'] || '—'} | UAT Date: ${r['UAT DATE'] || '—'}\nPlanned: ${r['Planned Completion'] || '—'} | Revised: ${r['Revised Completion'] || '—'}\n${stale >= 5 ? `WARNING: No update for ${stale} days.\n` : ''}${revH ? `Revision History:\n${revH}\n` : ''}Recent Updates (newest first):\n${updates || '  No updates logged.'}\n\nRespond in exactly this format (plain text, no markdown symbols):\n\nHEALTH: [one line — On Track / At Risk / Critical + brief reason]\n\nKEY RISK: [the single biggest risk or blocker right now]\n\nNEXT ACTION: [specific action the PM should take this week]`;
+  try {
+    const text = await askGemini(prompt);
+    out.innerHTML = text.split('\n').map(line => {
+      line = line.trim(); if (!line) return '';
+      if (/^(HEALTH|KEY RISK|NEXT ACTION):/.test(line)) {
+        const [label, ...rest] = line.split(':');
+        const val = rest.join(':').trim();
+        const color = label === 'HEALTH' ? '#1e3a5f' : label === 'KEY RISK' ? '#dc2626' : '#16a34a';
+        return `<div style="margin-bottom:8px"><span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em">${esc(label)}: </span><span style="font-size:12px">${esc(val)}</span></div>`;
+      }
+      return `<div style="font-size:12px;padding:1px 0">${esc(line)}</div>`;
+    }).join('');
+    out.style.display = 'block';
+  } catch(e) {
+    out.innerHTML = `<div style="color:#dc2626;font-size:12px">⚠ ${esc(e.message)}</div>`;
+    out.style.display = 'block';
+  }
+  btn.disabled = false; btn.textContent = '✨ Regenerate';
+}
 
 // ═══════════════════════════════════════════════════════════════
 // UTILITIES
@@ -1622,6 +1699,8 @@ function showInvTab(tab,btn){
 }
 
 function renderInsights(){
+  const aiCard=document.getElementById('ai-digest-wrap');
+  if(aiCard) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions</div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
   const g=document.getElementById('igg');
   const sMap={},oMap={},vMap={};
   allData.forEach(r=>{
@@ -1727,7 +1806,15 @@ function openModal(idx){
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
-    ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}<div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
+    ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}
+    <div class="msec" style="background:linear-gradient(135deg,#f0f7ff 0%,#e8f0fe 100%);border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">🧠 AI Summary</div>
+        <button id="site-ai-btn-${idx}" onclick="runSiteAI(${idx})" style="background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ Analyse this site</button>
+      </div>
+      <div id="site-ai-out-${idx}" style="display:none;font-size:12px;line-height:1.6;padding-top:6px;border-top:1px solid #c7d7f0"></div>
+    </div>
+    <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
       </div>
