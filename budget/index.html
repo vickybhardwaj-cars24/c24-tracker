@@ -31,7 +31,8 @@ body{font-family:'Inter',sans-serif;margin:0;padding:0}
 .tbl-wrap{overflow:auto;max-height:calc(100vh - 260px)}
 .tbl-wrap table{border-collapse:separate;border-spacing:0}
 .tbl-wrap thead tr th{position:sticky;top:0;z-index:10;white-space:nowrap}
-.tbl-wrap thead tr:nth-child(2) th{top:37px}
+.tbl-wrap thead tr:nth-child(2) th{top:36px}
+.tbl-wrap thead tr:nth-child(3) th{top:72px}
 .tbl-wrap .s-col{position:sticky;left:0;z-index:4}
 .tbl-wrap thead .s-col{z-index:15}
 /* sticky col backgrounds */
@@ -798,46 +799,54 @@ function GSHubsTab({ gsData }) {
         <div className="tbl-wrap">
           <table className="w-full text-xs min-w-[1100px]">
             <thead>
-              {/* Row 1: Totals */}
+              {/* Row 1: Totals (aligns with row 3 column structure) */}
               <tr>
                 <th className={`${thB} s-col text-left`} colSpan="8">
                   <span className="text-[#4736FE] font-bold">TOTALS — {filtered.length} hubs</span>
                 </th>
                 {visCols.map(col=>(
-                  <th key={col.key} className={`${thB} text-right ${col.key==='grandTotal'?'text-[#4736FE]':''}`}>
+                  <th key={'t-'+col.key} className={`${thB} text-right whitespace-nowrap ${col.key==='grandTotal'?'text-[#4736FE] font-bold':''}`}>
                     {totals[col.key]?fmtAmt(totals[col.key]):'—'}
                   </th>
                 ))}
               </tr>
-              {/* Row 2: Column headers with group toggles */}
+              {/* Row 2: Group labels with colSpan (click to expand/collapse) */}
               <tr>
-                {['Cost Center','Hub','City','Zone','Category','Stage','Parking','Slots'].map((h,i)=>(
-                  <th key={h} className={`${thB} ${i===0?'s-col ':''} text-left whitespace-nowrap`}>{h}</th>
+                <th className={`${thB} s-col`} colSpan="8"></th>
+                {COL_GROUPS.map(g=>{
+                  const isOpen = openGroups.has(g.key);
+                  return (
+                    <th key={'g-'+g.key} colSpan={isOpen ? g.subs.length : 1}
+                      onClick={()=>toggleGroup(g.key)}
+                      className={`${thB} text-center cursor-pointer select-none whitespace-nowrap
+                        ${isOpen ? 'text-[#4736FE] bg-[#4736FE]/[0.06] border-b-2 border-[#4736FE]/50' : 'hover:text-[#4736FE]'}`}>
+                      {g.label} <span className="text-[9px] font-bold">{isOpen ? '▲' : '▼'}</span>
+                    </th>
+                  );
+                })}
+                <th className={`${thB} text-right font-bold text-[#4736FE]`}>Grand Total</th>
+              </tr>
+              {/* Row 3: Column names (aligns with row 1) */}
+              <tr>
+                {['Cost Center','Hub','City','Zone','Cat.','Stage','Parking','Slots'].map((h,i)=>(
+                  <th key={'c-'+h} className={`${thB} ${i===0?'s-col ':''} text-left whitespace-nowrap`}>{h}</th>
                 ))}
                 {visCols.map(col=>{
                   if (col.isGroupHead) {
-                    const g = COL_GROUPS.find(g=>g.key===col.groupKey);
-                    return (
-                      <th key={col.key} className={`${thB} text-right cursor-pointer select-none hover:text-[#4736FE] whitespace-nowrap`}
-                        onClick={()=>toggleGroup(col.groupKey)} title={`Click to expand ${g.label}`}>
-                        {col.label} <span className="text-[#4736FE]">＋</span>
-                      </th>
-                    );
+                    return <th key={'c-'+col.key} className={`${thB} text-right whitespace-nowrap text-gray-400`}>Total</th>;
                   }
-                  if (col.inGroup) {
-                    const grp = COL_GROUPS.find(g=>g.key===col.inGroup);
-                    const isLast = grp && grp.subs[grp.subs.length-1].key===col.key;
-                    return (
-                      <th key={col.key} className={`${thB} text-right whitespace-nowrap ${isLast?'border-r border-gray-300 dark:border-gray-600':''}`}
-                        title={`Part of ${grp?.label}`}>
-                        {col.label}
-                        {grp?.subs[0].key===col.key && (
-                          <button className="ml-1 text-[#4736FE] text-[9px]" onClick={()=>toggleGroup(col.inGroup)} title="Collapse">－</button>
-                        )}
-                      </th>
-                    );
-                  }
-                  return <th key={col.key} className={`${thB} text-right font-bold text-[#4736FE] whitespace-nowrap`}>{col.label}</th>;
+                  const grp = COL_GROUPS.find(g=>g.key===col.inGroup);
+                  const isFirst = grp?.subs[0].key===col.key;
+                  const isLast = grp?.subs[grp.subs.length-1].key===col.key;
+                  if (col.key === 'grandTotal') return <th key={'c-grand'} className={`${thB} text-right font-bold text-[#4736FE] whitespace-nowrap`}>Grand Total</th>;
+                  return (
+                    <th key={'c-'+col.key}
+                      className={`${thB} text-right whitespace-nowrap bg-[#4736FE]/[0.03]
+                        ${isFirst ? 'border-l border-[#4736FE]/30' : ''}
+                        ${isLast ? 'border-r border-[#4736FE]/30' : ''}`}>
+                      {col.label}
+                    </th>
+                  );
                 })}
               </tr>
             </thead>
