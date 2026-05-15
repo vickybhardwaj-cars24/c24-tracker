@@ -7,285 +7,380 @@
 <script src="/shared/c24-favicon.js"></script>
 <script src="/shared/c24-uploader.js"></script>
 <script>
-  (function(){
-    try{var t=localStorage.getItem('c24-theme');if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(_){}
-  })();
+  (function(){try{var t=localStorage.getItem('c24-theme');if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(_){}}());
   tailwind.config={darkMode:'class'}
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
-  *{box-sizing:border-box}
-  body{font-family:'Inter',sans-serif;margin:0;padding:0}
-  ::-webkit-scrollbar{width:5px;height:5px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{background:#4736FE55;border-radius:3px}
-  .fade-in{animation:fadeIn .2s ease}
-  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
-  td,th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .tooltip-box{pointer-events:none;z-index:9999}
+*{box-sizing:border-box}
+body{font-family:'Inter',sans-serif;margin:0;padding:0}
+::-webkit-scrollbar{width:5px;height:5px}
+::-webkit-scrollbar-track{background:transparent}
+::-webkit-scrollbar-thumb{background:#4736FE55;border-radius:3px}
+.fade-in{animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.spin{animation:spin 1s linear infinite}
+@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+
+/* Sticky table */
+.tbl-wrap{overflow:auto;max-height:calc(100vh - 260px)}
+.tbl-wrap table{border-collapse:separate;border-spacing:0}
+.tbl-wrap thead tr th{position:sticky;top:0;z-index:10;white-space:nowrap}
+.tbl-wrap thead tr:nth-child(2) th{top:37px}
+.tbl-wrap .s-col{position:sticky;left:0;z-index:4}
+.tbl-wrap thead .s-col{z-index:15}
+/* sticky col backgrounds */
+.dark .tbl-wrap .s-col{background:#111}
+.dark .tbl-wrap thead .s-col{background:#1a1a1a}
+.dark .tbl-wrap .city-row .s-col{background:#1c1c2e}
+.light-s{background:#f9fafb}
+html:not(.dark) .tbl-wrap .s-col{background:#f9fafb}
+html:not(.dark) .tbl-wrap thead .s-col{background:#f3f4f6}
+td,th{overflow:hidden;text-overflow:ellipsis}
+.tooltip-box{pointer-events:none;z-index:9999;position:fixed}
 </style>
 </head>
 <body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
 <div id="root"></div>
-
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
-// ── Data ──────────────────────────────────────────────────────────────────
+const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
+const BUDGET_PATH = 'budget-fy2627';
 
-const GS_HUB_DATA = [
-  // Delhi/NCR
-  {costCenter:'',hub:'CARS24 Hub, Rajouri Garden',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Minor Upgrade',parking:'Covered',slots:90,totalCapex:1470000,infraCost:1000000,slotMarking:0,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2070000},
-  {costCenter:'',hub:'CARS24 Hub, Metro Walk, Rohini',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Major Upgrade',parking:'Open',slots:150,totalCapex:2220000,infraCost:500000,slotMarking:0,vm:100000,newInitiatives:1420000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2970000},
-  {costCenter:'Rohini Existing HRC',hub:'Rohini Existing HRC',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1050000,totalMaint:0,grandTotal:1050000},
-  {costCenter:'06,10,237,1001u',hub:'Cars24 Hub, DLF South Court, Saket',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Minor Upgrade',parking:'Covered',slots:80,totalCapex:1560000,infraCost:1000000,slotMarking:90000,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2160000},
-  {costCenter:'06,14,206,1493/06,14,237,1401b',hub:'CARS24 Hub, Gaur City Mall, Greater Noida',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:1035000,infraCost:500000,slotMarking:90000,vm:25000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1635000},
-  {costCenter:'06,11,237,1101b/06,11,206,1101c',hub:'CARS24 Hub, M3M Urbana, Gurugram',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:250,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
-  {costCenter:'',hub:'CARS24 Hub, Gurgaon Sector 18',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Major Upgrade',parking:'Open',slots:100,totalCapex:5670000,infraCost:3750000,slotMarking:200000,vm:100000,newInitiatives:1420000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:6420000},
-  {costCenter:'New Gurgaon HRC',hub:'New Gurgaon HRC',city:'Delhi/NCR',stage:'Active',zone:'North',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
-  {costCenter:'Gurgaon Existing HRC',hub:'Gurgaon Existing HRC',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1050000,totalMaint:0,grandTotal:1050000},
-  {costCenter:'',hub:'CARS24, Soul City Mall, Dwarka',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:77,totalCapex:420000,infraCost:0,slotMarking:0,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1020000},
-  {costCenter:'',hub:'CARS24 Hub, Faridabad',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Open',slots:81,totalCapex:1320000,infraCost:0,slotMarking:0,vm:0,newInitiatives:1120000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2070000},
-  {costCenter:'',hub:'CARS24 Hub, GNB Mall, Ghaziabad',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
-  {costCenter:'Vikaspuri',hub:'Vikaspuri',city:'Delhi/NCR',stage:'YTL',zone:'North',category:'NSO',parking:'Covered',slots:0,totalCapex:2180000,infraCost:1500000,slotMarking:30000,vm:130000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:500000,grandTotal:2680000},
-  {costCenter:'Sonipat',hub:'Sonipat',city:'Delhi/NCR',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5550000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:570000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6150000},
-  {costCenter:'Karnal',hub:'Karnal',city:'Delhi/NCR',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5550000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:570000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6150000},
-  {costCenter:'MLCP Noida Replacement',hub:'MLCP Noida Replacement',city:'Delhi/NCR',stage:'YTL',zone:'North',category:'Replacement',parking:'Covered',slots:0,totalCapex:2690000,infraCost:2000000,slotMarking:90000,vm:180000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:3290000},
-  // Bangalore
-  {costCenter:'',hub:'CARS24 Hub, Bellahalli, Jakkur Post',city:'Bangalore',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Open',slots:300,totalCapex:4245000,infraCost:1200000,slotMarking:200000,vm:225000,newInitiatives:2420000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4995000},
-  {costCenter:'Jakkur Existing HRC',hub:'Jakkur Existing HRC',city:'Bangalore',stage:'Active',zone:'South',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1700000,totalMaint:0,grandTotal:1700000},
-  {costCenter:'06,15,279,1589/06,15,264,1536',hub:'CARS24 Hub, GT World Mall',city:'Bangalore',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Covered',slots:120,totalCapex:2450000,infraCost:1340000,slotMarking:90000,vm:600000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:3050000},
-  {costCenter:'',hub:'CARS24 Hub, Bhoruka Tech Park, Whitefield',city:'Bangalore',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Covered',slots:130,totalCapex:2350000,infraCost:1340000,slotMarking:90000,vm:500000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2950000},
-  {costCenter:'',hub:'CARS24 Hub, Right Parking MLCP, Gandhi Nagar',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:120,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
-  {costCenter:'',hub:'CARS24 Hub, Nexus Whitefield Mall',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:116,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
-  {costCenter:'',hub:'CARS24 Hub, Vaishnavi Sapphire Centre, Yeswanthpur',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
-  {costCenter:'Bangalore Prem Hub',hub:'Bangalore Prem Hub',city:'Bangalore',stage:'YTD',zone:'South',category:'NSO',parking:'Open',slots:50,totalCapex:7650000,infraCost:5900000,slotMarking:80000,vm:500000,newInitiatives:870000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8400000},
-  {costCenter:'',hub:'CARS24 Hub, Nexus Mall Koramangala',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:90,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
-  // Hyderabad
-  {costCenter:'',hub:'CARS24 Hub, Mantra Mall, Attapur',city:'Hyderabad',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:80,totalCapex:900000,infraCost:340000,slotMarking:90000,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1500000},
-  {costCenter:'',hub:'CARS24 Hub, Kompally',city:'Hyderabad',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Open',slots:250,totalCapex:3945000,infraCost:1150000,slotMarking:200000,vm:25000,newInitiatives:2370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4695000},
-  {costCenter:'Kompally Existing HRC',hub:'Kompally Existing HRC',city:'Hyderabad',stage:'Active',zone:'South',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:2400000,totalMaint:0,grandTotal:2400000},
-  {costCenter:'',hub:'CARS24 Hub, Bachupally',city:'Hyderabad',stage:'Active',zone:'South',category:'To be replaced',parking:'Open',slots:86,totalCapex:150000,infraCost:0,slotMarking:0,vm:150000,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:0,grandTotal:150000},
-  {costCenter:'Bachupally Replacement',hub:'Bachupally Replacement',city:'Hyderabad',stage:'YTL',zone:'South',category:'Replacement',parking:'YTD',slots:0,totalCapex:9870000,infraCost:7700000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:10620000},
-  {costCenter:'',hub:'CARS24 Hub, GVK One Mall',city:'Hyderabad',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:60,totalCapex:535000,infraCost:0,slotMarking:90000,vm:25000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1135000},
-  {costCenter:'Uppal',hub:'Uppal',city:'Hyderabad',stage:'YTD',zone:'South',category:'NSO',parking:'Open',slots:0,totalCapex:7850000,infraCost:5900000,slotMarking:80000,vm:700000,newInitiatives:870000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8600000},
-  // Chennai
-  {costCenter:'',hub:'CARS24 Hub, Karapakkam, OMR Road',city:'Chennai',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Open',slots:113,totalCapex:3320000,infraCost:1250000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4070000},
-  {costCenter:'',hub:'CARS24 Hub, JP Parking Yard, Thiruverkadu',city:'Chennai',stage:'Active',zone:'South',category:'To be replaced',parking:'Open',slots:150,totalCapex:500000,infraCost:0,slotMarking:200000,vm:300000,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:0,grandTotal:500000},
-  {costCenter:'Thiruverkadu Replacement',hub:'Thiruverkadu Replacement',city:'Chennai',stage:'YTD',zone:'South',category:'Replacement',parking:'YTD',slots:0,totalCapex:6370000,infraCost:4200000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:7120000},
-  {costCenter:'06,20,206,2097/06,20,237,2001f',hub:'CARS24 Hub, Nexus Vijaya Mall, Vadapalani',city:'Chennai',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:900000,infraCost:340000,slotMarking:90000,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1500000},
-  // Mumbai
-  {costCenter:'06,16,264,1674/06,16,237,1689',hub:'CARS24 Hub, Goregaon',city:'Mumbai',stage:'Active',zone:'West',category:'To be replaced',parking:'Covered',slots:100,totalCapex:90000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:600000,grandTotal:690000},
-  {costCenter:'Goregaon Replacement',hub:'Goregaon Replacement',city:'Mumbai',stage:'YTD',zone:'West',category:'Replacement',parking:'YTD',slots:0,totalCapex:5310000,infraCost:4200000,slotMarking:90000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5910000},
-  {costCenter:'',hub:'CARS24 Hub, Belapur',city:'Mumbai',stage:'Active',zone:'West',category:'Minor Upgrade',parking:'Covered',slots:100,totalCapex:1585000,infraCost:1000000,slotMarking:90000,vm:75000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2185000},
-  {costCenter:'',hub:'CARS24 Hub, Kandivali',city:'Mumbai',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:92,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
-  {costCenter:'',hub:'CARS24 Hub, Regency Anantam, Dombivli East',city:'Mumbai',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:100,totalCapex:4210000,infraCost:1640000,slotMarking:200000,vm:0,newInitiatives:2170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4960000},
-  {costCenter:'Dombivli Existing HRC',hub:'Dombivli Existing HRC',city:'Mumbai',stage:'Active',zone:'West',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1750000,totalMaint:0,grandTotal:1750000},
-  {costCenter:'Dombivli New HRC',hub:'Dombivli New HRC',city:'Mumbai',stage:'YTD',zone:'West',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:4200000,totalMaint:0,grandTotal:4200000},
-  {costCenter:'',hub:'CARS24 Hub, Korum Mall, Thane West',city:'Mumbai',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:98,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
-  {costCenter:'Vasai-vihar',hub:'Vasai-vihar',city:'Mumbai',stage:'YTD',zone:'West',category:'NSO',parking:'Covered',slots:0,totalCapex:5550000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:570000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6150000},
-  // Pune
-  {costCenter:'06,17,206,1796/06,17,237,1784',hub:'CARS24 Hub, Tathawade',city:'Pune',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:300,totalCapex:4520000,infraCost:600000,slotMarking:200000,vm:150000,newInitiatives:3370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:5270000},
-  {costCenter:'Pune Existing HRC',hub:'Pune Existing HRC',city:'Pune',stage:'Active',zone:'West',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1200000,totalMaint:0,grandTotal:1200000},
-  {costCenter:'Pune New Hub',hub:'Pune New Hub',city:'Pune',stage:'YTD',zone:'West',category:'NSO',parking:'Open',slots:100,totalCapex:7650000,infraCost:5900000,slotMarking:80000,vm:500000,newInitiatives:870000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8400000},
-  {costCenter:'',hub:'CARS24 Hub, Amanora Mall',city:'Pune',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:270,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
-  // Ahmedabad
-  {costCenter:'',hub:'CARS24 Hub, Karnavati Club, S.G. Highway',city:'Ahmedabad',stage:'Active',zone:'West',category:'To be Replaced',parking:'Open',slots:150,totalCapex:400000,infraCost:0,slotMarking:200000,vm:200000,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:400000,grandTotal:800000},
-  {costCenter:'Karnavati Replacement',hub:'Karnavati Replacement',city:'Ahmedabad',stage:'YTD',zone:'West',category:'Replacement',parking:'YTD',slots:0,totalCapex:8070000,infraCost:5900000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8820000},
-  {costCenter:'Naroda New HRC',hub:'Naroda New HRC',city:'Ahmedabad',stage:'YTD',zone:'West',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:2787500,totalMaint:0,grandTotal:2787500},
-  {costCenter:'',hub:'CARS24 Hub, Naroda',city:'Ahmedabad',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:200,totalCapex:4920000,infraCost:1000000,slotMarking:200000,vm:150000,newInitiatives:3370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:5670000},
-  // Other cities
-  {costCenter:'',hub:'Cars24 Hub, Bestech Mall, Chandigarh',city:'Chandigarh',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:110,totalCapex:810000,infraCost:0,slotMarking:90000,vm:300000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1410000},
-  {costCenter:'New Chandigarh HRC',hub:'New Chandigarh HRC',city:'Chandigarh',stage:'YTD',zone:'North',category:'HRC',parking:'Covered',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
-  {costCenter:'06,47,237,4787/06,47,206,4793',hub:'CARS24 Hub, Nishal Arcade, Surat',city:'Surat',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:75,totalCapex:1010000,infraCost:500000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1610000},
-  {costCenter:'Surat HRC',hub:'Surat HRC',city:'Surat',stage:'YTD',zone:'West',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
-  {costCenter:'06,33,237,3390',hub:'Cars24 Hub, C21 Malhar Mall, Indore',city:'Indore',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:80,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
-  {costCenter:'',hub:'CARS24 Hub, Mansarovar, Jaipur',city:'Jaipur',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:160,totalCapex:3135000,infraCost:840000,slotMarking:200000,vm:525000,newInitiatives:1370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:3885000},
-  {costCenter:'Jaipur Existing HRC',hub:'Jaipur Existing HRC',city:'Jaipur',stage:'Active',zone:'West',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1350000,totalMaint:0,grandTotal:1350000},
-  {costCenter:'',hub:'CARS24 Hub, Avani Riverside Mall, Kolkata',city:'Kolkata',stage:'Active',zone:'East',category:'Basic Upgrade',parking:'Covered',slots:68,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
-  {costCenter:'',hub:'CARS24 Hub, Astra Tower, Kolkata',city:'Kolkata',stage:'Active',zone:'East',category:'Basic Upgrade',parking:'Covered',slots:120,totalCapex:610000,infraCost:0,slotMarking:90000,vm:100000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1210000},
-  {costCenter:'Kolkata HRC',hub:'Kolkata HRC',city:'Kolkata',stage:'YTD',zone:'East',category:'HRC',parking:'Covered',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
-  {costCenter:'',hub:'CARS24 Hub, OP Road, Vadodara',city:'Vadodara',stage:'Active',zone:'West',category:'Minor Upgrade',parking:'Open',slots:90,totalCapex:1570000,infraCost:0,slotMarking:200000,vm:0,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2320000},
-  {costCenter:'',hub:'CARS24 Hub, Info Park, Kochi',city:'Kochi',stage:'Active',zone:'South',category:'Minor Upgrade',parking:'Open',slots:250,totalCapex:1670000,infraCost:0,slotMarking:200000,vm:100000,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2420000},
-  {costCenter:'',hub:'CARS24 Hub, Gomti Nagar, Lucknow',city:'Lucknow',stage:'Active',zone:'North',category:'To be replaced',parking:'Covered',slots:200,totalCapex:460000,infraCost:0,slotMarking:140000,vm:50000,newInitiatives:270000,itCost:0,hrcTotal:0,totalMaint:0,grandTotal:460000},
-  {costCenter:'Lucknow Replacement',hub:'Lucknow Replacement',city:'Lucknow',stage:'YTD',zone:'North',category:'Replacement',parking:'Covered',slots:0,totalCapex:5910000,infraCost:4200000,slotMarking:90000,vm:500000,newInitiatives:870000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6510000},
-  {costCenter:'New Lucknow HRC',hub:'New Lucknow HRC',city:'Lucknow',stage:'YTD',zone:'North',category:'HRC',parking:'Covered',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
-  {costCenter:'',hub:'CARS24 Hub, Atal Path, Patna',city:'Patna',stage:'Active',zone:'East',category:'Major Upgrade',parking:'Open',slots:70,totalCapex:3610000,infraCost:1340000,slotMarking:200000,vm:500000,newInitiatives:1370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4360000},
-  {costCenter:'',hub:'CARS24 Hub, Vivekananda Nagar, Coimbatore',city:'Coimbatore',stage:'Active',zone:'South',category:'Minor Upgrade',parking:'Open',slots:100,totalCapex:2110000,infraCost:340000,slotMarking:200000,vm:200000,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2860000},
-  {costCenter:'Kanpur',hub:'Kanpur',city:'Kanpur',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-  {costCenter:'Dehradun',hub:'Dehradun',city:'Dehradun',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-  {costCenter:'Bhopal',hub:'Bhopal',city:'Bhopal',stage:'YTD',zone:'West',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-  {costCenter:'Vizag',hub:'Vizag',city:'Vizag',stage:'YTD',zone:'South',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-  {costCenter:'Bhubaneshwar',hub:'Bhubaneshwar',city:'Bhubaneshwar',stage:'YTD',zone:'East',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-  {costCenter:'Ranchi/Raipur',hub:'Ranchi/Raipur',city:'Ranchi/Raipur',stage:'YTD',zone:'East',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-  {costCenter:'Rajkot',hub:'Rajkot',city:'Rajkot',stage:'YTD',zone:'West',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
-];
+// ── Hard-coded data (fallback) ─────────────────────────────────────────────
 
-const C2B_DATA = [
-  {hub:'Pune_Cars24 Parking',zone:'West'},
-  {hub:'Ahmedabad-3 Parking',zone:'West'},
-  {hub:'Surat-3 Parking',zone:'West'},
-  {hub:'Rajkot-2 Parking',zone:'West'},
-  {hub:'Bhopal-2 Parking',zone:'West'},
-  {hub:'Gwalior Parking',zone:'West'},
-  {hub:'Indore Parking',zone:'West'},
-  {hub:'Raipur Parking',zone:'West'},
-  {hub:'Nagpur Parking',zone:'West'},
-  {hub:'Aurangabad Parking',zone:'West'},
-  {hub:'Nashik Parking',zone:'West'},
-  {hub:'Mumbai Parking',zone:'West'},
-  {hub:'Bhubaneswar Parking',zone:'West'},
-  {hub:'Chennai Parking',zone:'South'},
-  {hub:'Hyderabad-2 Parking',zone:'South'},
-  {hub:'Bangalore Parking',zone:'South'},
-  {hub:'Kochi Parking',zone:'South'},
-  {hub:'Mysore Parking',zone:'South'},
-  {hub:'Jaipur Parking-2',zone:'RON'},
-  {hub:'Lucknow Parking',zone:'RON'},
-  {hub:'Meerut Parking',zone:'RON'},
-  {hub:'Dehradun Parking',zone:'RON'},
-  {hub:'Chandigarh Parking',zone:'RON'},
-  {hub:'Ludhiana Parking',zone:'RON'},
-  {hub:'Gurgaon Parking 2',zone:'North'},
-  {hub:'Noida Sec-37 Parking',zone:'North'},
-  {hub:'Metrowalk Parking Yard',zone:'North'},
-].map(r => ({...r, totalCapex:300000, infraNetworking:200000, rack:100000}));
+const HARDCODED_GS = [
+  // costCenter, hub, city, stage, zone, category, parking, slots, grossRental, totalCapex, infraCost, slotMarking, vm, newInitiatives, itCost, hrcTotal, totalMaint, grandTotal
+  ['','CARS24 Hub, Rajouri Garden','Delhi/NCR','Active','North','Minor Upgrade','Covered',90,745000,1470000,1000000,0,50000,270000,150000,0,600000,2070000],
+  ['','CARS24 Hub, Metro Walk, Rohini','Delhi/NCR','Active','North','Major Upgrade','Open',150,595659,2220000,500000,0,100000,1420000,200000,0,750000,2970000],
+  ['Rohini Existing HRC','Rohini Existing HRC','Delhi/NCR','Active','North','Existing HRC','Open',0,0,0,0,0,0,0,0,1050000,0,1050000],
+  ['06,10,237,1001u','Cars24 Hub, DLF South Court, Saket','Delhi/NCR','Active','North','Minor Upgrade','Covered',80,672363,1560000,1000000,90000,50000,270000,150000,0,600000,2160000],
+  ['06,14,206,1493/06,14,237,1401b','CARS24 Hub, Gaur City Mall, Greater Noida','Delhi/NCR','Active','North','Basic Upgrade','Covered',100,399000,1035000,500000,90000,25000,270000,150000,0,600000,1635000],
+  ['06,11,237,1101b/06,11,206,1101c','CARS24 Hub, M3M Urbana, Gurugram','Delhi/NCR','Active','North','Basic Upgrade','Covered',250,816584,850000,340000,90000,0,270000,150000,0,600000,1450000],
+  ['','CARS24 Hub, Gurgaon Sector 18','Delhi/NCR','Active','North','Major Upgrade','Open',100,676000,5670000,3750000,200000,100000,1420000,200000,0,750000,6420000],
+  ['New Gurgaon HRC','New Gurgaon HRC','Delhi/NCR','Active','North','HRC','Open',0,0,0,0,0,0,0,0,5100000,0,5100000],
+  ['Gurgaon Existing HRC','Gurgaon Existing HRC','Delhi/NCR','Active','North','Existing HRC','Open',0,0,0,0,0,0,0,0,1050000,0,1050000],
+  ['','CARS24, Soul City Mall, Dwarka','Delhi/NCR','Active','North','Basic Upgrade','Covered',77,718000,420000,0,0,0,270000,150000,0,600000,1020000],
+  ['','CARS24 Hub, Faridabad','Delhi/NCR','Active','North','Basic Upgrade','Open',81,583000,1320000,0,0,0,1120000,200000,0,750000,2070000],
+  ['','CARS24 Hub, GNB Mall, Ghaziabad','Delhi/NCR','Active','North','Basic Upgrade','Covered',100,252960,510000,0,90000,0,270000,150000,0,600000,1110000],
+  ['Vikaspuri','Vikaspuri','Delhi/NCR','YTL','North','NSO','Covered',0,0,2180000,1500000,30000,130000,270000,250000,0,500000,2680000],
+  ['Sonipat','Sonipat','Delhi/NCR','YTD','North','NSO','Covered',50,0,5550000,4200000,30000,500000,570000,250000,0,600000,6150000],
+  ['Karnal','Karnal','Delhi/NCR','YTD','North','NSO','Covered',50,0,5550000,4200000,30000,500000,570000,250000,0,600000,6150000],
+  ['MLCP Noida Replacement','MLCP Noida Replacement','Delhi/NCR','YTL','North','Replacement','Covered',0,0,2690000,2000000,90000,180000,270000,150000,0,600000,3290000],
+  ['','CARS24 Hub, Bellahalli, Jakkur Post','Bangalore','Active','South','Major Upgrade','Open',300,588813,4245000,1200000,200000,225000,2420000,200000,0,750000,4995000],
+  ['Jakkur Existing HRC','Jakkur Existing HRC','Bangalore','Active','South','Existing HRC','Open',0,0,0,0,0,0,0,0,1700000,0,1700000],
+  ['06,15,279,1589/06,15,264,1536','CARS24 Hub, GT World Mall','Bangalore','Active','South','Major Upgrade','Covered',120,343512,2450000,1340000,90000,600000,270000,150000,0,600000,3050000],
+  ['','CARS24 Hub, Bhoruka Tech Park, Whitefield','Bangalore','Active','South','Major Upgrade','Covered',130,486000,2350000,1340000,90000,500000,270000,150000,0,600000,2950000],
+  ['','CARS24 Hub, Right Parking MLCP, Gandhi Nagar','Bangalore','Active','South','Basic Upgrade','Covered',120,500000,510000,0,90000,0,270000,150000,0,600000,1110000],
+  ['','CARS24 Hub, Nexus Whitefield Mall','Bangalore','Active','South','Basic Upgrade','Covered',116,345030,850000,340000,90000,0,270000,150000,0,600000,1450000],
+  ['','CARS24 Hub, Vaishnavi Sapphire, Yeswanthpur','Bangalore','Active','South','Basic Upgrade','Covered',100,404250,850000,340000,90000,0,270000,150000,0,600000,1450000],
+  ['Bangalore Prem Hub','Bangalore Prem Hub','Bangalore','YTD','South','NSO','Open',50,0,7650000,5900000,80000,500000,870000,300000,0,750000,8400000],
+  ['','CARS24 Hub, Nexus Mall Koramangala','Bangalore','Active','South','Basic Upgrade','Covered',90,405814,510000,0,90000,0,270000,150000,0,600000,1110000],
+  ['','CARS24 Hub, Mantra Mall, Attapur, Hyderabad','Hyderabad','Active','South','Basic Upgrade','Covered',80,500000,900000,340000,90000,50000,270000,150000,0,600000,1500000],
+  ['','CARS24 Hub, Kompally, Hyderabad','Hyderabad','Active','South','Major Upgrade','Open',250,341250,3945000,1150000,200000,25000,2370000,200000,0,750000,4695000],
+  ['Kompally Existing HRC','Kompally Existing HRC','Hyderabad','Active','South','Existing HRC','Open',0,0,0,0,0,0,0,0,2400000,0,2400000],
+  ['','CARS24 Hub, Bachupally, Hyderabad','Hyderabad','Active','South','To be replaced','Open',86,204356,150000,0,0,150000,0,0,0,0,150000],
+  ['Bachupally Replacement','Bachupally Replacement','Hyderabad','YTL','South','Replacement','Open',0,0,9870000,7700000,200000,500000,1170000,300000,0,750000,10620000],
+  ['','CARS24 Hub, GVK One Mall, Hyderabad','Hyderabad','Active','South','Basic Upgrade','Covered',60,330400,535000,0,90000,25000,270000,150000,0,600000,1135000],
+  ['Uppal','Uppal','Hyderabad','YTD','South','NSO','Open',0,0,7850000,5900000,80000,700000,870000,300000,0,750000,8600000],
+  ['','CARS24 Hub, Karapakkam, OMR Road, Chennai','Chennai','Active','South','Major Upgrade','Open',113,500000,3320000,1250000,200000,500000,1170000,200000,0,750000,4070000],
+  ['','CARS24 Hub, JP Parking, Thiruverkadu, Chennai','Chennai','Active','South','To be replaced','Open',150,612488,500000,0,200000,300000,0,0,0,0,500000],
+  ['Thiruverkadu Replacement','Thiruverkadu Replacement','Chennai','YTD','South','Replacement','Open',0,0,6370000,4200000,200000,500000,1170000,300000,0,750000,7120000],
+  ['06,20,206,2097/06,20,237,2001f','CARS24 Hub, Nexus Vijaya Mall, Vadapalani','Chennai','Active','South','Basic Upgrade','Covered',100,558137,900000,340000,90000,50000,270000,150000,0,600000,1500000],
+  ['06,16,264,1674/06,16,237,1689','CARS24 Hub, Goregaon, Mumbai','Mumbai','Active','West','To be replaced','Covered',100,619949,90000,0,90000,0,0,0,0,600000,690000],
+  ['Goregaon Replacement','Goregaon Replacement','Mumbai','YTD','West','Replacement','Covered',0,0,5310000,4200000,90000,500000,270000,250000,0,600000,5910000],
+  ['','CARS24 Hub, Belapur, Mumbai','Mumbai','Active','West','Minor Upgrade','Covered',100,450000,1585000,1000000,90000,75000,270000,150000,0,600000,2185000],
+  ['','CARS24 Hub, Kandivali, Mumbai','Mumbai','Active','West','Basic Upgrade','Covered',92,519225,850000,340000,90000,0,270000,150000,0,600000,1450000],
+  ['','CARS24 Hub, Dombivli East, Mumbai','Mumbai','Active','West','Major Upgrade','Open',100,708750,4210000,1640000,200000,0,2170000,200000,0,750000,4960000],
+  ['Dombivli Existing HRC','Dombivli Existing HRC','Mumbai','Active','West','Existing HRC','Open',0,0,0,0,0,0,0,0,1750000,0,1750000],
+  ['Dombivli New HRC','Dombivli New HRC','Mumbai','YTD','West','HRC','Open',0,0,0,0,0,0,0,0,4200000,0,4200000],
+  ['','CARS24 Hub, Korum Mall, Thane West','Mumbai','Active','West','Basic Upgrade','Covered',98,527800,510000,0,90000,0,270000,150000,0,600000,1110000],
+  ['Vasai-vihar','Vasai-vihar','Mumbai','YTD','West','NSO','Covered',0,0,5550000,4200000,30000,500000,570000,250000,0,600000,6150000],
+  ['06,17,206,1796/06,17,237,1784','CARS24 Hub, Tathawade, Pune','Pune','Active','West','Major Upgrade','Open',300,560250,4520000,600000,200000,150000,3370000,200000,0,750000,5270000],
+  ['Pune Existing HRC','Pune Existing HRC','Pune','Active','West','Existing HRC','Open',0,0,0,0,0,0,0,0,1200000,0,1200000],
+  ['Pune New Hub','Pune New Hub','Pune','YTD','West','NSO','Open',100,0,7650000,5900000,80000,500000,870000,300000,0,750000,8400000],
+  ['','CARS24 Hub, Amanora Mall, Pune','Pune','Active','West','Basic Upgrade','Covered',270,714750,850000,340000,90000,0,270000,150000,0,600000,1450000],
+  ['','CARS24 Hub, Karnavati Club, Ahmedabad','Ahmedabad','Active','West','To be Replaced','Open',150,606375,400000,0,200000,200000,0,0,0,400000,800000],
+  ['Karnavati Replacement','Karnavati Replacement','Ahmedabad','YTD','West','Replacement','Open',0,0,8070000,5900000,200000,500000,1170000,300000,0,750000,8820000],
+  ['Naroda New HRC','Naroda New HRC','Ahmedabad','YTD','West','HRC','Open',0,0,0,0,0,0,0,0,2787500,0,2787500],
+  ['','CARS24 Hub, Naroda, Ahmedabad','Ahmedabad','Active','West','Major Upgrade','Open',200,275331,4920000,1000000,200000,150000,3370000,200000,0,750000,5670000],
+  ['','Cars24 Hub, Bestech Mall, Chandigarh','Chandigarh','Active','North','Basic Upgrade','Covered',110,365725,810000,0,90000,300000,270000,150000,0,600000,1410000],
+  ['New Chandigarh HRC','New Chandigarh HRC','Chandigarh','YTD','North','HRC','Covered',0,0,0,0,0,0,0,0,5100000,0,5100000],
+  ['06,47,237,4787/06,47,206,4793','CARS24 Hub, Nishal Arcade, Surat','Surat','Active','West','Basic Upgrade','Covered',75,466663,1010000,500000,90000,0,270000,150000,0,600000,1610000],
+  ['Surat HRC','Surat HRC','Surat','YTD','West','HRC','Open',0,0,0,0,0,0,0,0,5100000,0,5100000],
+  ['06,33,237,3390','Cars24 Hub, C21 Malhar Mall, Indore','Indore','Active','West','Basic Upgrade','Covered',80,300000,510000,0,90000,0,270000,150000,0,600000,1110000],
+  ['','CARS24 Hub, Mansarovar, Jaipur','Jaipur','Active','West','Major Upgrade','Open',160,441000,3135000,840000,200000,525000,1370000,200000,0,750000,3885000],
+  ['Jaipur Existing HRC','Jaipur Existing HRC','Jaipur','Active','West','Existing HRC','Open',0,0,0,0,0,0,0,0,1350000,0,1350000],
+  ['','CARS24 Hub, Avani Riverside Mall, Kolkata','Kolkata','Active','East','Basic Upgrade','Covered',68,308540,510000,0,90000,0,270000,150000,0,600000,1110000],
+  ['','CARS24 Hub, Astra Tower, Kolkata','Kolkata','Active','East','Basic Upgrade','Covered',120,241000,610000,0,90000,100000,270000,150000,0,600000,1210000],
+  ['Kolkata HRC','Kolkata HRC','Kolkata','YTD','East','HRC','Covered',0,0,0,0,0,0,0,0,5100000,0,5100000],
+  ['','CARS24 Hub, OP Road, Vadodara','Vadodara','Active','West','Minor Upgrade','Open',90,711115,1570000,0,200000,0,1170000,200000,0,750000,2320000],
+  ['','CARS24 Hub, Info Park, Kochi','Kochi','Active','South','Minor Upgrade','Open',250,483463,1670000,0,200000,100000,1170000,200000,0,750000,2420000],
+  ['','CARS24 Hub, Gomti Nagar, Lucknow','Lucknow','Active','North','To be replaced','Covered',200,430125,460000,0,140000,50000,270000,0,0,0,460000],
+  ['Lucknow Replacement','Lucknow Replacement','Lucknow','YTD','North','Replacement','Covered',0,0,5910000,4200000,90000,500000,870000,250000,0,600000,6510000],
+  ['New Lucknow HRC','New Lucknow HRC','Lucknow','YTD','North','HRC','Covered',0,0,0,0,0,0,0,0,5100000,0,5100000],
+  ['','CARS24 Hub, Atal Path, Patna','Patna','Active','East','Major Upgrade','Open',70,463000,3610000,1340000,200000,500000,1370000,200000,0,750000,4360000],
+  ['','CARS24 Hub, Vivekananda Nagar, Coimbatore','Coimbatore','Active','South','Minor Upgrade','Open',100,347287,2110000,340000,200000,200000,1170000,200000,0,750000,2860000],
+  ['Kanpur','Kanpur','Kanpur','YTD','North','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+  ['Dehradun','Dehradun','Dehradun','YTD','North','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+  ['Bhopal','Bhopal','Bhopal','YTD','West','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+  ['Vizag','Vizag','Vizag','YTD','South','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+  ['Bhubaneshwar','Bhubaneshwar','Bhubaneshwar','YTD','East','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+  ['Ranchi/Raipur','Ranchi/Raipur','Ranchi/Raipur','YTD','East','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+  ['Rajkot','Rajkot','Rajkot','YTD','West','NSO','Covered',50,0,5250000,4200000,30000,500000,270000,250000,0,600000,5850000],
+].map(r => ({
+  costCenter:r[0], hub:r[1], city:r[2], stage:r[3], zone:r[4], category:r[5], parking:r[6],
+  slots:r[7], grossRental:r[8], totalCapex:r[9], infraCost:r[10], slotMarking:r[11], vm:r[12],
+  newInitiatives:r[13], itCost:r[14], hrcTotal:r[15], totalMaint:r[16], grandTotal:r[17]
+}));
+
+const HARDCODED_C2B = [
+  ['Pune_Cars24 Parking','Pune','West'],['Ahmedabad-3 Parking','Ahmedabad','West'],
+  ['Surat-3 Parking','Surat','West'],['Rajkot-2 Parking','Rajkot','West'],
+  ['Bhopal-2 Parking','Bhopal','West'],['Gwalior Parking','Gwalior','West'],
+  ['Indore Parking','Indore','West'],['Raipur Parking','Raipur','West'],
+  ['Nagpur Parking','Nagpur','West'],['Aurangabad Parking','Aurangabad','West'],
+  ['Nashik Parking','Nashik','West'],['Mumbai Parking','Mumbai','West'],
+  ['Bhubaneswar Parking','Bhubaneswar','West'],['Chennai Parking','Chennai','South'],
+  ['Hyderabad-2 Parking','Hyderabad','South'],['Bangalore Parking','Bangalore','South'],
+  ['Kochi Parking','Kochi','South'],['Mysore Parking','Mysore','South'],
+  ['Jaipur Parking-2','Jaipur','RON'],['Lucknow Parking','Lucknow','RON'],
+  ['Meerut Parking','Meerut','RON'],['Dehradun Parking','Dehradun','RON'],
+  ['Chandigarh Parking','Chandigarh','RON'],['Ludhiana Parking','Ludhiana','RON'],
+  ['Gurgaon Parking 2','Gurgaon','North'],['Noida Sec-37 Parking','Noida','North'],
+  ['Metrowalk Parking Yard','Delhi','North'],
+].map(r => ({hub:r[0], city:r[1], zone:r[2], totalCapex:300000, infraNetworking:200000, rack:100000}));
+
+// ── Assumptions ───────────────────────────────────────────────────────────
 
 const ASSUMPTIONS = {
   infraCost: {
-    'NSO': [
-      {label:'CEC (Civil, Electrical, Carpentry)', amount:2000000},
-      {label:'OPS Setup', amount:1000000},
-      {label:'Delivery Area', amount:500000},
-      {label:'VM Branding', amount:700000},
+    'NSO':[
+      {label:'CEC — Civil, Electrical, Carpentry',amount:2000000},
+      {label:'OPS Setup',amount:1000000},
+      {label:'Delivery Area',amount:500000},
+      {label:'VM Branding',amount:700000},
     ],
-    'Major Upgrade': [
-      {label:'CEC Works', amount:1000000},
-      {label:'Ops Upgrade', amount:500000},
-      {label:'Delivery Area', amount:200000},
+    'Major Upgrade':[
+      {label:'CEC Works',amount:1000000},
+      {label:'Ops Upgrade',amount:500000},
+      {label:'Delivery Area',amount:200000},
     ],
-    'Minor Upgrade': [
-      {label:'Painting', amount:80000},
-      {label:'Washroom Renovation', amount:60000},
-      {label:'Electrical & AC', amount:50000},
-      {label:'Yard Repairs & Revamp', amount:100000},
-      {label:'Furniture', amount:50000},
+    'Minor Upgrade':[
+      {label:'Painting',amount:80000},
+      {label:'Washroom Renovation',amount:60000},
+      {label:'Electrical & AC',amount:50000},
+      {label:'Yard Repairs & Revamp',amount:100000},
+      {label:'Furniture',amount:50000},
     ],
-    'Basic Upgrade': [
-      {label:'Painting', amount:80000},
-      {label:'Washroom Renovation', amount:60000},
-      {label:'Electrical & AC', amount:50000},
-      {label:'Yard Repairs', amount:100000},
-      {label:'Furniture', amount:50000},
+    'Basic Upgrade':[
+      {label:'Painting',amount:80000},
+      {label:'Washroom Renovation',amount:60000},
+      {label:'Electrical & AC',amount:50000},
+      {label:'Yard Repairs',amount:100000},
+      {label:'Furniture',amount:50000},
     ],
-    'Replacement': [
-      {label:'Full hub rebuild — same as NSO package', amount:null},
+    'Replacement':[
+      {label:'Full hub rebuild (NSO package)',amount:4200000},
+      {label:'Site-specific civil additions',amount:null},
     ],
-    'HRC': [
-      {label:'Studio Setup', amount:1200000},
-      {label:'Shed and PCC', amount:800000},
-      {label:'Paint Booth', amount:400000},
-      {label:'Washroom Renovation', amount:300000},
-      {label:'Lift (4 nos)', amount:650000},
-      {label:'Compressor & Pneumatic Lines', amount:250000},
-      {label:'New Paint Booth', amount:1000000},
-      {label:'Misc Equipments', amount:150000},
+    'HRC':[
+      {label:'Studio Setup',amount:1200000},
+      {label:'Shed and PCC',amount:800000},
+      {label:'Paint Booth',amount:400000},
+      {label:'Washroom Renovation',amount:300000},
+      {label:'Lift (4 nos)',amount:650000},
+      {label:'Compressor & Pneumatic Lines',amount:250000},
+      {label:'New Paint Booth',amount:1000000},
+      {label:'Misc Equipments',amount:150000},
     ],
-  },
-  itCost: {
-    'Covered': [{label:'IT Equipment (Covered Hub)', amount:150000}],
-    'Open': [{label:'IT Equipment (Open Hub)', amount:200000}],
-    'NSO-Open': [{label:'IT NSO Setup', amount:250000},{label:'Router', amount:50000}],
-    'NSO-Covered': [{label:'IT NSO Setup', amount:200000},{label:'Router', amount:50000}],
-    'HRC': [{label:'IT Work — HRC', amount:200000}],
-  },
-  vm: {
-    'default': [{label:'VM Initiatives & Branding', amount:null},{label:'Pylon/Mascot/Digital Host/Markers as applicable', amount:null}],
-    'NSO': [{label:'VM Branding (included in Infra Cost)', amount:0}],
   },
   slotMarking: {
-    'NSO': [{label:'Slot Marking & Painting — NSO', amount:30000}],
-    'Upgrade-Covered': [{label:'Slot Marking & Painting', amount:90000}],
-    'Upgrade-Open': [{label:'Slot Marking & Painting', amount:200000}],
+    'NSO':[{label:'Slot Marking & Painting — NSO',amount:30000}],
+    'Open':[{label:'Slot Marking & Painting — Open Hub',amount:200000}],
+    'Covered':[{label:'Slot Marking & Painting — Covered Hub',amount:90000}],
   },
-  totalMaint: {
-    'Covered': [{label:'Infra Maintenance', amount:300000},{label:'VM Maintenance (Closed Hub)', amount:300000}],
-    'Open': [{label:'Infra Maintenance', amount:400000},{label:'VM Maintenance (Open Hub)', amount:350000}],
-    'NSO-Covered': [{label:'Infra Maintenance', amount:300000},{label:'VM Maintenance', amount:200000}],
-    'NSO-Open': [{label:'Infra Maintenance', amount:400000},{label:'VM Maintenance', amount:350000}],
+  vm: {
+    'NSO-Open':[{label:'VM Branding (pylon, digital host, markers)',amount:500000},{label:'Landscaping',amount:200000}],
+    'NSO-Covered':[{label:'VM Branding (pylon, digital host, markers)',amount:130000}],
+    'Open':[{label:'VM Initiatives (open hub)',amount:null},{label:'Pylon ₹3L, Digital Host ₹1.2L, Category Markers ₹1L',amount:null},{label:'Landscaping ₹3L, Key Rack ₹0.5L',amount:null}],
+    'Covered':[{label:'VM Initiatives (covered hub)',amount:null},{label:'Digital Host ₹1.2L, Category Markers ₹1L',amount:null},{label:'Key Rack ₹0.5L, Logo/Logo Revamp as needed',amount:null}],
+  },
+  newInitiatives: {
+    'NSO-Covered':[{label:'IT Networking Setup (Covered)',amount:270000}],
+    'NSO-Open':[{label:'IT Networking Setup (Open)',amount:570000},{label:'Guard Room',amount:300000}],
+    'Major-Open':[{label:'IT Networking Upgrade (Open Hub)',amount:null},{label:'Hub-specific IT/infra projects included',amount:null},{label:'Typical range: ₹14L – ₹34L',amount:null}],
+    'Major-Covered':[{label:'IT Networking Upgrade (Covered)',amount:270000}],
+    'Minor-Open':[{label:'IT Networking (Open Hub)',amount:1170000}],
+    'Minor-Covered':[{label:'IT Networking (Covered Hub)',amount:270000}],
+    'Basic-Open':[{label:'IT Networking (Open Hub)',amount:1120000}],
+    'Basic-Covered':[{label:'IT Networking (Covered Hub)',amount:270000}],
+    'Replacement':[{label:'IT Networking — same as NSO type',amount:null}],
+  },
+  itCost: {
+    'Covered':[{label:'IT Equipment (Covered Hub)',amount:150000}],
+    'Open':[{label:'IT Equipment (Open Hub)',amount:200000}],
+    'NSO-Open':[{label:'IT NSO Setup',amount:250000},{label:'Router',amount:50000}],
+    'NSO-Covered':[{label:'IT NSO Setup',amount:200000},{label:'Router',amount:50000}],
+    'HRC':[{label:'IT Work — HRC',amount:200000}],
+    'Replacement-Open':[{label:'IT NSO-type Setup (Open)',amount:300000}],
+    'Replacement-Covered':[{label:'IT NSO-type Setup (Covered)',amount:250000}],
   },
   hrcTotal: {
-    'Existing HRC': [{label:'HRC Maintenance (12 months)', amount:null},{label:'~10.5L per HRC per year', amount:null}],
-    'New HRC': [{label:'New HRC Full Setup — see Infra Cost breakdown', amount:null}],
-    'HRC': [{label:'HRC Setup (Capex)', amount:null},{label:'See Infra Cost column for breakdown', amount:null}],
+    'Existing HRC':[{label:'HRC Maintenance (annual)',amount:1050000},{label:'Note: ~₹10.5L per HRC/yr',amount:null}],
+    'HRC':[{label:'Studio Setup',amount:1200000},{label:'Shed and PCC',amount:800000},{label:'Paint Booth',amount:400000},{label:'Washroom',amount:300000},{label:'Lift (4 nos)',amount:650000},{label:'Compressor',amount:250000},{label:'New Paint Booth',amount:1000000},{label:'Misc',amount:150000}],
+    'default':[{label:'HRC cost — see category for breakdown',amount:null}],
+  },
+  totalMaint: {
+    'NSO-Covered':[{label:'Infra Maintenance',amount:300000},{label:'VM Maintenance',amount:200000}],
+    'NSO-Open':[{label:'Infra Maintenance',amount:400000},{label:'VM Maintenance',amount:350000}],
+    'Covered':[{label:'Infra Maintenance',amount:300000},{label:'VM Maintenance (Closed Hub)',amount:300000}],
+    'Open':[{label:'Infra Maintenance',amount:400000},{label:'VM Maintenance (Open Hub)',amount:350000}],
   },
 };
-
-// ── Helpers ───────────────────────────────────────────────────────────────
-
-function fmtMoney(v, short=false) {
-  if (!v || v === 0) return '—';
-  if (short) {
-    if (v >= 10000000) return `₹${(v/10000000).toFixed(2)}Cr`;
-    if (v >= 100000) return `₹${(v/100000).toFixed(2)}L`;
-    if (v >= 1000) return `₹${(v/1000).toFixed(1)}K`;
-  }
-  return '₹' + Math.round(v).toLocaleString('en-IN');
-}
-
-function fmtL(v) {
-  if (!v) return '—';
-  return `₹${(v/100000).toFixed(2)}L`;
-}
-
-function uniqSorted(arr) { return [...new Set(arr.filter(Boolean))].sort(); }
 
 function getAssumptions(col, row) {
   const cat = row.category || '';
   const park = row.parking || '';
+  const isNSO = cat==='NSO'||cat==='Replacement';
+  const isOpen = park==='Open';
+
   if (col === 'infraCost') {
-    const key = cat.includes('NSO') ? 'NSO' : cat.includes('Major') ? 'Major Upgrade' : cat.includes('Minor') ? 'Minor Upgrade' : cat.includes('Basic') ? 'Basic Upgrade' : cat.includes('Replacement') ? 'Replacement' : cat === 'HRC' ? 'HRC' : null;
-    return key ? (ASSUMPTIONS.infraCost[key] || []) : [];
-  }
-  if (col === 'itCost') {
-    const key = cat.includes('NSO') ? (park==='Open'?'NSO-Open':'NSO-Covered') : cat==='HRC'?'HRC' : park==='Open'?'Open':'Covered';
-    return ASSUMPTIONS.itCost[key] || [];
-  }
-  if (col === 'vm') {
-    return cat.includes('NSO') ? ASSUMPTIONS.vm['NSO'] : ASSUMPTIONS.vm['default'];
+    const k = cat.includes('NSO')?'NSO':cat.includes('Major')?'Major Upgrade':cat.includes('Minor')?'Minor Upgrade':cat.includes('Basic')?'Basic Upgrade':cat.includes('Replacement')?'Replacement':cat==='HRC'?'HRC':null;
+    return k ? (ASSUMPTIONS.infraCost[k]||[]) : [];
   }
   if (col === 'slotMarking') {
-    const key = cat.includes('NSO') ? 'NSO' : park==='Open' ? 'Upgrade-Open' : 'Upgrade-Covered';
-    return ASSUMPTIONS.slotMarking[key] || [];
+    const k = cat.includes('NSO')||cat.includes('Replacement') ? 'NSO' : isOpen ? 'Open' : 'Covered';
+    return ASSUMPTIONS.slotMarking[k]||[];
   }
-  if (col === 'totalMaint') {
-    const key = cat.includes('NSO') ? (park==='Open'?'NSO-Open':'NSO-Covered') : park==='Open'?'Open':'Covered';
-    return ASSUMPTIONS.totalMaint[key] || [];
+  if (col === 'vm') {
+    if (cat.includes('NSO')) return ASSUMPTIONS.vm[isOpen?'NSO-Open':'NSO-Covered'];
+    return ASSUMPTIONS.vm[isOpen?'Open':'Covered'];
+  }
+  if (col === 'newInitiatives') {
+    if (cat.includes('NSO')) return ASSUMPTIONS.newInitiatives[isOpen?'NSO-Open':'NSO-Covered']||[];
+    if (cat.includes('Replacement')) return ASSUMPTIONS.newInitiatives['Replacement']||[];
+    if (cat.includes('Major')) return ASSUMPTIONS.newInitiatives[isOpen?'Major-Open':'Major-Covered']||[];
+    if (cat.includes('Minor')) return ASSUMPTIONS.newInitiatives[isOpen?'Minor-Open':'Minor-Covered']||[];
+    return ASSUMPTIONS.newInitiatives[isOpen?'Basic-Open':'Basic-Covered']||[];
+  }
+  if (col === 'itCost') {
+    if (cat.includes('NSO')) return ASSUMPTIONS.itCost[isOpen?'NSO-Open':'NSO-Covered']||[];
+    if (cat==='HRC') return ASSUMPTIONS.itCost['HRC']||[];
+    if (cat.includes('Replacement')) return ASSUMPTIONS.itCost[isOpen?'Replacement-Open':'Replacement-Covered']||[];
+    return ASSUMPTIONS.itCost[isOpen?'Open':'Covered']||[];
   }
   if (col === 'hrcTotal') {
-    const key = cat==='Existing HRC' ? 'Existing HRC' : cat==='HRC' ? 'HRC' : 'New HRC';
-    return ASSUMPTIONS.hrcTotal[key] || [];
+    const k = cat==='Existing HRC'?'Existing HRC':cat==='HRC'?'HRC':'default';
+    return ASSUMPTIONS.hrcTotal[k]||[];
+  }
+  if (col === 'totalMaint') {
+    if (cat.includes('NSO')||cat.includes('Replacement')) return ASSUMPTIONS.totalMaint[isOpen?'NSO-Open':'NSO-Covered']||[];
+    return ASSUMPTIONS.totalMaint[isOpen?'Open':'Covered']||[];
   }
   return [];
 }
 
+// ── Formatters ─────────────────────────────────────────────────────────────
+
+function fmtAmt(v) {
+  if (!v || v === 0) return '—';
+  const a = Math.abs(v);
+  if (a >= 10000000) return `₹${(v/10000000).toFixed(2)} Cr`;
+  if (a >= 100000)   return `₹${(v/100000).toFixed(2)} L`;
+  if (a >= 1000)     return `₹${(v/1000).toFixed(1)} K`;
+  return `₹${Math.round(v)}`;
+}
+function uniq(arr) { return [...new Set(arr.filter(Boolean))].sort(); }
+
+// ── Excel Parser ──────────────────────────────────────────────────────────
+
+function parseExcel(buffer) {
+  const wb = XLSX.read(buffer, {type:'array'});
+  const gsSheet = wb.Sheets['GS Capex AOP'];
+  const c2bSheet = wb.Sheets['C2B Capex AOP'];
+  const gsRows = [], c2bRows = [];
+
+  if (gsSheet) {
+    const raw = XLSX.utils.sheet_to_json(gsSheet, {header:1, defval:null});
+    // Find header row (has 'Hub Name')
+    let hi = raw.findIndex(r => r && r.some(c => String(c||'').includes('Hub Name')));
+    if (hi < 0) hi = 2;
+    for (let i = hi+1; i < raw.length; i++) {
+      const r = raw[i];
+      if (!r || !r[2]) continue;
+      const stage = String(r[4]||'').trim();
+      if (!['Active','YTD','YTL'].includes(stage)) continue;
+      gsRows.push({
+        costCenter: String(r[0]||'').trim(),
+        hub: String(r[2]||'').trim(),
+        city: String(r[3]||'').trim(),
+        stage, zone: String(r[5]||'').trim(),
+        category: String(r[6]||'').trim(),
+        parking: String(r[7]||'').trim(),
+        slots: Number(r[8])||0,
+        grossRental: Number(r[9])||0,
+        totalCapex: Number(r[10])||0,
+        infraCost: Number(r[11])||0,
+        slotMarking: Number(r[12])||0,
+        vm: Number(r[13])||0,
+        newInitiatives: Number(r[14])||0,
+        itCost: Number(r[15])||0,
+        hrcTotal: Number(r[16])||0,
+        totalMaint: Number(r[20])||0,
+        grandTotal: Number(r[23])||0,
+      });
+    }
+  }
+
+  if (c2bSheet) {
+    const raw = XLSX.utils.sheet_to_json(c2bSheet, {header:1, defval:null});
+    for (let i = 1; i < raw.length; i++) {
+      const r = raw[i];
+      if (!r || !r[0]) continue;
+      c2bRows.push({
+        hub: String(r[0]||'').trim(),
+        city: String(r[1]||'').trim(),
+        zone: String(r[2]||'').trim(),
+        totalCapex: Number(r[3])||300000,
+        infraNetworking: Number(r[4])||200000,
+        rack: Number(r[5])||100000,
+      });
+    }
+  }
+
+  return { gsRows: gsRows.length ? gsRows : null, c2bRows: c2bRows.length ? c2bRows : null };
+}
+
 // ── Tooltip ───────────────────────────────────────────────────────────────
 
-function Tooltip({ items, x, y }) {
-  if (!items || !items.length) return null;
+function TooltipBox({ tooltip }) {
+  if (!tooltip.visible || !tooltip.items.length) return null;
+  const x = Math.min(tooltip.x + 14, window.innerWidth - 310);
+  const y = Math.max(10, Math.min(tooltip.y - 10, window.innerHeight - 220));
+  const total = tooltip.items.filter(it=>it.amount!=null).reduce((s,it)=>s+it.amount,0);
   return (
-    <div className="tooltip-box fixed bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-3 text-xs min-w-[200px] max-w-[280px]"
-      style={{left: Math.min(x+12, window.innerWidth-300), top: Math.min(y-8, window.innerHeight-200)}}>
-      {items.map((it, i) => (
+    <div className="tooltip-box bg-gray-900 border border-gray-600 rounded-xl shadow-2xl p-3 text-xs min-w-[220px] max-w-[300px]"
+      style={{left:x, top:y}}>
+      <div className="text-[10px] text-gray-400 uppercase tracking-wider mb-2">{tooltip.col}</div>
+      {tooltip.items.map((it,i) => (
         <div key={i} className="flex justify-between gap-3 py-0.5">
           <span className="text-gray-300">{it.label}</span>
-          <span className="text-white font-semibold">{it.amount!=null ? fmtL(it.amount) : ''}</span>
+          <span className="text-white font-semibold whitespace-nowrap">{it.amount!=null ? fmtAmt(it.amount) : ''}</span>
         </div>
       ))}
+      {total > 0 && (
+        <div className="flex justify-between gap-3 pt-1.5 mt-1.5 border-t border-gray-700">
+          <span className="text-gray-400 font-semibold">Standard Total</span>
+          <span className="text-[#4736FE] font-bold">{fmtAmt(total)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -300,14 +395,12 @@ function Ico({ n, size=16, cls='' }) {
     filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
     search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
     x:      <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
-    copy:   <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+    upload: <><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></>,
+    spin:   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
+    lock:   <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
+    logout: <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
   };
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
-      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
-      {d[n]}
-    </svg>
-  );
+  return <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>{d[n]}</svg>;
 }
 
 // ── MultiCheck ────────────────────────────────────────────────────────────
@@ -316,7 +409,7 @@ function MultiCheck({ label, options, selected, onChange }) {
   const [open, setOpen] = useState(false);
   const ref = useRef();
   useEffect(() => {
-    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    const h = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
     document.addEventListener('mousedown', h);
     return () => document.removeEventListener('mousedown', h);
   }, []);
@@ -325,11 +418,11 @@ function MultiCheck({ label, options, selected, onChange }) {
     <div className="relative" ref={ref}>
       <button onClick={()=>setOpen(o=>!o)}
         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
-          ${count>0 ? 'border-[#4736FE] bg-[#4736FE]/10 text-[#4736FE]' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'}`}>
+          ${count>0?'border-[#4736FE] bg-[#4736FE]/10 text-[#4736FE]':'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'}`}>
         <Ico n="filter" size={11}/>{label}{count>0&&` (${count})`}
       </button>
       {open && (
-        <div className="absolute top-full mt-1 left-0 z-30 min-w-[180px] bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 max-h-64 overflow-y-auto fade-in">
+        <div className="absolute top-full mt-1 left-0 z-30 min-w-[170px] bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 max-h-64 overflow-y-auto fade-in">
           <div className="flex items-center justify-between px-1 pb-1 mb-1 border-b border-gray-100 dark:border-gray-800">
             <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</span>
             {count>0 && <button onClick={()=>onChange(new Set())} className="text-[10px] text-[#4736FE] hover:underline">Clear</button>}
@@ -348,87 +441,117 @@ function MultiCheck({ label, options, selected, onChange }) {
   );
 }
 
+// ── LoginModal ────────────────────────────────────────────────────────────
+
+function LoginModal({ onSuccess, onClose }) {
+  const [user, setUser] = useState('');
+  const [pass, setPass] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [err, setErr] = useState('');
+  function submit(e) {
+    e.preventDefault();
+    if (!user||!pass){setErr('Enter credentials.');return;}
+    setErr('');setLoading(true);
+    window.C24Uploader.verify({workerUrl:WORKER_URL,auth:{username:user,password:pass}})
+      .then(()=>onSuccess({username:user,password:pass}))
+      .catch(er=>setErr(er.status===401?'Wrong credentials.':'Error: '+(er.message||er)))
+      .finally(()=>setLoading(false));
+  }
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-sm p-6 fade-in" onClick={e=>e.stopPropagation()}>
+        <div className="flex items-center gap-3 mb-4">
+          <div className="w-9 h-9 rounded-xl bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center"><Ico n="lock" size={16} cls="text-[#4736FE]"/></div>
+          <div><div className="font-bold text-sm">Login to upload</div><div className="text-xs text-gray-400">CARS24 credentials required</div></div>
+          <button onClick={onClose} className="ml-auto w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"><Ico n="x" size={14}/></button>
+        </div>
+        <form onSubmit={submit} className="space-y-3">
+          <input value={user} onChange={e=>setUser(e.target.value)} placeholder="Username" className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:outline-none focus:border-[#4736FE]"/>
+          <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="Password" className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:outline-none focus:border-[#4736FE]"/>
+          {err && <p className="text-xs text-red-400">{err}</p>}
+          <button type="submit" disabled={loading} className="w-full py-2 rounded-lg bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] disabled:opacity-50 flex items-center justify-center gap-2">
+            {loading?<><Ico n="spin" size={14} cls="spin"/>Verifying…</>:'Login'}
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+}
+
+// ── Toast ─────────────────────────────────────────────────────────────────
+
+function useToast() {
+  const [toasts, setToasts] = useState([]);
+  const add = useCallback((msg, type='ok') => {
+    const id = Date.now();
+    setToasts(t=>[...t,{id,msg,type}]);
+    setTimeout(()=>setToasts(t=>t.filter(x=>x.id!==id)),3500);
+  },[]);
+  return {toasts, add};
+}
+function ToastLayer({toasts}) {
+  return <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
+    {toasts.map(t=><div key={t.id} className={`px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl fade-in ${t.type==='ok'?'bg-green-500 text-white':'bg-red-500 text-white'}`}>{t.msg}</div>)}
+  </div>;
+}
+
 // ── Summary Tab ───────────────────────────────────────────────────────────
 
-function SummaryTab() {
-  const totalCapexGS = GS_HUB_DATA.reduce((s,r)=>s+r.totalCapex,0);
-  const totalGrandGS = GS_HUB_DATA.reduce((s,r)=>s+r.grandTotal,0);
-  const totalC2B = C2B_DATA.reduce((s,r)=>s+r.totalCapex,0);
+function SummaryTab({ gsData, c2bData }) {
+  const totalCapexGS = gsData.reduce((s,r)=>s+r.totalCapex,0);
+  const totalGrandGS = gsData.reduce((s,r)=>s+r.grandTotal,0);
+  const totalHRC = gsData.reduce((s,r)=>s+r.hrcTotal,0);
+  const totalMaint = gsData.reduce((s,r)=>s+r.totalMaint,0);
+  const totalC2B = c2bData.reduce((s,r)=>s+r.totalCapex,0);
   const overall = totalGrandGS + totalC2B;
 
-  const byZone = useMemo(() => {
-    const m = {};
-    GS_HUB_DATA.forEach(r => { m[r.zone] = (m[r.zone]||0) + r.grandTotal; });
-    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
-  }, []);
+  const byZone = useMemo(()=>{const m={};gsData.forEach(r=>{m[r.zone]=(m[r.zone]||0)+r.grandTotal;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}, [gsData]);
+  const byCat = useMemo(()=>{const m={};gsData.forEach(r=>{const c=r.category.includes('NSO')?'NSO':r.category.includes('HRC')?'HRC':r.category.includes('Replacement')?'Replacement':'Upgrade';m[c]=(m[c]||0)+r.grandTotal;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}, [gsData]);
+  const byStage = useMemo(()=>{const m={};gsData.forEach(r=>{m[r.stage]=(m[r.stage]||0)+r.grandTotal;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}, [gsData]);
 
-  const byCat = useMemo(() => {
-    const m = {};
-    GS_HUB_DATA.forEach(r => {
-      const c = r.category.includes('NSO') ? 'NSO' : r.category.includes('HRC') ? 'HRC' : r.category.includes('Replacement') ? 'Replacement' : 'Upgrade';
-      m[c] = (m[c]||0) + r.grandTotal;
-    });
-    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
-  }, []);
+  const zoneColors={North:'bg-blue-500',South:'bg-green-500',West:'bg-amber-500',East:'bg-purple-500',RON:'bg-pink-500'};
+  const catColors={NSO:'bg-[#4736FE]',HRC:'bg-rose-500',Replacement:'bg-orange-500',Upgrade:'bg-teal-500'};
+  const stageColors={Active:'bg-green-500',YTD:'bg-amber-500',YTL:'bg-blue-500'};
 
-  const byStage = useMemo(() => {
-    const m = {};
-    GS_HUB_DATA.forEach(r => { m[r.stage] = (m[r.stage]||0) + r.grandTotal; });
-    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
-  }, []);
-
-  const maxZone = Math.max(...byZone.map(([,v])=>v));
-  const maxCat = Math.max(...byCat.map(([,v])=>v));
-  const maxStage = Math.max(...byStage.map(([,v])=>v));
-
-  const zoneColors = {North:'bg-blue-500',South:'bg-green-500',West:'bg-amber-500',East:'bg-purple-500'};
-  const catColors = {NSO:'bg-[#4736FE]',HRC:'bg-rose-500',Replacement:'bg-orange-500',Upgrade:'bg-teal-500'};
-  const stageColors = {Active:'bg-green-500',YTD:'bg-amber-500',YTL:'bg-blue-500'};
-
-  function Card({label, value, sub, color}) {
-    const cls = {indigo:'bg-[#4736FE]/10 border-[#4736FE]/30 text-[#4736FE]',amber:'bg-amber-500/10 border-amber-500/30 text-amber-400',green:'bg-green-500/10 border-green-500/30 text-green-400',purple:'bg-purple-500/10 border-purple-500/30 text-purple-400'}[color];
-    return (
-      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
-        <div className={`text-xs font-semibold mb-1 ${cls?.split(' ').pop()}`}>{label}</div>
-        <div className="text-2xl font-bold mb-0.5">{value}</div>
-        {sub && <div className="text-xs text-gray-400">{sub}</div>}
-      </div>
-    );
+  function Card({label,value,sub,color}) {
+    const cls={indigo:'text-[#4736FE]',amber:'text-amber-400',green:'text-green-400',purple:'text-purple-400',rose:'text-rose-400'}[color]||'text-gray-400';
+    return <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+      <div className={`text-xs font-semibold mb-1 ${cls}`}>{label}</div>
+      <div className="text-xl font-bold mb-0.5">{value}</div>
+      {sub && <div className="text-xs text-gray-400">{sub}</div>}
+    </div>;
   }
 
-  function BarChart({title, data, colorMap, maxVal}) {
-    return (
-      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
-        <div className="text-sm font-semibold mb-4">{title}</div>
-        <div className="space-y-3">
-          {data.map(([k,v]) => (
-            <div key={k}>
-              <div className="flex justify-between text-xs mb-1">
-                <span className="font-medium">{k}</span>
-                <span className="text-gray-400">{fmtL(v)}</span>
-              </div>
-              <div className="h-2 bg-gray-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
-                <div className={`h-full rounded-full ${colorMap[k]||'bg-gray-400'}`} style={{width:`${(v/maxVal*100).toFixed(1)}%`}}/>
-              </div>
+  function BarChart({title,data,colorMap,maxVal}) {
+    return <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+      <div className="text-sm font-semibold mb-4">{title}</div>
+      <div className="space-y-3">
+        {data.map(([k,v])=>(
+          <div key={k}>
+            <div className="flex justify-between text-xs mb-1"><span className="font-medium">{k}</span><span className="text-gray-400">{fmtAmt(v)}</span></div>
+            <div className="h-2 bg-gray-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
+              <div className={`h-full rounded-full ${colorMap[k]||'bg-gray-400'}`} style={{width:`${(v/maxVal*100).toFixed(1)}%`}}/>
             </div>
-          ))}
-        </div>
+          </div>
+        ))}
       </div>
-    );
+    </div>;
   }
 
   return (
     <div className="fade-in space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <Card label="GS Hubs Capex" value={fmtL(totalCapexGS)} sub="Excl. HRC & Maintenance" color="indigo"/>
-        <Card label="GS Hubs Grand Total" value={fmtL(totalGrandGS)} sub="Incl. HRC, Maintenance" color="amber"/>
-        <Card label="C2B Total" value={fmtL(totalC2B)} sub={`${C2B_DATA.length} parking hubs × ₹3L`} color="green"/>
-        <Card label="Overall Grand Total" value={fmtL(overall)} sub="GS + C2B combined" color="purple"/>
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
+        <Card label="GS Capex (excl. HRC/Maint)" value={fmtAmt(totalCapexGS)} sub={`${gsData.length} hubs`} color="indigo"/>
+        <Card label="HRC Budget" value={fmtAmt(totalHRC)} sub="New + Existing" color="rose"/>
+        <Card label="Maintenance Budget" value={fmtAmt(totalMaint)} sub="Annual" color="amber"/>
+        <Card label="GS Grand Total" value={fmtAmt(totalGrandGS)} sub="Capex + HRC + Maint" color="amber"/>
+        <Card label="C2B Parking Total" value={fmtAmt(totalC2B)} sub={`${c2bData.length} hubs × ₹3L`} color="green"/>
+        <Card label="Overall Grand Total" value={fmtAmt(overall)} sub="GS + C2B" color="purple"/>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <BarChart title="By Zone (Grand Total)" data={byZone} colorMap={zoneColors} maxVal={maxZone}/>
-        <BarChart title="By Category" data={byCat} colorMap={catColors} maxVal={maxCat}/>
-        <BarChart title="By Stage" data={byStage} colorMap={stageColors} maxVal={maxStage}/>
+        <BarChart title="By Zone (Grand Total)" data={byZone} colorMap={zoneColors} maxVal={Math.max(...byZone.map(([,v])=>v))}/>
+        <BarChart title="By Category" data={byCat} colorMap={catColors} maxVal={Math.max(...byCat.map(([,v])=>v))}/>
+        <BarChart title="By Stage" data={byStage} colorMap={stageColors} maxVal={Math.max(...byStage.map(([,v])=>v))}/>
       </div>
     </div>
   );
@@ -436,210 +559,230 @@ function SummaryTab() {
 
 // ── GS Hubs Tab ───────────────────────────────────────────────────────────
 
-function GSHubsTab() {
+const MONEY_COLS = [
+  {key:'totalCapex',label:'Total Capex',tip:false},
+  {key:'infraCost',label:'Infra Cost',tip:true},
+  {key:'slotMarking',label:'Slot Marking',tip:true},
+  {key:'vm',label:'VM',tip:true},
+  {key:'newInitiatives',label:'New Init.',tip:true},
+  {key:'itCost',label:'IT Cost',tip:true},
+  {key:'hrcTotal',label:'HRC',tip:true},
+  {key:'totalMaint',label:'Maint.',tip:true},
+  {key:'grandTotal',label:'Grand Total',tip:false},
+];
+
+function GSHubsTab({ gsData }) {
   const [fZone, setFZone] = useState(new Set());
-  const [fCity, setFCity] = useState(new Set());
   const [fCat, setFCat] = useState(new Set());
   const [fStage, setFStage] = useState(new Set());
   const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState(null);
-  const [tooltip, setTooltip] = useState({visible:false, x:0, y:0, items:[]});
+  const [groupByCity, setGroupByCity] = useState(true);
+  const [collapsedCities, setCollapsedCities] = useState(new Set());
+  const [tooltip, setTooltip] = useState({visible:false, x:0, y:0, items:[], col:''});
+  const hideTimer = useRef(null);
 
-  const opts = useMemo(() => ({
-    zones: uniqSorted(GS_HUB_DATA.map(r=>r.zone)),
-    cities: uniqSorted(GS_HUB_DATA.map(r=>r.city)),
-    cats: uniqSorted(GS_HUB_DATA.map(r=>r.category)),
-    stages: uniqSorted(GS_HUB_DATA.map(r=>r.stage)),
-  }), []);
+  const opts = useMemo(()=>({
+    zones: uniq(gsData.map(r=>r.zone)),
+    cats: uniq(gsData.map(r=>r.category)),
+    stages: uniq(gsData.map(r=>r.stage)),
+  }),[gsData]);
 
-  const filtered = useMemo(() => {
-    let rows = GS_HUB_DATA;
-    if (fZone.size>0) rows = rows.filter(r=>fZone.has(r.zone));
-    if (fCity.size>0) rows = rows.filter(r=>fCity.has(r.city));
-    if (fCat.size>0) rows = rows.filter(r=>fCat.has(r.category));
-    if (fStage.size>0) rows = rows.filter(r=>fStage.has(r.stage));
-    if (search.trim()) {
-      const q = search.trim().toLowerCase();
-      rows = rows.filter(r => r.hub.toLowerCase().includes(q) || r.city.toLowerCase().includes(q) || r.costCenter.toLowerCase().includes(q));
-    }
+  const filtered = useMemo(()=>{
+    let rows = gsData;
+    if (fZone.size>0) rows=rows.filter(r=>fZone.has(r.zone));
+    if (fCat.size>0) rows=rows.filter(r=>fCat.has(r.category));
+    if (fStage.size>0) rows=rows.filter(r=>fStage.has(r.stage));
+    if (search.trim()) { const q=search.trim().toLowerCase(); rows=rows.filter(r=>r.hub.toLowerCase().includes(q)||r.city.toLowerCase().includes(q)||(r.costCenter||'').toLowerCase().includes(q)); }
     return rows;
-  }, [fZone, fCity, fCat, fStage, search]);
+  },[gsData,fZone,fCat,fStage,search]);
 
-  const totals = useMemo(() => ({
-    totalCapex: filtered.reduce((s,r)=>s+r.totalCapex,0),
-    infraCost: filtered.reduce((s,r)=>s+r.infraCost,0),
-    slotMarking: filtered.reduce((s,r)=>s+r.slotMarking,0),
-    vm: filtered.reduce((s,r)=>s+r.vm,0),
-    itCost: filtered.reduce((s,r)=>s+r.itCost,0),
-    hrcTotal: filtered.reduce((s,r)=>s+r.hrcTotal,0),
-    totalMaint: filtered.reduce((s,r)=>s+r.totalMaint,0),
-    grandTotal: filtered.reduce((s,r)=>s+r.grandTotal,0),
-  }), [filtered]);
+  const totals = useMemo(()=>{
+    const t={};
+    MONEY_COLS.forEach(c=>{t[c.key]=filtered.reduce((s,r)=>s+(r[c.key]||0),0);});
+    return t;
+  },[filtered]);
 
-  const activeFilters = fZone.size+fCity.size+fCat.size+fStage.size;
+  // group by city
+  const groups = useMemo(()=>{
+    if (!groupByCity) return null;
+    const m={};
+    filtered.forEach(r=>{if(!m[r.city])m[r.city]=[];m[r.city].push(r);});
+    return Object.entries(m);
+  },[filtered,groupByCity]);
 
-  function MoneyCell({value, col, row}) {
-    if (!value) return <td className="px-3 py-2.5 text-right text-gray-400 text-xs">—</td>;
-    const items = getAssumptions(col, row);
+  function showTip(items, col, x, y) {
+    if (hideTimer.current) { clearTimeout(hideTimer.current); hideTimer.current=null; }
+    if (items.length) setTooltip({visible:true, x, y, items, col});
+  }
+  function hideTip() {
+    hideTimer.current = setTimeout(()=>setTooltip(t=>({...t,visible:false})), 60);
+  }
+  function moveTip(x, y) {
+    if (tooltip.visible) setTooltip(t=>t.visible?{...t,x,y}:t);
+  }
+
+  const stageCls={Active:'bg-green-500/15 text-green-400',YTD:'bg-amber-500/15 text-amber-400',YTL:'bg-blue-500/15 text-blue-400'};
+  const thBase = "px-2 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px] bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800";
+  const tdBase = "px-2 py-2 text-xs";
+
+  function HubRow({r, i}) {
     return (
-      <td className="px-3 py-2.5 text-right text-xs font-medium cursor-help"
-        onMouseEnter={e => items.length && setTooltip({visible:true, x:e.clientX, y:e.clientY, items})}
-        onMouseMove={e => items.length && setTooltip(t => ({...t, x:e.clientX, y:e.clientY}))}
-        onMouseLeave={() => setTooltip(t=>({...t,visible:false}))}>
-        {fmtL(value)}
-      </td>
+      <tr className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-[#4736FE]/5 transition-colors">
+        <td className={`${tdBase} s-col font-mono text-[9px] text-gray-400 max-w-[120px] truncate whitespace-nowrap`} title={r.costCenter}>
+          {r.costCenter ? <a href={`/pr-po-tracker/?costCenter=${encodeURIComponent(r.costCenter)}`} className="text-[#4736FE] hover:underline" onClick={e=>e.stopPropagation()}>{r.costCenter}</a> : '—'}
+        </td>
+        <td className={`${tdBase} font-medium max-w-[200px] truncate`} title={r.hub}>{r.hub}</td>
+        <td className={`${tdBase} text-gray-400 whitespace-nowrap`}>{r.city}</td>
+        <td className={`${tdBase} text-gray-400`}>{r.zone}</td>
+        <td className={`${tdBase}`}><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
+        <td className={`${tdBase}`}><span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${stageCls[r.stage]||'bg-gray-100 text-gray-400'}`}>{r.stage}</span></td>
+        <td className={`${tdBase} text-gray-400`}>{r.parking}</td>
+        <td className={`${tdBase} text-right text-gray-400`}>{r.slots||'—'}</td>
+        {MONEY_COLS.map(col => {
+          const v = r[col.key];
+          const items = col.tip ? getAssumptions(col.key, r) : [];
+          const hasHint = items.length > 0;
+          return (
+            <td key={col.key}
+              className={`${tdBase} text-right whitespace-nowrap ${col.key==='grandTotal'?'font-bold text-[#4736FE]':col.key==='totalCapex'?'font-semibold':''} ${hasHint&&v?'cursor-help underline decoration-dotted decoration-gray-400':''}`}
+              onMouseEnter={e=>hasHint&&v?showTip(items,col.label,e.clientX,e.clientY):null}
+              onMouseMove={e=>moveTip(e.clientX,e.clientY)}
+              onMouseLeave={hideTip}>
+              {v ? fmtAmt(v) : '—'}
+            </td>
+          );
+        })}
+      </tr>
     );
   }
 
-  const stageCls = {Active:'bg-green-500/15 text-green-400', YTD:'bg-amber-500/15 text-amber-400', YTL:'bg-blue-500/15 text-blue-400'};
+  function CityTotal({rows}) {
+    const ct={};
+    MONEY_COLS.forEach(c=>{ct[c.key]=rows.reduce((s,r)=>s+(r[c.key]||0),0);});
+    return (
+      <tr className="city-row bg-[#1c1c2e] dark:bg-[#1c1c2e] text-xs font-semibold border-b border-gray-700">
+        <td className={`px-2 py-2 s-col text-gray-300 whitespace-nowrap`} colSpan="8">
+          Subtotal
+        </td>
+        {MONEY_COLS.map(col=>(
+          <td key={col.key} className={`px-2 py-2 text-right whitespace-nowrap ${col.key==='grandTotal'?'text-[#4736FE]':'text-gray-300'}`}>
+            {ct[col.key]?fmtAmt(ct[col.key]):'—'}
+          </td>
+        ))}
+      </tr>
+    );
+  }
 
   return (
-    <div className="fade-in">
-      {tooltip.visible && <Tooltip items={tooltip.items} x={tooltip.x} y={tooltip.y}/>}
+    <div className="fade-in relative">
+      <TooltipBox tooltip={tooltip}/>
       <div className="flex flex-wrap items-center gap-2 mb-4">
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <div className="relative flex-1 min-w-[160px] max-w-xs">
           <Ico n="search" size={14} cls="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search hub, city…"
-            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] transition-colors"/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search hub, city, CC…"
+            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE]"/>
         </div>
         <MultiCheck label="Zone" options={opts.zones} selected={fZone} onChange={setFZone}/>
-        <MultiCheck label="City" options={opts.cities} selected={fCity} onChange={setFCity}/>
         <MultiCheck label="Category" options={opts.cats} selected={fCat} onChange={setFCat}/>
         <MultiCheck label="Stage" options={opts.stages} selected={fStage} onChange={setFStage}/>
-        {(activeFilters>0||search) && (
-          <button onClick={()=>{setFZone(new Set());setFCity(new Set());setFCat(new Set());setFStage(new Set());setSearch('');}}
-            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 border border-red-400/30 hover:bg-red-500/10 transition-colors">
+        {(fZone.size+fCat.size+fStage.size>0||search) && (
+          <button onClick={()=>{setFZone(new Set());setFCat(new Set());setFStage(new Set());setSearch('');}}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-red-400 border border-red-400/30 hover:bg-red-500/10">
             <Ico n="x" size={11}/> Clear
           </button>
         )}
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} hubs</span>
+        <label className="flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer ml-auto">
+          <input type="checkbox" checked={groupByCity} onChange={e=>setGroupByCity(e.target.checked)} className="accent-[#4736FE]"/>
+          Group by city
+        </label>
+        <span className="text-xs text-gray-400">{filtered.length} hubs</span>
       </div>
+
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-xs min-w-[1100px]">
+        <div className="tbl-wrap">
+          <table className="w-full text-xs min-w-[1200px]">
             <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
-                {['Cost Center','Hub','City','Zone','Category','Stage','Parking','Slots','Total Capex','Infra Cost','Slot Marking','VM','New Init.','IT Cost','HRC Total','Maintenance','Grand Total'].map(h=>(
-                  <th key={h} className="text-left px-3 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+              {/* Totals row — always visible at top */}
+              <tr>
+                <th className={`${thBase} s-col text-left`} colSpan="8">
+                  <span className="text-[#4736FE] font-bold">TOTALS — {filtered.length} hubs</span>
+                </th>
+                {MONEY_COLS.map(col=>(
+                  <th key={col.key} className={`${thBase} text-right ${col.key==='grandTotal'?'text-[#4736FE]':''}`}>
+                    {totals[col.key]?fmtAmt(totals[col.key]):'—'}
+                  </th>
+                ))}
+              </tr>
+              {/* Column headers */}
+              <tr>
+                {['Cost Center','Hub','City','Zone','Category','Stage','Parking','Slots',...MONEY_COLS.map(c=>c.label)].map((h,i)=>(
+                  <th key={h} className={`${thBase} ${i===0?'s-col ':''} text-left whitespace-nowrap`}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {filtered.map((r,i) => (
-                <React.Fragment key={i}>
-                  <tr className="border-b border-gray-50 dark:border-gray-800/60 cursor-pointer hover:brightness-95 dark:hover:brightness-110 transition-all"
-                    onClick={()=>setExpanded(expanded===i?null:i)}>
-                    <td className="px-3 py-2.5 font-mono text-[10px] text-gray-400 max-w-[140px] truncate" title={r.costCenter}>
-                      {r.costCenter ? (
-                        <a href={`/pr-po-tracker/?costCenter=${encodeURIComponent(r.costCenter)}`}
-                          className="text-[#4736FE] hover:underline" onClick={e=>e.stopPropagation()}>
-                          {r.costCenter}
-                        </a>
-                      ) : '—'}
-                    </td>
-                    <td className="px-3 py-2.5 font-medium max-w-[200px] truncate" title={r.hub}>{r.hub}</td>
-                    <td className="px-3 py-2.5 text-gray-500">{r.city}</td>
-                    <td className="px-3 py-2.5 text-gray-500">{r.zone}</td>
-                    <td className="px-3 py-2.5">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500">{r.category}</span>
-                    </td>
-                    <td className="px-3 py-2.5">
-                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${stageCls[r.stage]||'bg-gray-100 text-gray-400'}`}>{r.stage}</span>
-                    </td>
-                    <td className="px-3 py-2.5 text-gray-500">{r.parking}</td>
-                    <td className="px-3 py-2.5 text-right text-gray-500">{r.slots||'—'}</td>
-                    <td className="px-3 py-2.5 text-right font-semibold text-[#4736FE]">{fmtL(r.totalCapex)}</td>
-                    <MoneyCell value={r.infraCost} col="infraCost" row={r}/>
-                    <MoneyCell value={r.slotMarking} col="slotMarking" row={r}/>
-                    <MoneyCell value={r.vm} col="vm" row={r}/>
-                    <td className="px-3 py-2.5 text-right text-xs">{r.newInitiatives ? fmtL(r.newInitiatives) : '—'}</td>
-                    <MoneyCell value={r.itCost} col="itCost" row={r}/>
-                    <MoneyCell value={r.hrcTotal} col="hrcTotal" row={r}/>
-                    <MoneyCell value={r.totalMaint} col="totalMaint" row={r}/>
-                    <td className="px-3 py-2.5 text-right font-bold">{fmtL(r.grandTotal)}</td>
-                  </tr>
-                  {expanded===i && (
-                    <tr>
-                      <td colSpan="17" className="px-5 py-4 bg-[#4736FE]/5 border-b border-gray-100 dark:border-gray-800">
-                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
-                          {[['Infra Cost',r.infraCost],['Slot Marking',r.slotMarking],['VM',r.vm],['New Initiatives',r.newInitiatives],['IT Cost',r.itCost],['HRC Total',r.hrcTotal],['Maintenance',r.totalMaint],['Grand Total',r.grandTotal]].map(([l,v])=>(
-                            <div key={l} className="bg-white dark:bg-black/20 rounded-xl p-3">
-                              <div className="text-[10px] text-gray-400 mb-1">{l}</div>
-                              <div className="text-sm font-bold">{fmtL(v)}</div>
-                            </div>
-                          ))}
-                        </div>
+              {groupByCity && groups ? groups.map(([city, rows]) => {
+                const collapsed = collapsedCities.has(city);
+                const cityTotals={};
+                MONEY_COLS.forEach(c=>{cityTotals[c.key]=rows.reduce((s,r)=>s+(r[c.key]||0),0);});
+                return (
+                  <React.Fragment key={city}>
+                    <tr className="bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/[0.09]"
+                      onClick={()=>{const s=new Set(collapsedCities);collapsed?s.delete(city):s.add(city);setCollapsedCities(s);}}>
+                      <td className="px-2 py-2 s-col font-bold text-xs text-[#4736FE] whitespace-nowrap" colSpan="8">
+                        {collapsed?'▶':' ▼'} {city} <span className="text-gray-400 font-normal ml-1">({rows.length} hubs)</span>
                       </td>
+                      {MONEY_COLS.map(col=>(
+                        <td key={col.key} className={`px-2 py-2 text-right text-xs font-bold ${col.key==='grandTotal'?'text-[#4736FE]':'text-gray-600 dark:text-gray-300'} whitespace-nowrap`}>
+                          {cityTotals[col.key]?fmtAmt(cityTotals[col.key]):'—'}
+                        </td>
+                      ))}
                     </tr>
-                  )}
-                </React.Fragment>
-              ))}
+                    {!collapsed && rows.map((r,i)=><HubRow key={i} r={r} i={i}/>)}
+                    {!collapsed && <CityTotal rows={rows}/>}
+                  </React.Fragment>
+                );
+              }) : filtered.map((r,i)=><HubRow key={i} r={r} i={i}/>)}
             </tbody>
-            <tfoot>
-              <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/[0.03] font-bold">
-                <td colSpan="8" className="px-3 py-3 text-xs text-gray-500">TOTAL ({filtered.length} hubs)</td>
-                <td className="px-3 py-3 text-right text-xs text-[#4736FE]">{fmtL(totals.totalCapex)}</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.infraCost)}</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.slotMarking)}</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.vm)}</td>
-                <td className="px-3 py-3 text-right text-xs">—</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.itCost)}</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.hrcTotal)}</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.totalMaint)}</td>
-                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.grandTotal)}</td>
-              </tr>
-            </tfoot>
           </table>
         </div>
       </div>
+      <p className="text-[10px] text-gray-400 mt-2">💡 Hover over underlined amounts to see assumption breakdown. Click city row to collapse/expand.</p>
     </div>
   );
 }
 
 // ── C2B Tab ───────────────────────────────────────────────────────────────
 
-function C2BTab() {
-  const byZone = useMemo(() => {
-    const m = {};
-    C2B_DATA.forEach(r => { if (!m[r.zone]) m[r.zone]=[]; m[r.zone].push(r); });
-    return Object.entries(m);
-  }, []);
-  const total = C2B_DATA.reduce((s,r)=>s+r.totalCapex,0);
-
+function C2BTab({ c2bData }) {
+  const byZone = useMemo(()=>{const m={};c2bData.forEach(r=>{if(!m[r.zone])m[r.zone]=[];m[r.zone].push(r);});return Object.entries(m);},[c2bData]);
+  const total = c2bData.reduce((s,r)=>s+r.totalCapex,0);
   return (
     <div className="fade-in space-y-4">
-      <div className="flex items-center gap-4 bg-[#4736FE]/10 border border-[#4736FE]/30 rounded-2xl px-5 py-4">
-        <div>
-          <div className="text-xs text-gray-400 mb-1">C2B Parking Hubs Total</div>
-          <div className="text-2xl font-bold text-[#4736FE]">{fmtL(total)}</div>
-        </div>
-        <div className="ml-6 text-xs text-gray-400">
-          {C2B_DATA.length} hubs × ₹3L each | Infra/Networking: ₹2L + Rack: ₹1L per hub
-        </div>
+      <div className="flex items-center gap-6 bg-[#4736FE]/10 border border-[#4736FE]/30 rounded-2xl px-5 py-4">
+        <div><div className="text-xs text-gray-400 mb-1">C2B Total Budget</div><div className="text-2xl font-bold text-[#4736FE]">{fmtAmt(total)}</div></div>
+        <div className="text-xs text-gray-400">{c2bData.length} hubs × ₹3L each<br/>Infra/Networking: ₹2L + Rack: ₹1L per hub</div>
       </div>
-      {byZone.map(([zone, rows]) => (
+      {byZone.map(([zone,rows])=>(
         <div key={zone} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
             <span className="font-semibold text-sm">{zone} Zone</span>
-            <span className="text-xs text-gray-400">{rows.length} hubs · {fmtL(rows.reduce((s,r)=>s+r.totalCapex,0))}</span>
+            <span className="text-xs text-gray-400">{rows.length} hubs · {fmtAmt(rows.reduce((s,r)=>s+r.totalCapex,0))}</span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
-              <thead>
-                <tr className="border-b border-gray-50 dark:border-gray-800/60 bg-gray-50 dark:bg-white/[0.02]">
-                  {['#','Hub Name','Infra/Networking','Rack','Total Capex'].map(h=>(
-                    <th key={h} className="text-left px-4 py-2 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
-                  ))}
-                </tr>
-              </thead>
+              <thead><tr className="border-b border-gray-50 dark:border-gray-800/60 bg-gray-50 dark:bg-white/[0.02]">
+                {['#','Hub Name','City','Infra/Networking','Rack','Total'].map(h=><th key={h} className="text-left px-4 py-2 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>)}
+              </tr></thead>
               <tbody>
-                {rows.map((r,i) => (
+                {rows.map((r,i)=>(
                   <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60">
                     <td className="px-4 py-2.5 text-gray-400">{i+1}</td>
                     <td className="px-4 py-2.5 font-medium">{r.hub}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtL(r.infraNetworking)}</td>
-                    <td className="px-4 py-2.5 text-right">{fmtL(r.rack)}</td>
-                    <td className="px-4 py-2.5 text-right font-bold text-[#4736FE]">{fmtL(r.totalCapex)}</td>
+                    <td className="px-4 py-2.5 text-gray-400">{r.city||'—'}</td>
+                    <td className="px-4 py-2.5 text-right">{fmtAmt(r.infraNetworking)}</td>
+                    <td className="px-4 py-2.5 text-right">{fmtAmt(r.rack)}</td>
+                    <td className="px-4 py-2.5 text-right font-bold text-[#4736FE]">{fmtAmt(r.totalCapex)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -653,49 +796,33 @@ function C2BTab() {
 
 // ── NSO Pipeline Tab ──────────────────────────────────────────────────────
 
-function NSOTab() {
-  const rows = useMemo(() => {
-    return GS_HUB_DATA
-      .filter(r => ['NSO','Replacement'].includes(r.category) || ['YTD','YTL'].includes(r.stage))
-      .sort((a,b) => {
-        const ord = {YTL:0, YTD:1, Active:2};
-        return (ord[a.stage]??3) - (ord[b.stage]??3);
-      });
-  }, []);
-
-  const total = rows.reduce((s,r)=>s+r.grandTotal,0);
-  const capex = rows.reduce((s,r)=>s+r.totalCapex,0);
-
-  const stageCls = {Active:'bg-green-500/15 text-green-400', YTD:'bg-amber-500/15 text-amber-400', YTL:'bg-blue-500/15 text-blue-400'};
-
+function NSOTab({ gsData }) {
+  const rows = useMemo(()=>gsData
+    .filter(r=>['NSO','Replacement','HRC'].includes(r.category)||['YTD','YTL'].includes(r.stage))
+    .sort((a,b)=>({YTL:0,YTD:1,Active:2}[a.stage]??3)-({YTL:0,YTD:1,Active:2}[b.stage]??3)),[gsData]);
+  const stageCls={Active:'bg-green-500/15 text-green-400',YTD:'bg-amber-500/15 text-amber-400',YTL:'bg-blue-500/15 text-blue-400'};
+  const capex=rows.reduce((s,r)=>s+r.totalCapex,0);
+  const grand=rows.reduce((s,r)=>s+r.grandTotal,0);
   return (
     <div className="fade-in space-y-4">
-      <div className="flex flex-wrap gap-4">
-        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
-          <div className="text-xs text-gray-400 mb-1">Sites in Pipeline</div>
-          <div className="text-2xl font-bold">{rows.length}</div>
-        </div>
-        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
-          <div className="text-xs text-gray-400 mb-1">Total Capex Budget</div>
-          <div className="text-2xl font-bold text-[#4736FE]">{fmtL(capex)}</div>
-        </div>
-        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
-          <div className="text-xs text-gray-400 mb-1">Grand Total (incl. Maint)</div>
-          <div className="text-2xl font-bold text-amber-400">{fmtL(total)}</div>
-        </div>
+      <div className="flex flex-wrap gap-3">
+        {[['Sites in Pipeline',rows.length,'text-white'],['Total Capex',fmtAmt(capex),'text-[#4736FE]'],['Grand Total',fmtAmt(grand),'text-amber-400']].map(([l,v,c])=>(
+          <div key={l} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
+            <div className="text-xs text-gray-400 mb-1">{l}</div>
+            <div className={`text-2xl font-bold ${c}`}>{v}</div>
+          </div>
+        ))}
       </div>
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-        <div className="overflow-x-auto">
+        <div className="tbl-wrap" style={{maxHeight:'calc(100vh - 300px)'}}>
           <table className="w-full text-xs min-w-[700px]">
-            <thead>
-              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
-                {['#','Hub','City','Zone','Stage','Category','Total Capex','Grand Total'].map(h=>(
-                  <th key={h} className="text-left px-4 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
-                ))}
-              </tr>
-            </thead>
+            <thead><tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-[#1a1a1a]">
+              {['#','Hub','City','Zone','Stage','Category','Capex','Grand Total'].map(h=>(
+                <th key={h} className="text-left px-4 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px] sticky top-0 bg-gray-50 dark:bg-[#1a1a1a]">{h}</th>
+              ))}
+            </tr></thead>
             <tbody>
-              {rows.map((r,i) => (
+              {rows.map((r,i)=>(
                 <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60">
                   <td className="px-4 py-2.5 text-gray-400">{i+1}</td>
                   <td className="px-4 py-2.5 font-medium max-w-[200px] truncate" title={r.hub}>{r.hub}</td>
@@ -703,8 +830,8 @@ function NSOTab() {
                   <td className="px-4 py-2.5 text-gray-500">{r.zone}</td>
                   <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${stageCls[r.stage]||''}`}>{r.stage}</span></td>
                   <td className="px-4 py-2.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#4736FE]/15 text-[#4736FE]">{r.category}</span></td>
-                  <td className="px-4 py-2.5 text-right font-semibold text-[#4736FE]">{fmtL(r.totalCapex)}</td>
-                  <td className="px-4 py-2.5 text-right font-bold">{fmtL(r.grandTotal)}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-[#4736FE]">{fmtAmt(r.totalCapex)}</td>
+                  <td className="px-4 py-2.5 text-right font-bold">{fmtAmt(r.grandTotal)}</td>
                 </tr>
               ))}
             </tbody>
@@ -715,63 +842,177 @@ function NSOTab() {
   );
 }
 
-// ── Assumptions Tab ───────────────────────────────────────────────────────
+// ── Opex Tab ──────────────────────────────────────────────────────────────
 
-function AssumptionsTab() {
-  const infra = ASSUMPTIONS.infraCost;
-  const packages = [
-    {label:'NSO', items:infra['NSO'], note:'New Store Opening — full fit-out'},
-    {label:'Major Upgrade', items:infra['Major Upgrade'], note:'Significant civil + ops upgrade'},
-    {label:'Minor Upgrade', items:infra['Minor Upgrade'], note:'Cosmetic + maintenance upgrade'},
-    {label:'Basic Upgrade', items:infra['Basic Upgrade'], note:'Painting, minor repairs'},
-    {label:'Replacement', items:infra['Replacement'], note:'Full hub rebuild at new location'},
-    {label:'HRC (new setup)', items:infra['HRC'], note:'Hub Reconditioning Centre — new'},
-  ];
+function OpexTab({ gsData }) {
+  const [fZone, setFZone] = useState(new Set());
+  const [fCity, setFCity] = useState(new Set());
+  const opts = useMemo(()=>({zones:uniq(gsData.map(r=>r.zone)),cities:uniq(gsData.map(r=>r.city))}),[gsData]);
 
-  const standards = [
-    {label:'IT Cost — Covered Hub', value:'₹1.5L'},
-    {label:'IT Cost — Open Hub', value:'₹2L'},
-    {label:'IT Cost — NSO Open', value:'₹3L (Setup ₹2.5L + Router ₹0.5L)'},
-    {label:'IT Cost — NSO Covered', value:'₹2.5L (Setup ₹2L + Router ₹0.5L)'},
-    {label:'Maintenance — Covered Hub/yr', value:'₹6L (Infra ₹3L + VM ₹3L)'},
-    {label:'Maintenance — Open Hub/yr', value:'₹7.5L (Infra ₹4L + VM ₹3.5L)'},
-    {label:'Slot Marking — NSO', value:'₹0.3L'},
-    {label:'Slot Marking — Covered (Upgrade)', value:'₹0.9L'},
-    {label:'Slot Marking — Open (Upgrade)', value:'₹2L'},
-    {label:'HRC — New Setup Total', value:'₹45.5L (full setup)'},
-    {label:'HRC — Existing Maintenance/yr', value:'₹10.5L per HRC'},
-    {label:'C2B Parking Hub', value:'₹3L (Infra/Networking ₹2L + Rack ₹1L)'},
-  ];
+  const rows = useMemo(()=>{
+    let r = gsData.filter(x=>x.grossRental>0 || x.totalMaint>0);
+    if (fZone.size>0) r=r.filter(x=>fZone.has(x.zone));
+    if (fCity.size>0) r=r.filter(x=>fCity.has(x.city));
+    return r;
+  },[gsData,fZone,fCity]);
+
+  const totals = useMemo(()=>({
+    grossRental: rows.reduce((s,r)=>s+r.grossRental,0),
+    annualRental: rows.reduce((s,r)=>s+r.grossRental*12,0),
+    totalMaint: rows.reduce((s,r)=>s+r.totalMaint,0),
+    totalOpex: rows.reduce((s,r)=>s+(r.grossRental*12+r.totalMaint),0),
+  }),[rows]);
+
+  // group by city
+  const groups = useMemo(()=>{const m={};rows.forEach(r=>{if(!m[r.city])m[r.city]=[];m[r.city].push(r);});return Object.entries(m);},[rows]);
+
+  const thCls = "px-3 py-2.5 text-left text-gray-400 font-semibold uppercase tracking-wider text-[10px] sticky top-0 bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 whitespace-nowrap";
 
   return (
-    <div className="fade-in space-y-5">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {packages.map(p => (
-          <div key={p.label} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
-            <div className="font-semibold text-sm mb-1">{p.label}</div>
-            <div className="text-xs text-gray-400 mb-3">{p.note}</div>
-            <div className="space-y-2">
-              {p.items.map((it,i) => (
-                <div key={i} className="flex justify-between gap-2 text-xs border-b border-gray-50 dark:border-gray-800/50 pb-1.5">
-                  <span className="text-gray-600 dark:text-gray-300">{it.label}</span>
-                  <span className="font-semibold text-right">{it.amount!=null ? fmtL(it.amount) : '—'}</span>
-                </div>
-              ))}
-              <div className="flex justify-between gap-2 text-xs pt-1">
-                <span className="font-bold">Total</span>
-                <span className="font-bold text-[#4736FE]">{fmtL(p.items.filter(it=>it.amount!=null).reduce((s,it)=>s+(it.amount||0),0))}</span>
-              </div>
-            </div>
+    <div className="fade-in space-y-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        {[
+          ['Monthly Gross Rental',fmtAmt(totals.grossRental),'text-[#4736FE]'],
+          ['Annual Gross Rental',fmtAmt(totals.annualRental),'text-amber-400'],
+          ['Annual Maintenance',fmtAmt(totals.totalMaint),'text-rose-400'],
+          ['Total Annual Opex',fmtAmt(totals.totalOpex),'text-green-400'],
+        ].map(([l,v,c])=>(
+          <div key={l} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+            <div className="text-xs text-gray-400 mb-1">{l}</div>
+            <div className={`text-xl font-bold ${c}`}>{v}</div>
           </div>
         ))}
       </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <MultiCheck label="Zone" options={opts.zones} selected={fZone} onChange={setFZone}/>
+        <MultiCheck label="City" options={opts.cities} selected={fCity} onChange={setFCity}/>
+        {(fZone.size+fCity.size>0) && <button onClick={()=>{setFZone(new Set());setFCity(new Set());}} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-red-400 border border-red-400/30 hover:bg-red-500/10"><Ico n="x" size={11}/> Clear</button>}
+        <span className="ml-auto text-xs text-gray-400">{rows.length} hubs with rental data</span>
+      </div>
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="tbl-wrap">
+          <table className="w-full text-xs min-w-[800px]">
+            <thead>
+              <tr>
+                <th className={thCls} colSpan="5"><span className="text-[#4736FE] font-bold">TOTALS — {rows.length} hubs</span></th>
+                <th className={`${thCls} text-right`}>{fmtAmt(totals.grossRental)}</th>
+                <th className={`${thCls} text-right`}>{fmtAmt(totals.annualRental)}</th>
+                <th className={`${thCls} text-right`}>{fmtAmt(totals.totalMaint)}</th>
+                <th className={`${thCls} text-right text-green-400`}>{fmtAmt(totals.totalOpex)}</th>
+              </tr>
+              <tr>
+                {['Hub','City','Zone','Category','Stage','Monthly Rental','Annual Rental','Annual Maint.','Total Annual Opex'].map(h=>(
+                  <th key={h} className={thCls}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {groups.map(([city, cityRows])=>{
+                const cRental=cityRows.reduce((s,r)=>s+r.grossRental,0);
+                const cMaint=cityRows.reduce((s,r)=>s+r.totalMaint,0);
+                return (
+                  <React.Fragment key={city}>
+                    <tr className="bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700">
+                      <td className="px-3 py-2 font-bold text-[#4736FE] text-xs" colSpan="5">{city} <span className="text-gray-400 font-normal">({cityRows.length})</span></td>
+                      <td className="px-3 py-2 text-right text-xs font-semibold">{fmtAmt(cRental)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-semibold">{fmtAmt(cRental*12)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-semibold">{fmtAmt(cMaint)}</td>
+                      <td className="px-3 py-2 text-right text-xs font-bold text-green-400">{fmtAmt(cRental*12+cMaint)}</td>
+                    </tr>
+                    {cityRows.map((r,i)=>(
+                      <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+                        <td className="px-3 py-2 font-medium max-w-[220px] truncate" title={r.hub}>{r.hub}</td>
+                        <td className="px-3 py-2 text-gray-400">{r.city}</td>
+                        <td className="px-3 py-2 text-gray-400">{r.zone}</td>
+                        <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
+                        <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${{Active:'bg-green-500/15 text-green-400',YTD:'bg-amber-500/15 text-amber-400',YTL:'bg-blue-500/15 text-blue-400'}[r.stage]||''}`}>{r.stage}</span></td>
+                        <td className="px-3 py-2 text-right font-medium">{r.grossRental?fmtAmt(r.grossRental):'—'}</td>
+                        <td className="px-3 py-2 text-right font-medium">{r.grossRental?fmtAmt(r.grossRental*12):'—'}</td>
+                        <td className="px-3 py-2 text-right">{r.totalMaint?fmtAmt(r.totalMaint):'—'}</td>
+                        <td className="px-3 py-2 text-right font-bold text-green-400">{(r.grossRental||r.totalMaint)?fmtAmt(r.grossRental*12+r.totalMaint):'—'}</td>
+                      </tr>
+                    ))}
+                  </React.Fragment>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <p className="text-[10px] text-gray-400">Note: Rental figures are monthly values from AOP sheet. Annual = monthly × 12. Maintenance is the annual budget from Capex AOP.</p>
+    </div>
+  );
+}
+
+// ── Assumptions Tab ───────────────────────────────────────────────────────
+
+function AssumptionsTab() {
+  const pkgs=[
+    {label:'NSO (New Store Opening)',items:ASSUMPTIONS.infraCost['NSO'],note:'Full fit-out — civil, electrical, VM, OPS'},
+    {label:'Major Upgrade',items:ASSUMPTIONS.infraCost['Major Upgrade'],note:'Significant civil + ops works'},
+    {label:'Minor Upgrade',items:ASSUMPTIONS.infraCost['Minor Upgrade'],note:'Cosmetic + minor repair package'},
+    {label:'Basic Upgrade',items:ASSUMPTIONS.infraCost['Basic Upgrade'],note:'Painting, minor repairs'},
+    {label:'Replacement',items:ASSUMPTIONS.infraCost['Replacement'],note:'Full rebuild at new location'},
+    {label:'HRC — New Setup',items:ASSUMPTIONS.infraCost['HRC'],note:'Hub Reconditioning Centre — full setup'},
+  ];
+
+  const newInitPkgs=[
+    {label:'NSO Covered',items:ASSUMPTIONS.newInitiatives['NSO-Covered']},
+    {label:'NSO Open',items:ASSUMPTIONS.newInitiatives['NSO-Open']},
+    {label:'Major Upgrade Open',items:ASSUMPTIONS.newInitiatives['Major-Open']},
+    {label:'Major Upgrade Covered',items:ASSUMPTIONS.newInitiatives['Major-Covered']},
+    {label:'Basic/Minor Open',items:ASSUMPTIONS.newInitiatives['Basic-Open']},
+    {label:'Basic/Minor Covered',items:ASSUMPTIONS.newInitiatives['Basic-Covered']},
+  ];
+
+  const standards=[
+    ['IT Cost — Covered Hub','₹1.5L'],['IT Cost — Open Hub','₹2L'],
+    ['IT Cost — NSO Open','₹3L (Setup ₹2.5L + Router ₹0.5L)'],['IT Cost — NSO Covered','₹2.5L (Setup ₹2L + Router ₹0.5L)'],
+    ['Maint — Covered Hub/yr','₹6L (Infra ₹3L + VM ₹3L)'],['Maint — Open Hub/yr','₹7.5L (Infra ₹4L + VM ₹3.5L)'],
+    ['Maint — NSO Covered/yr','₹5L (Infra ₹3L + VM ₹2L)'],['Maint — NSO Open/yr','₹7.5L (Infra ₹4L + VM ₹3.5L)'],
+    ['Slot Marking — NSO','₹0.3L'],['Slot Marking — Covered Upgrade','₹0.9L'],['Slot Marking — Open Upgrade','₹2L'],
+    ['HRC New Setup Total','~₹45.5L (full package)'],['HRC Existing Maint/yr','₹10.5L per HRC'],
+    ['C2B Parking Hub','₹3L (Networking ₹2L + Rack ₹1L)'],
+    ['VM — Open Hub','Pylon ₹3L, Digital Host ₹1.2L, Markers ₹1L, Landscaping ₹3L, Key Rack ₹0.5L'],
+    ['VM — Covered Hub','Digital Host ₹1.2L, Markers ₹1L, Key Rack ₹0.5L, Logo/Revamp as needed'],
+  ];
+
+  function PkgCard({label,items,note}) {
+    const tot=items.filter(x=>x.amount!=null).reduce((s,x)=>s+x.amount,0);
+    return (
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4">
+        <div className="font-semibold text-sm mb-0.5">{label}</div>
+        {note && <div className="text-xs text-gray-400 mb-3">{note}</div>}
+        <div className="space-y-1.5">
+          {items.map((it,i)=>(
+            <div key={i} className="flex justify-between gap-2 text-xs border-b border-gray-50 dark:border-gray-800/50 pb-1.5">
+              <span className="text-gray-600 dark:text-gray-300">{it.label}</span>
+              <span className="font-semibold whitespace-nowrap">{it.amount!=null?fmtAmt(it.amount):'—'}</span>
+            </div>
+          ))}
+          {tot>0 && <div className="flex justify-between gap-2 text-xs pt-1"><span className="font-bold">Std Total</span><span className="font-bold text-[#4736FE]">{fmtAmt(tot)}</span></div>}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in space-y-6">
+      <div>
+        <div className="text-sm font-bold mb-3">Infra Cost — Package Breakdown</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{pkgs.map(p=><PkgCard key={p.label} {...p}/>)}</div>
+      </div>
+      <div>
+        <div className="text-sm font-bold mb-3">New Initiatives — IT Networking Assumptions</div>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">{newInitPkgs.map(p=><PkgCard key={p.label} {...p}/>)}</div>
+      </div>
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
-        <div className="font-semibold text-sm mb-4">Standard Package Costs</div>
+        <div className="font-semibold text-sm mb-4">Standard Package Reference</div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-          {standards.map((s,i) => (
+          {standards.map(([l,v],i)=>(
             <div key={i} className="flex justify-between gap-3 text-xs py-2 border-b border-gray-50 dark:border-gray-800/50">
-              <span className="text-gray-500">{s.label}</span>
-              <span className="font-semibold">{s.value}</span>
+              <span className="text-gray-500">{l}</span>
+              <span className="font-semibold text-right max-w-[220px]">{v}</span>
             </div>
           ))}
         </div>
@@ -783,64 +1024,128 @@ function AssumptionsTab() {
 // ── App ───────────────────────────────────────────────────────────────────
 
 function App() {
+  const [gsData, setGsData] = useState(HARDCODED_GS);
+  const [c2bData, setC2bData] = useState(HARDCODED_C2B);
+  const [dataSource, setDataSource] = useState('hardcoded');
   const [tab, setTab] = useState('summary');
-  const [theme, setTheme] = useState(()=>{ try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';} });
+  const [theme, setTheme] = useState(()=>{try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';}});
+  const [auth, setAuth] = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const uploadRef = useRef();
+  const {toasts, add:toast} = useToast();
+
+  useEffect(()=>{
+    const cc = new URLSearchParams(window.location.search).get('costCenter');
+    if (cc) setTab('hubs');
+  },[]);
+
+  // Try to load from Cloudflare on mount
+  useEffect(()=>{
+    if (location.protocol==='file:') return;
+    window.C24Uploader.fetchText(WORKER_URL + BUDGET_PATH + '.json', {cache:'no-store'})
+      .then(text=>{
+        const j = JSON.parse(text);
+        if (j.gs && j.gs.length) { setGsData(j.gs); setC2bData(j.c2b||HARDCODED_C2B); setDataSource('cloudflare'); toast('✓ Budget data loaded from Cloudflare','ok'); }
+      })
+      .catch(()=>{}); // fallback to hardcoded silently
+  },[]);
 
   function toggleTheme() {
-    const next = theme==='dark'?'light':'dark';
+    const next=theme==='dark'?'light':'dark';
     setTheme(next);
     try{localStorage.setItem('c24-theme',next);}catch{}
-    if(next==='dark') document.documentElement.classList.add('dark');
+    if(next==='dark')document.documentElement.classList.add('dark');
     else document.documentElement.classList.remove('dark');
   }
 
-  // Pre-filter from URL if ?costCenter=XX (redirects to GS tab)
-  useEffect(() => {
-    const cc = new URLSearchParams(window.location.search).get('costCenter');
-    if (cc) setTab('hubs');
-  }, []);
+  function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const { gsRows, c2bRows } = parseExcel(new Uint8Array(ev.target.result));
+        if (!gsRows) { toast('Could not parse GS Capex AOP sheet','err'); setUploading(false); e.target.value=''; return; }
+        setGsData(gsRows);
+        if (c2bRows) setC2bData(c2bRows);
+        setDataSource('uploaded');
+        toast(`✓ Parsed ${gsRows.length} GS hubs${c2bRows?` + ${c2bRows.length} C2B hubs`:''}`, 'ok');
 
-  const tabs = [
-    ['summary','📊 Summary'],
-    ['hubs','🏢 GS Hubs'],
-    ['c2b','🚗 C2B'],
-    ['nso','🏗 NSO Pipeline'],
-    ['assumptions','📐 Assumptions'],
-  ];
+        // Save to Cloudflare if authenticated
+        if (auth) {
+          const jsonText = JSON.stringify({gs:gsRows, c2b:c2bRows||HARDCODED_C2B, uploadedAt:new Date().toISOString()});
+          window.C24Uploader.upload({csvText:jsonText, workerUrl:WORKER_URL, toolPath:BUDGET_PATH+'.json', auth, contentType:'application/json'})
+            .then(()=>{ setDataSource('cloudflare'); toast('✓ Saved to Cloudflare — all users will see updated data','ok'); })
+            .catch(er=>{ if(er.status===401){toast('Session expired','err');}else toast('Parsed OK but CF save failed: '+(er.message||er),'err'); });
+        }
+      } catch(err) {
+        toast('Parse error: '+err.message,'err');
+      } finally {
+        setUploading(false); e.target.value='';
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  }
+
+  const tabs=[['summary','📊 Summary'],['hubs','🏢 GS Hubs'],['c2b','🚗 C2B'],['nso','🏗 NSO Pipeline'],['opex','💸 Opex'],['assumptions','📐 Assumptions']];
+  const srcBadge={hardcoded:'Hardcoded',uploaded:'Uploaded',cloudflare:'Live (CF)'}[dataSource];
+  const srcCls={hardcoded:'text-gray-400',uploaded:'text-amber-400',cloudflare:'text-green-400'}[dataSource];
 
   return (
     <div className="min-h-screen flex flex-col">
       <header className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-20 bg-gray-50/90 dark:bg-[#111]/90 backdrop-blur-md">
         <div className="flex items-center gap-3">
-          <a href="/" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4736FE] transition-colors">
-            <Ico n="back" size={14}/> Hub
-          </a>
+          <a href="/" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4736FE] transition-colors"><Ico n="back" size={14}/> Hub</a>
           <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"/>
-          <a href="/pr-po-tracker/" className="text-sm text-gray-400 hover:text-[#4736FE] transition-colors font-medium">📋 PR/PO Tracker</a>
+          <a href="/pr-po-tracker/" className="text-sm text-gray-400 hover:text-[#4736FE] font-medium">📋 PR/PO</a>
           <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"/>
           <span className="font-bold text-sm">Capex Budget FY 26-27</span>
+          <span className={`text-[10px] font-semibold ${srcCls}`}>{srcBadge}</span>
         </div>
-        <button onClick={toggleTheme} className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-[#4736FE] hover:border-[#4736FE] transition-colors">
-          {theme==='dark'?<Ico n="sun" size={14}/>:<Ico n="moon" size={14}/>}
-        </button>
+        <div className="flex items-center gap-2">
+          <input ref={uploadRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload}/>
+          {auth ? (
+            <>
+              <button onClick={()=>uploadRef.current.click()} disabled={uploading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4736FE] text-white hover:bg-[#3829CC] disabled:opacity-50">
+                {uploading?<><Ico n="spin" size={12} cls="spin"/>Parsing…</>:<><Ico n="upload" size={12}/>Update Excel</>}
+              </button>
+              <button onClick={()=>setAuth(null)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-red-400 hover:border-red-400/50">
+                <Ico n="logout" size={12}/> Logout
+              </button>
+            </>
+          ) : (
+            <button onClick={()=>setLoginOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[#4736FE] hover:text-[#4736FE]">
+              <Ico n="upload" size={12}/> Upload Excel
+            </button>
+          )}
+          <button onClick={toggleTheme} className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-[#4736FE] hover:border-[#4736FE]">
+            {theme==='dark'?<Ico n="sun" size={14}/>:<Ico n="moon" size={14}/>}
+          </button>
+        </div>
       </header>
 
       <main className="flex-1 px-4 sm:px-6 py-5 max-w-screen-2xl mx-auto w-full">
         <div className="flex items-center gap-1 mb-5 flex-wrap">
-          {tabs.map(([t,l]) => (
+          {tabs.map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab===t?'bg-[#4736FE] text-white':'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>
               {l}
             </button>
           ))}
         </div>
-
-        {tab==='summary' && <SummaryTab/>}
-        {tab==='hubs' && <GSHubsTab/>}
-        {tab==='c2b' && <C2BTab/>}
-        {tab==='nso' && <NSOTab/>}
-        {tab==='assumptions' && <AssumptionsTab/>}
+        {tab==='summary'    && <SummaryTab gsData={gsData} c2bData={c2bData}/>}
+        {tab==='hubs'       && <GSHubsTab gsData={gsData}/>}
+        {tab==='c2b'        && <C2BTab c2bData={c2bData}/>}
+        {tab==='nso'        && <NSOTab gsData={gsData}/>}
+        {tab==='opex'       && <OpexTab gsData={gsData}/>}
+        {tab==='assumptions'&& <AssumptionsTab/>}
       </main>
+
+      {loginOpen && <LoginModal onSuccess={creds=>{setAuth(creds);setLoginOpen(false);toast('✓ Logged in','ok');}} onClose={()=>setLoginOpen(false)}/>}
+      <ToastLayer toasts={toasts}/>
     </div>
   );
 }
