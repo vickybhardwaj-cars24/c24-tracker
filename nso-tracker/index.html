@@ -1037,17 +1037,7 @@ function getTodayColNSO(){
 // ─────────────────────────────────────────────────────────
 function openModal(idx){
   currentModalIdx=idx;
-  var r=allData[idx];
-  if(!r) return;
-
-  // Title — NO T-Live prefix in site name
-  document.getElementById('modal-title').textContent=r['Site Name']||'--';
-  var subParts=[];
-  if(r['Cost Center']) subParts.push('CC: '+r['Cost Center']);
-  if(r['Status']) subParts.push('Status: '+r['Status']);
-  if(r['Replacement']) subParts.push('Replacement: '+r['Replacement']);
-  document.getElementById('modal-sub').textContent=subParts.join(' · ');
-
+  var r=allData[idx]; if(!r) return;
   var tl=getEffectiveTempLive(r);
   var fl=getFinalLive(r);
   var sat=tl?new Date(tl.getTime()+45*86400000):null;
@@ -1056,115 +1046,135 @@ function openModal(idx){
   var deptMap=parseDeptStatuses(r);
   var nsoSt=getNSOStatus(r);
   var itFilled=(r['IT form Filled']||'').toLowerCase()==='yes';
+  var sn=(r['Site Name']||'').trim();
+
+  document.getElementById('modal-title').textContent=sn||'--';
+  var subParts=[];
+  if(r['Cost Center']) subParts.push('CC: '+r['Cost Center']);
+  if(r['Status']) subParts.push('Status: '+r['Status']);
+  if(r['Replacement']) subParts.push('Replacement: '+r['Replacement']);
+  document.getElementById('modal-sub').textContent=subParts.join(' · ');
 
   var html='';
 
-  // ── Key Info section (T-Live shown prominently here in modal)
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">Site Overview</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">';
-  function infoCell(lbl,val,alert){
-    return '<div style="padding:10px;background:var(--surface);border-radius:8px;border:1px solid '+(alert?'#fca5a5':'var(--border)')+'">'
-      +'<div style="font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px">'+esc(lbl)+'</div>'
-      +'<div style="font-size:13px;font-weight:700;color:'+(alert?'#dc2626':'var(--text)')+'">'+esc(val)+'</div>'
-      +'</div>';
+  // ── Site Overview
+  html+='<div class="msec"><div class="mst">Site Overview</div><div class="mgrid">';
+  function mc(l,v,alert){
+    return '<div class="mi"><div class="ml">'+esc(l)+'</div>'
+      +'<div class="mv" style="color:'+(alert?'#dc2626':'var(--text)')+'">'+esc(v||'--')+'</div></div>';
   }
-  html+=infoCell('T-Live',tl?fmtDate(tl):'Not Set',!tl);
-  html+=infoCell('Revised T-Live',getRevisedTempLive(r)?fmtDate(getRevisedTempLive(r)):'--',false);
-  html+=infoCell('Final Live',fl?fmtDate(fl):'--',false);
-  html+=infoCell('Est. SAT (T-Live+45d)',sat?fmtDate(sat):'--',false);
-  html+=infoCell('Est. UAT (SAT+10d)',uat?fmtDate(uat):'--',false);
-  html+=infoCell('Days to T-Live',d!==null?(d<0?Math.abs(d)+'d overdue':d+'d away'):'Unknown',d!==null&&d<0);
-  html+=infoCell('IT Form',itFilled?'Filled':'Pending',!itFilled);
-  html+=infoCell('Temp Furniture',r['Temp Furniture']||'--',false);
-  html+='</div>';
-  html+='</div>';
+  html+=mc('Temp Live',tl?fmtDate(tl):'Not Set',!tl);
+  html+=mc('Revised T-Live',getRevisedTempLive(r)?fmtDate(getRevisedTempLive(r)):'--',false);
+  html+=mc('Final Live',fl?fmtDate(fl):'--',false);
+  html+=mc('Est. SAT (T+45d)',sat?fmtDate(sat):'--',false);
+  html+=mc('Est. UAT (SAT+10d)',uat?fmtDate(uat):'--',false);
+  html+=mc('Days to T-Live',d!==null?(d<0?Math.abs(d)+'d overdue':d+'d away'):'Unknown',d!==null&&d<0);
+  html+=mc('IT Form',itFilled?'Filled':'Pending',!itFilled);
+  html+=mc('Temp Furniture',r['Temp Furniture']||'--',false);
+  html+='</div></div>';
 
   // ── NSO Status
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">NSO Status (929 Checklist)</div>';
   var nsoBg=nsoSt.status==='done'?'#f0fdf4':nsoSt.status==='pending'?'#fffbeb':'var(--surface)';
   var nsoClr=nsoSt.status==='done'?'#16a34a':nsoSt.status==='pending'?'#d97706':'var(--muted)';
-  html+='<div style="padding:12px;border-radius:8px;background:'+nsoBg+';border:1px solid '+(nsoSt.status==='done'?'#86efac':nsoSt.status==='pending'?'#fde68a':'var(--border)')+'">'
+  var nsoBorder=nsoSt.status==='done'?'#86efac':nsoSt.status==='pending'?'#fde68a':'var(--border)';
+  html+='<div class="msec"><div class="mst">NSO Status (929 Checklist)</div>'
+    +'<div style="padding:10px 12px;border-radius:8px;background:'+nsoBg+';border:1px solid '+nsoBorder+'">'
     +'<div style="font-size:12px;font-weight:700;color:'+nsoClr+';margin-bottom:4px">'
     +(nsoSt.status==='done'?'✅ 929 Done':nsoSt.status==='pending'?'⏳ 929 Pending':'— No NSO Update')
     +'</div>'
     +(nsoSt.text?'<div style="font-size:11px;color:var(--muted)">'+esc(nsoSt.text)+'</div>':'')
-    +'</div>';
-  html+='</div>';
+    +'</div></div>';
 
   // ── Department Status
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">Department Status (Latest Updates)</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">';
+  html+='<div class="msec"><div class="mst">Department Status</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:7px">';
   DEPTS.forEach(function(dept){
     var status=(deptMap[dept]||'').trim();
     var clr=DEPT_COLOR[dept]||{bg:'var(--surface)',color:'var(--muted)',border:'var(--border)'};
-    html+='<div style="padding:8px 12px;border-radius:7px;background:'+clr.bg+';border:1px solid '+clr.border+';opacity:'+(status?1:.6)+'">'
-      +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+clr.color+';margin-bottom:4px">'+esc(dept)+'</div>'
-      +'<div style="font-size:11px;color:var(--text);line-height:1.4">'+(status?esc(status):'<span style="color:var(--muted)">No update yet</span>')+'</div>'
+    html+='<div style="padding:7px 10px;border-radius:7px;background:'+clr.bg+';border:1px solid '+clr.border+';opacity:'+(status?1:.55)+'">'
+      +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+clr.color+';margin-bottom:3px">'+esc(dept)+'</div>'
+      +'<div style="font-size:11px;color:var(--text);line-height:1.4">'+(status?esc(status):'<span style="color:var(--muted)">—</span>')+'</div>'
       +'</div>';
   });
-  html+='</div>';
-  html+='</div>';
+  html+='</div></div>';
 
-  // ── Daily Updates (editable)
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title" style="display:flex;align-items:center;justify-content:space-between">'
-    +'<span>Daily Updates</span>'
-    +'<span style="font-size:10px;color:var(--muted);font-weight:400">Click any cell to edit · Changes save locally</span>'
-    +'</div>';
-
-  if(dateCols.length){
-    html+='<div style="overflow-x:auto"><table class="upd-table">';
-    html+='<thead><tr><th style="text-align:left;position:sticky;left:0;z-index:2">Date</th><th>Update</th></tr></thead>';
-    html+='<tbody>';
-    dateCols.slice().reverse().forEach(function(col){
-      var val=(r[col]||'').trim();
-      html+='<tr>'
-        +'<td style="font-size:11px;font-weight:600;white-space:nowrap;padding:6px 10px;vertical-align:top;color:var(--muted);min-width:80px">'+esc(col)+'</td>'
-        +'<td style="padding:4px">'
-        +'<div class="upd-cell" contenteditable="true" data-col="'+esc(col)+'" data-idx="'+idx+'" '
-        +'onblur="saveUpdate(this)" onkeydown="if(event.key===\'Escape\')this.blur()"'
-        +'>'+esc(val)+'</div>'
-        +'</td>'
-        +'</tr>';
-    });
-    html+='</tbody></table></div>';
-  } else {
-    html+='<div style="font-size:11px;color:var(--muted)">No date columns detected in the uploaded CSV.</div>';
+  // ── Daily Updates (projects-tracker style)
+  var siteEdits=NSO_UPDATES[sn]||{};
+  // Collect cols that have content (manual or CSV) in reverse order
+  var visibleCols=dateCols.slice().reverse().filter(function(col){
+    return (siteEdits[col]!==undefined&&siteEdits[col]!=='')||(r[col]||'').trim();
+  });
+  // Also find carry-forward: latest col with no content but a prior manual edit
+  var cfCol=null,cfText='',cfFromCol='';
+  for(var ci=dateCols.length-1;ci>=0;ci--){
+    var cc=dateCols[ci];
+    if((siteEdits[cc]!==undefined&&siteEdits[cc]!=='')||(r[cc]||'').trim()) break; // has content, no need for cf
+    // empty — check if there's a prior manual edit
+    var cf=getEffectiveUpdate(r,cc);
+    if(cf&&cf.source==='carried'){cfCol=cc;cfText=cf.text;cfFromCol=cf.fromCol;break;}
   }
-  html+='</div>';
+
+  var updEntries='';
+  visibleCols.forEach(function(col){
+    var eff=getEffectiveUpdate(r,col);
+    var k=col.replace(/ /g,'_');
+    var isManual=eff.source==='manual';
+    var badge=isManual?'<span class="u-m">Manual</span>':'';
+    var clearBtn=isManual?'<button class="btn btn-o btn-sm" style="font-size:10px;padding:2px 7px;color:#dc2626;border-color:#fca5a5" onclick="clearNSOUpd(\''+esc(col)+'\','+idx+')">Clear</button>':'';
+    updEntries+='<div class="uentry">'
+      +'<div class="ubar">'
+      +'<span class="udlbl">'+esc(col)+badge+'</span>'
+      +'<div style="display:flex;gap:5px">'+clearBtn+'<button class="btn btn-o btn-sm" onclick="toggleNSOUpd(\''+esc(col)+'\','+idx+')">Edit</button></div>'
+      +'</div>'
+      +'<div class="utxt" id="utxt-'+k+'-'+idx+'">'+esc(eff.text)+'</div>'
+      +'<div class="uedit" id="ued-'+k+'-'+idx+'">'
+      +'<textarea id="uta-'+k+'-'+idx+'">'+esc(eff.text)+'</textarea>'
+      +'<div class="erow">'
+      +'<button class="btn btn-p btn-sm" onclick="saveNSOUpd(\''+esc(col)+'\','+idx+')">Save</button>'
+      +'<button class="btn btn-o btn-sm" onclick="cancelNSOUpd(\''+esc(col)+'\','+idx+')">Cancel</button>'
+      +'</div></div></div>';
+  });
+  if(cfCol){
+    var cfk=cfCol.replace(/ /g,'_');
+    updEntries+='<div class="uentry" style="opacity:.7">'
+      +'<div class="ubar">'
+      +'<span class="udlbl">'+esc(cfCol)+'<span class="u-cf">↑ carried from '+esc(cfFromCol)+'</span></span>'
+      +'<button class="btn btn-o btn-sm" onclick="toggleNSOUpd(\''+esc(cfCol)+'\','+idx+')">Edit</button>'
+      +'</div>'
+      +'<div class="utxt u-carried" id="utxt-'+cfk+'-'+idx+'">'+esc(cfText)+'</div>'
+      +'<div class="uedit" id="ued-'+cfk+'-'+idx+'">'
+      +'<textarea id="uta-'+cfk+'-'+idx+'">'+esc(cfText)+'</textarea>'
+      +'<div class="erow">'
+      +'<button class="btn btn-p btn-sm" onclick="saveNSOUpd(\''+esc(cfCol)+'\','+idx+')">Save</button>'
+      +'<button class="btn btn-o btn-sm" onclick="cancelNSOUpd(\''+esc(cfCol)+'\','+idx+')">Cancel</button>'
+      +'</div></div></div>';
+  }
+  if(!updEntries) updEntries='<div style="font-size:12px;color:var(--muted);padding:6px 0">No updates yet. Add one below.</div>';
+
+  var todayColVal=getTodayColNSO();
+  html+='<div class="msec"><div class="mst">Daily Updates</div>'
+    +updEntries
+    +'<div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>'
+    +'<div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span>'
+    +'<input type="text" id="nd-nso-'+idx+'" value="'+esc(todayColVal)+'" placeholder="e.g. 17 May">'
+    +'</div><textarea id="nt-nso-'+idx+'" placeholder="Write update… (supports multi-line, dept labels like NSO:, IT:)"></textarea>'
+    +'<div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addNSOUpd('+idx+')">Add Update</button></div>'
+    +'</div></div></div>';
 
   // ── Manual T-Live entry
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">Manual Temp Live Date Entry</div>';
-  html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
-  html+='<input type="text" id="manual-tlive" placeholder="e.g. 15 Jul 26" value="'+esc(r['Temp Live Date']||'')+'" '
-    +'style="padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:\'Inter\',sans-serif;outline:none;width:160px">';
-  html+='<button class="btn btn-p btn-sm" onclick="saveManualTLive('+idx+')">Save T-Live</button>';
-  html+='<span style="font-size:11px;color:var(--muted)">Updates the "Temp Live Date" field for this site locally.</span>';
-  html+='</div>';
-  html+='</div>';
+  html+='<div class="msec"><div class="mst">Manual Temp Live Date</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<input type="text" id="manual-tlive" placeholder="e.g. 15 Jul 26" value="'+esc(r['Temp Live Date']||'')+'" '
+    +'style="padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:\'Inter\',sans-serif;outline:none;width:160px">'
+    +'<button class="btn btn-p btn-sm" onclick="saveManualTLive('+idx+')">Save T-Live</button>'
+    +'<span style="font-size:11px;color:var(--muted)">Updates Temp Live Date locally.</span>'
+    +'</div></div>';
 
   document.getElementById('modal-body').innerHTML=html;
   document.getElementById('modal-overlay').classList.add('open');
 }
 
 function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
-
-// Editable update cell save
-function saveUpdate(el){
-  var col=el.getAttribute('data-col');
-  var idx=parseInt(el.getAttribute('data-idx'));
-  var newVal=el.textContent||'';
-  if(!allData[idx]) return;
-  allData[idx][col]=newVal;
-  // Re-parse filtered, re-render KPIs (don't close modal)
-  applyFilters();
-  renderKPIs();
-  toast('Update saved locally — re-upload CSV to persist');
-}
 
 function saveManualTLive(idx){
   var inp=document.getElementById('manual-tlive');
@@ -1207,6 +1217,8 @@ function loadFromServer(manual){
     if(manual) toast('Worker URL not configured');
     return;
   }
+  // Load manual updates first so they survive the CSV merge
+  loadNSOUpdates();
   var url=WORKER_URL.replace(/\/+$/,'')+'/'+NSO_TOOL_PATH+'.csv';
   var btn=document.getElementById('load-server-btn');
   if(btn){btn.disabled=true;btn.textContent='Loading…';}
@@ -1243,6 +1255,7 @@ function loadFromServer(manual){
   if(allData.length){ buildFilters(); renderKPIs(); }
   renderCurrentView();
   document.getElementById('count-chip').textContent=allData.length+' sites';
+  loadNSOUpdates();
 })();
 </script>
 </body>
