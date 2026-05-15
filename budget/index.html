@@ -1484,6 +1484,19 @@ function App() {
           <span className={`text-[10px] font-semibold ${srcCls}`}>{srcBadge}</span>
         </div>
         <div className="flex items-center gap-2">
+          <div className="hidden md:flex items-center gap-1 mr-1">
+            <a href="https://cars24.slack.com/team/U07PN5VRWCB" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-[#4A154B] dark:hover:text-purple-300 hover:bg-[#4A154B]/10 transition-all" title="Slack — Vicky Bhardwaj">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
+              Vicky
+            </a>
+            <a href="https://mail.google.com/mail/?view=cm&to=vicky.bhardwaj@cars24.com" target="_blank" rel="noopener noreferrer"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-[#EA4335] dark:hover:text-red-400 hover:bg-[#EA4335]/10 transition-all" title="Email Vicky Bhardwaj">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
+              Mail
+            </a>
+            <div className="w-px h-4 bg-gray-200 dark:bg-gray-700 mx-1"/>
+          </div>
           <input ref={uploadRef} type="file" accept=".xlsx,.xls" className="hidden" onChange={handleUpload}/>
           {auth ? (
             <>
@@ -1527,26 +1540,6 @@ function App() {
       {loginOpen && <LoginModal onSuccess={creds=>{setAuth(creds);setLoginOpen(false);toast('✓ Logged in','ok');}} onClose={()=>setLoginOpen(false)}/>}
       <ToastLayer toasts={toasts}/>
 
-      <footer className="mt-auto border-t border-gray-100 dark:border-gray-800 px-6 py-4 flex items-center justify-between bg-gray-50/60 dark:bg-[#111]/60 backdrop-blur-sm">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400">
-          <span>Built &amp; maintained by</span>
-          <span className="font-semibold text-gray-700 dark:text-gray-200">Vicky Bhardwaj</span>
-          <span className="text-gray-300 dark:text-gray-600">·</span>
-          <span className="text-gray-400">Head of Projects, CARS24</span>
-        </div>
-        <div className="flex items-center gap-3">
-          <a href="https://cars24.slack.com/team/U07PN5VRWCB" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-[#4A154B] dark:hover:text-purple-300 hover:bg-[#4A154B]/10 border border-transparent hover:border-[#4A154B]/20 transition-all">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zm1.271 0a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zm0 1.271a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zm10.122 2.521a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zm-1.268 0a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zm-2.523 10.122a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zm0-1.268a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
-            Slack
-          </a>
-          <a href="https://mail.google.com/mail/?view=cm&to=vicky.bhardwaj@cars24.com" target="_blank" rel="noopener noreferrer"
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-gray-400 hover:text-[#EA4335] dark:hover:text-red-400 hover:bg-[#EA4335]/10 border border-transparent hover:border-[#EA4335]/20 transition-all">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
-            Mail
-          </a>
-        </div>
-      </footer>
     </div>
   );
 }
