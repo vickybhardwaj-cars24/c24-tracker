@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.0</title>
+<title>Cars24 Projects Tracker v4.1</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1078,7 +1078,7 @@ function renderTable(){
     const tLiveBadge=_tLive?'<span class="badge b-bd" style="margin-left:5px;font-size:9px">T-Live: '+fmtD(_tLive)+'</span>':'';
     const cells=[
       '<td style="color:var(--muted);font-size:11px;text-align:center;white-space:nowrap">'+(r['S.No.']?parseInt(r['S.No.'])||r['S.No.']:idx+1)+'</td>',
-      '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+tLiveBadge+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
+      '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">'+esc(r.Owner||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(r.Vendor||'—')+'</td>',
       '<td>'+(!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>',
@@ -1713,6 +1713,7 @@ function openModal(idx){
   const metaF=[
     ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion',pctV!==null?pctV+'%':''],
     ['PO Date',r['PO Date']||'—'],['Kickoff Date',r['Kickoff Date']||'—'],['Work Start',r['Work Start Date']||'—'],
+    ['T-Live',(()=>{const tl=getTempLiveDate(r);return tl?fmtD(tl):'—';})()],
     ['SAT Date',r['SAT Date']||'—'],['UAT Date',r['UAT DATE']||'—'],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
   ];
   const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';
