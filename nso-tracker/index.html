@@ -1217,14 +1217,16 @@ function loadFromServer(manual){
     if(manual) toast('Worker URL not configured');
     return;
   }
-  // Load manual updates first so they survive the CSV merge
-  loadNSOUpdates();
   var url=WORKER_URL.replace(/\/+$/,'')+'/'+NSO_TOOL_PATH+'.csv';
   var btn=document.getElementById('load-server-btn');
   if(btn){btn.disabled=true;btn.textContent='Loading…';}
-  C24Uploader.fetchText(url,{skeleton:false})
-    .then(function(text){
+  // Fetch updates JSON and CSV in parallel, then merge
+  Promise.all([
+    loadNSOUpdates(),
+    C24Uploader.fetchText(url,{skeleton:false})
+  ]).then(function(results){
       if(btn){btn.disabled=false;btn.textContent='↓ Load from Server';}
+      var text=results[1];
       if(!text||text.trim().length<10){
         toast('⚠ Worker returned empty data — is nso-tracker.csv uploaded?');
         console.warn('[NSO] Worker returned empty/short response for',url);
