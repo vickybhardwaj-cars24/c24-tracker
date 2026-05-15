@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.61</title>
+<title>Cars24 Projects Tracker v3.62</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1200,7 +1200,7 @@ function commCard(entry,type){
     :'';
   const _commType=(type==='SAT'?'hem_design_sat':'hem_design_uat');
   const _siteName=r['Site Name']||'';
-  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:'+bg+';border:1px solid '+border+';border-radius:8px;gap:10px;flex-wrap:wrap">'    +'<div style="flex:1;min-width:150px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:12px;font-weight:700">'+esc(_siteName)+revBadge+'</div>'    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(r['Owner']||'—')+' · '+esc(r['Vendor']||'—')+'</div>'    +revDateLine    +'</div>'    +'<div style="text-align:center;min-width:80px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:13px;font-weight:800;color:'+diffColor+'">'+dateLabel+'</div>'    +'<div style="font-size:10px;color:'+diffColor+'">'+diffLabel+'</div>'    +'</div>'    +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'    +'<a href="'+gmailUrl+'" target="_blank" onclick="markEmailSent('+JSON.stringify(_siteName)+',\''+_commType+'\',\''+gmailUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\');return true;" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Email HEM + Design</a>'    +emailLogBadge(_siteName,_commType)    +'</div>'    +'</div>';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:'+bg+';border:1px solid '+border+';border-radius:8px;gap:10px;flex-wrap:wrap">'    +'<div style="flex:1;min-width:150px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:12px;font-weight:700">'+esc(_siteName)+revBadge+'</div>'    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(r['Owner']||'—')+' · '+esc(r['Vendor']||'—')+'</div>'    +revDateLine    +'</div>'    +'<div style="text-align:center;min-width:80px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:13px;font-weight:800;color:'+diffColor+'">'+dateLabel+'</div>'    +'<div style="font-size:10px;color:'+diffColor+'">'+diffLabel+'</div>'    +'</div>'    +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'    +'<a href="'+gmailUrl+'" target="_blank" data-elog-site="'+esc(_siteName)+'" data-elog-type="'+_commType+'" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Email HEM + Design</a>'    +emailLogBadge(_siteName,_commType)    +'</div>'    +'</div>';
 }
 
 function renderSatUat(){
@@ -1394,7 +1394,7 @@ function renderSatUat(){
       +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['SAT Date']||'--')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600;color:#7c3aed">'+(revUAT!='--'?revUAT:'<span style="color:var(--muted);font-size:10px">None</span>')+'</td>'
-      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation();markEmailSent('+JSON.stringify(u.r['Site Name']||'')+',\'uat_delay\',\''+vendorDelayMail(u.r).replace(/'/g,"\\'")+'\')" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'</td>':'<td></td>')
+      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'</td>':'<td></td>')
       +(u.gap>10?'<td style="padding:6px 10px;text-align:center"><span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;border:1px solid #fecaca">🚨 UAT Date Missing</span></td>':'<td></td>')
       +'</tr>';
   }
@@ -1463,7 +1463,7 @@ function renderSatUat(){
         +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+esc(u.r['Planned Completion']||'—')+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+esc(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
-        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation();markEmailSent('+JSON.stringify(u.r['Site Name']||'')+',\'sat_delay\',\''+satDelayMail(u.r)+'\');return false;" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>':'';
   el.innerHTML=_snav+_ndH+_sdH+_dH+_wH+_oH+(
@@ -1480,6 +1480,7 @@ function renderSatUat(){
     +'<div class="su-stat"><div class="su-sl">UAT Done</div><div class="su-sv" style="color:#16a34a">'+doneArr.length+'</div><div class="su-ss">fully closed</div></div>'
     +'</div>'
     +nwHtml+rcHtml+pendHtml+doneHtml);
+  attachEmailTracking();
 }
 
 function renderWarnings(container){
@@ -1506,7 +1507,7 @@ function renderWarnings(container){
     const _warnLogged=EMAIL_LOG[site]&&EMAIL_LOG[site]['uat_warning'];
     const notifyBtn = _warnLogged
       ? '<span class="notified-tag">✓ Warning sent'+(_warnLogged.count>1?' ×'+_warnLogged.count:'')+' · '+_warnLogged.lastSentDate+'</span>'
-      : '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation();markEmailSent('+JSON.stringify(site)+',\'uat_warning\',\''+gmailUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\');setTimeout(function(){renderWarnings();},300);">📧 Send Warning Email to '+esc(owner)+'</a>';
+      : '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" data-elog-site="'+esc(site)+'" data-elog-type="uat_warning" data-elog-refresh="warnings" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation()">📧 Send Warning Email to '+esc(owner)+'</a>';
     return '<div class="warn-card'+(isCrit?'':' w-orange')+'" onclick="openModal('+idx+')">' +
       '<div class="warn-card-top">' +
       '<div>' +
@@ -1537,6 +1538,7 @@ function renderWarnings(container){
     </div>
     ${critical.length?`<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔴 Critical — Over 30 days (${critical.length})</div>${critical.map(wCard).join('')}</div>`:''}
     ${high.length?`<div><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🟡 High — 15–30 days (${high.length})</div>${high.map(wCard).join('')}</div>`:''}`;
+  attachEmailTracking();
 }
 
 function markNotified(siteName, btn) {
@@ -1563,7 +1565,7 @@ function markNotifiedByIdx(btn) {
     +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+gap+' days since SAT · Owner: '+esc(owner)+'</div>'
     +'<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;margin-bottom:12px" id="warn-email-body">'+esc(body)+'</div>'
     +'<div style="display:flex;gap:8px;align-items:center">'
-    +'<a href="'+gmailUrl+'" target="_blank" class="btn btn-p btn-sm" onclick="markEmailSent('+JSON.stringify(site)+',\'uat_warning\',\''+gmailUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">📧 Open in Gmail</a>'
+    +'<a href="'+gmailUrl+'" target="_blank" class="btn btn-p btn-sm" data-elog-site="'+esc(site)+'" data-elog-type="uat_warning">📧 Open in Gmail</a>'
     +'<button class="btn btn-o btn-sm" onclick="copyWarnEmail()">📋 Copy Email</button>'
     +emailLogBadge(site,'uat_warning')
     +'</div>';
@@ -1571,9 +1573,7 @@ function markNotifiedByIdx(btn) {
   document.getElementById('mttl').textContent='';
   var dm=document.getElementById('mdrive'); if(dm) dm.style.display='none';
   document.getElementById('mbody').innerHTML=html;
-  // Mark as notified
-  const div=btn.parentElement;
-  div.innerHTML='<span class="notified-tag">✓ Warning sent this session</span>';
+  attachEmailTracking();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3940,7 +3940,7 @@ function renderBDTab(){
       var eType='bd_'+team.toLowerCase();
       var sn=r['Site Name']||'';
       return '<span style="display:inline-flex;align-items:center;gap:3px">'
-        +'<a href="'+url+'" target="_blank" style="'+style+'" onclick="markEmailSent('+JSON.stringify(sn)+',\''+eType+'\',\''+url.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">📧 '+team+'</a>'
+        +'<a href="'+url+'" target="_blank" data-elog-site="'+esc(sn)+'" data-elog-type="'+eType+'" style="'+style+'">📧 '+team+'</a>'
         +emailLogBadge(sn,eType)
         +'</span>';
     }).join(' ');
@@ -3990,6 +3990,7 @@ function renderBDTab(){
   });
 
   el.innerHTML=html;
+  attachEmailTracking();
 }
 
 (function init(){
@@ -4281,36 +4282,41 @@ const WORKER_URL       = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
 const TICKET_TOOL_PATH = 'tickets';
-const EMAIL_LOG_PATH   = 'projects-tracker';
-const EMAIL_LOG_KEY    = '__email_log';
+const EMAIL_LOG_KEY = '__email_log';
 
-// In-memory email sent log: { siteName: { sat_delay: {sentAt, count}, uat_delay: {...}, ... } }
+// In-memory email sent log: { siteName: { sat_delay: {sentAt, count}, ... } }
 var EMAIL_LOG = {};
 var _emailLogMappingsCache = {};
 
 function loadEmailLog(){
   if (location.protocol === 'file:') return Promise.resolve();
-  return fetch(WORKER_URL + EMAIL_LOG_PATH + '-mappings.json', {cache:'no-store'})
+  return fetch(WORKER_URL + TOOL_PATH + '-mappings.json', {cache:'no-store'})
     .then(function(r){ return r.ok ? r.json() : {}; })
     .then(function(data){
-      _emailLogMappingsCache = data || {};
+      _emailLogMappingsCache = (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
       EMAIL_LOG = _emailLogMappingsCache[EMAIL_LOG_KEY] || {};
     })
-    .catch(function(){ EMAIL_LOG = {}; });
+    .catch(function(e){ console.warn('loadEmailLog failed:', e); EMAIL_LOG = {}; });
 }
 
 function saveEmailLog(){
   if (location.protocol === 'file:') return;
   _emailLogMappingsCache[EMAIL_LOG_KEY] = EMAIL_LOG;
+  var payload = JSON.stringify(_emailLogMappingsCache);
   fetch(WORKER_URL + 'mappings', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-Tool-Path': EMAIL_LOG_PATH },
-    body: JSON.stringify(_emailLogMappingsCache)
-  }).catch(function(){});
+    headers: { 'Content-Type': 'application/json', 'X-Tool-Path': TOOL_PATH },
+    body: payload
+  })
+  .then(function(r){
+    return r.json().then(function(j){
+      if(!r.ok || !j.success) toast('Email log save failed: '+(j.error||r.status), 'err');
+    });
+  })
+  .catch(function(e){ toast('Email log network error: '+e.message, 'err'); });
 }
 
-function markEmailSent(siteName, emailType, mailUrl){
-  window.open(mailUrl, '_blank');
+function markEmailSent(siteName, emailType){
   var entry = EMAIL_LOG[siteName] || {};
   var prev = entry[emailType] || {};
   entry[emailType] = {
@@ -4320,9 +4326,23 @@ function markEmailSent(siteName, emailType, mailUrl){
   };
   EMAIL_LOG[siteName] = entry;
   saveEmailLog();
-  // Refresh the SAT/UAT tab so button updates immediately
+  // Re-render whichever tab is active
   var suv = document.getElementById('suv');
   if (suv && suv.classList.contains('show')) renderSatUat();
+  var bdv = document.getElementById('bdv');
+  if (bdv && bdv.classList.contains('show')) renderBDTab();
+}
+
+// Attach tracking to all email links after render — no URL embedded in onclick
+function attachEmailTracking(){
+  document.querySelectorAll('a[data-elog-site]').forEach(function(el){
+    if(el._elogBound) return;
+    el._elogBound = true;
+    el.addEventListener('click', function(){
+      markEmailSent(el.dataset.elogSite, el.dataset.elogType);
+      if(el.dataset.elogRefresh === 'warnings') setTimeout(renderWarnings, 300);
+    });
+  });
 }
 
 function emailLogBadge(siteName, emailType){
