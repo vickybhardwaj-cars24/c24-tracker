@@ -27,21 +27,21 @@ body{font-family:'Inter',sans-serif;margin:0;padding:0}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
+/* CSS vars for sticky col — update on theme toggle */
+:root{--sc-bg:#ffffff;--sc-txt:#111827;--sc-hbg:#f3f4f6;--sc-htxt:#6b7280;--sc-cbg:#eef2ff;--sc-ctxt:#4338ca}
+html.dark{--sc-bg:#1e1e1e;--sc-txt:#e5e7eb;--sc-hbg:#252525;--sc-htxt:#9ca3af;--sc-cbg:#1e1e2e;--sc-ctxt:#a5b4fc}
+
 /* Sticky table */
 .tbl-wrap{overflow:auto;max-height:calc(100vh - 260px)}
 .tbl-wrap table{border-collapse:separate;border-spacing:0}
-.tbl-wrap thead tr th{position:sticky;top:0;z-index:10;white-space:nowrap}
+.tbl-wrap thead tr th{position:sticky;top:0;z-index:20;white-space:nowrap}
 .tbl-wrap thead tr:nth-child(2) th{top:36px}
 .tbl-wrap thead tr:nth-child(3) th{top:72px}
-.tbl-wrap .s-col{position:sticky;left:0;z-index:4;border-right:1px solid rgba(99,99,140,0.18)}
-.tbl-wrap thead .s-col{z-index:15}
-/* sticky col backgrounds — match surrounding bg closely but slightly offset */
-.dark .tbl-wrap tbody td.s-col{background:#1a1a1a !important;color:#e5e7eb !important}
-.dark .tbl-wrap thead th.s-col{background:#1e1e1e !important;color:#9ca3af !important}
-.dark .tbl-wrap .city-row td.s-col{background:#242430 !important;color:#a5b4fc !important}
-html:not(.dark) .tbl-wrap tbody td.s-col{background:#fff !important;color:#111827 !important}
-html:not(.dark) .tbl-wrap thead th.s-col{background:#f3f4f6 !important;color:#6b7280 !important}
-html:not(.dark) .tbl-wrap .city-row td.s-col{background:#eef2ff !important;color:#4338ca !important}
+.tbl-wrap .s-col{position:sticky;left:0;z-index:5;border-right:1px solid rgba(120,120,160,0.15)}
+.tbl-wrap thead .s-col{z-index:30}
+.tbl-wrap tbody td.s-col{background:var(--sc-bg)!important;color:var(--sc-txt)!important}
+.tbl-wrap thead th.s-col{background:var(--sc-hbg)!important;color:var(--sc-htxt)!important}
+.tbl-wrap .city-row td.s-col{background:var(--sc-cbg)!important;color:var(--sc-ctxt)!important}
 td,th{overflow:hidden;text-overflow:ellipsis}
 .tooltip-box{pointer-events:none;z-index:9999;position:fixed}
 </style>
