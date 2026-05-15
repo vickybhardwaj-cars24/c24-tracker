@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.60</title>
+<title>Cars24 Projects Tracker v3.61</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4281,25 +4281,31 @@ const WORKER_URL       = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
 const TICKET_TOOL_PATH = 'tickets';
-const EMAIL_LOG_PATH   = 'projects-tracker-email-log';
+const EMAIL_LOG_PATH   = 'projects-tracker';
+const EMAIL_LOG_KEY    = '__email_log';
 
 // In-memory email sent log: { siteName: { sat_delay: {sentAt, count}, uat_delay: {...}, ... } }
 var EMAIL_LOG = {};
+var _emailLogMappingsCache = {};
 
 function loadEmailLog(){
   if (location.protocol === 'file:') return Promise.resolve();
   return fetch(WORKER_URL + EMAIL_LOG_PATH + '-mappings.json', {cache:'no-store'})
     .then(function(r){ return r.ok ? r.json() : {}; })
-    .then(function(data){ EMAIL_LOG = data || {}; })
+    .then(function(data){
+      _emailLogMappingsCache = data || {};
+      EMAIL_LOG = _emailLogMappingsCache[EMAIL_LOG_KEY] || {};
+    })
     .catch(function(){ EMAIL_LOG = {}; });
 }
 
 function saveEmailLog(){
   if (location.protocol === 'file:') return;
+  _emailLogMappingsCache[EMAIL_LOG_KEY] = EMAIL_LOG;
   fetch(WORKER_URL + 'mappings', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Tool-Path': EMAIL_LOG_PATH },
-    body: JSON.stringify(EMAIL_LOG)
+    body: JSON.stringify(_emailLogMappingsCache)
   }).catch(function(){});
 }
 
