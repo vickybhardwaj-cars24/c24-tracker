@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 NSO Tracker v1.0</title>
+<title>Cars24 NSO Tracker v1.1</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -18,7 +18,7 @@ html,body{height:100%;overflow:hidden}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;display:flex;flex-direction:column}
 header{background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;z-index:200;box-shadow:var(--sh);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:10px}
-.logo-chip{background:#2563eb;padding:6px 12px;border-radius:6px;color:#fff;font-size:12px;font-weight:700;letter-spacing:.3px}
+.logo img{height:34px;border-radius:6px;display:block}
 .logo h1{font-size:14px;font-weight:700}.logo p{font-size:11px;color:var(--muted)}
 .hdr-r{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:4px;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all .15s;line-height:1.4;text-decoration:none}
@@ -119,6 +119,28 @@ select.sel:focus{border-color:var(--accent)}
   .site-card{margin:0 8px 10px}
   .modal-body{padding:12px}
 }
+.msec{margin-bottom:18px}
+.mst{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:9px;padding-bottom:6px;border-bottom:1px solid var(--border)}
+.mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.mi .ml{font-size:10px;color:var(--muted);margin-bottom:2px;font-weight:500}
+.mi .mv{font-size:12px;font-weight:600;min-height:16px}
+.uentry{border:1px solid var(--border);border-radius:7px;margin-bottom:6px;overflow:hidden}
+.ubar{background:var(--surface);padding:5px 10px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid var(--border)}
+.udlbl{font-size:10px;font-weight:600;color:var(--accent);text-transform:uppercase;letter-spacing:.4px}
+.utxt{padding:8px 10px;font-size:12px;color:var(--muted);line-height:1.5;white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;max-height:180px;overflow-y:auto}
+.utxt.u-carried{color:var(--subtle);font-style:italic}
+.uedit{display:none;padding:7px 10px}
+.uedit textarea{width:100%;border:1px solid var(--border2);border-radius:5px;padding:7px;font-size:12px;font-family:'Inter',sans-serif;resize:vertical;min-height:60px;outline:none;color:var(--text);box-sizing:border-box}
+.uedit textarea:focus{border-color:var(--accent)}
+.erow{display:flex;gap:5px;margin-top:5px}
+.addbox{background:var(--surface);border:1px solid var(--border);border-radius:7px;padding:10px}
+.arow{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.arow input{padding:5px 8px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:'Inter',sans-serif;outline:none;width:120px}
+.arow input:focus{border-color:var(--accent)}
+.addbox textarea{width:100%;border:1px solid var(--border2);border-radius:5px;padding:7px;font-size:12px;font-family:'Inter',sans-serif;resize:vertical;min-height:60px;outline:none;color:var(--text);background:var(--white);box-sizing:border-box}
+.addbox textarea:focus{border-color:var(--accent)}
+.u-m{font-size:9px;font-weight:700;color:#2563eb;background:#eff6ff;border:1px solid #bfdbfe;padding:1px 6px;border-radius:8px;margin-left:5px}
+.u-cf{font-size:9px;font-weight:600;color:#92400e;background:#fffbeb;border:1px solid #fde68a;padding:1px 6px;border-radius:8px;margin-left:5px}
 </style>
 </head>
 <body>
@@ -126,7 +148,7 @@ select.sel:focus{border-color:var(--accent)}
 
 <header>
   <div class="logo">
-    <div class="logo-chip">NSO</div>
+    <img src="../cars24-round-icon.png" alt="Cars24">
     <div>
       <h1>NSO Tracker — FY 26/27</h1>
       <p>New Site Operations · CARS24 Expansion</p>
@@ -141,6 +163,7 @@ select.sel:focus{border-color:var(--accent)}
     <button class="btn btn-o" id="logout-btn" onclick="doLogout()" style="display:none;font-size:11px">↪ Logout <span id="login-user" style="margin-left:4px;color:var(--muted);font-weight:400"></span></button>
     <label class="btn btn-o" id="live-nso-lbl" for="nso-live-inp" style="display:none;cursor:pointer;font-size:11px">↑ Upload CSV (Live)</label>
     <input type="file" id="nso-live-inp" accept=".csv" style="display:none" onchange="handleLiveNSOCSV(event)">
+    <button class="btn btn-o" id="load-server-btn" onclick="loadFromServer()" style="font-size:11px">↓ Load from Server</button>
     <button class="btn btn-o" onclick="exportNSOCSV()" style="font-size:11px">↓ Export</button>
   </div>
 </header>
@@ -257,6 +280,8 @@ select.sel:focus{border-color:var(--accent)}
 const NSO_DATA = [];   // populated by CSV upload — never embed raw data
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const NSO_TOOL_PATH = 'nso-tracker';
+const NSO_UPDATES_TOOL = 'nso-updates';
+var NSO_UPDATES = {};  // { siteName: { dateCol: text } } — persisted to worker
 
 const META_COLS = ['S. No.','Cost Center','Site Name','Replacement','Status',
   'Temp Furniture','Temp Live Date','Final Live Date','Revised Temp Date',
@@ -388,7 +413,8 @@ function parseCSV(txt){
 
 function detectDateCols(headers){
   return headers.filter(function(h){
-    return /^\d{1,2}\s+[A-Za-z]+$/.test(h.trim()) || /^[A-Za-z]+\s+\d{1,2}$/.test(h.trim());
+    h=h.trim();
+    return /^\d{1,2}(?:st|nd|rd|th)?\s+[A-Za-z]+$/.test(h) || /^[A-Za-z]+\s+\d{1,2}(?:st|nd|rd|th)?$/.test(h);
   });
 }
 
@@ -470,11 +496,11 @@ function handleNSOUpload(event){
 function loadNSOData(csvText){
   var parsed=parseCSV(csvText);
   if(!parsed.length){toast('No valid data found in CSV');return;}
-  // Detect date cols from first row keys
   var keys=Object.keys(parsed[0]);
   dateCols=detectDateCols(keys);
   allData=parsed;
   filteredData=[...allData];
+  applyNSOUpdates(); // overlay manual edits — never lost on CSV reload
   buildFilters();
   renderKPIs();
   renderCurrentView();
@@ -879,21 +905,139 @@ function renderTimelineView(){
 }
 
 // ─────────────────────────────────────────────────────────
+// NSO UPDATES PERSISTENCE (worker mappings JSON)
+// ─────────────────────────────────────────────────────────
+function loadNSOUpdates(){
+  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0) return Promise.resolve();
+  var url=WORKER_URL.replace(/\/+$/,'')+'/'+NSO_UPDATES_TOOL+'-mappings.json';
+  return fetch(url,{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():{}; })
+    .then(function(data){
+      NSO_UPDATES=(data&&typeof data==='object'&&!Array.isArray(data))?data:{};
+    })
+    .catch(function(e){ console.warn('[NSO] Failed to load updates:',e); });
+}
+
+function saveNSOUpdates(){
+  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0) return;
+  var url=WORKER_URL.replace(/\/+$/,'')+'/mappings';
+  fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Tool-Path':NSO_UPDATES_TOOL},
+    body:JSON.stringify(NSO_UPDATES)
+  }).then(function(r){return r.json();})
+    .then(function(j){if(!j.success) toast('Save failed: '+(j.error||'error'));})
+    .catch(function(){toast('Network error saving update');});
+}
+
+// Apply manual updates on top of allData (called after every CSV load)
+function applyNSOUpdates(){
+  allData.forEach(function(row){
+    var sn=(row['Site Name']||'').trim();
+    var edits=NSO_UPDATES[sn];
+    if(!edits) return;
+    Object.keys(edits).forEach(function(col){
+      row[col]=edits[col];
+      if(dateCols.indexOf(col)<0) dateCols.push(col);
+    });
+  });
+}
+
+// Returns {text, source:'manual'|'csv'|'carried', fromCol?} for a row+col
+function getEffectiveUpdate(row, col){
+  var sn=(row['Site Name']||'').trim();
+  var siteEdits=NSO_UPDATES[sn]||{};
+  if(siteEdits[col]!==undefined) return {text:siteEdits[col],source:'manual'};
+  if((row[col]||'').trim()) return {text:(row[col]||'').trim(),source:'csv'};
+  // Carry-forward: find most recent manual edit before this col
+  var colIdx=dateCols.indexOf(col);
+  for(var i=colIdx-1;i>=0;i--){
+    var c=dateCols[i];
+    if(siteEdits[c]!==undefined&&siteEdits[c].trim()){
+      return {text:siteEdits[c],source:'carried',fromCol:c};
+    }
+  }
+  return {text:'',source:'empty'};
+}
+
+// ─────────────────────────────────────────────────────────
+// MODAL TOGGLE/SAVE/ADD
+// ─────────────────────────────────────────────────────────
+function toggleNSOUpd(col,idx){
+  var k=col.replace(/ /g,'_');
+  var t=document.getElementById('utxt-'+k+'-'+idx);
+  var e=document.getElementById('ued-'+k+'-'+idx);
+  if(t) t.style.display='none';
+  if(e) e.style.display='block';
+}
+function cancelNSOUpd(col,idx){
+  var k=col.replace(/ /g,'_');
+  var t=document.getElementById('utxt-'+k+'-'+idx);
+  var e=document.getElementById('ued-'+k+'-'+idx);
+  if(t) t.style.display='block';
+  if(e) e.style.display='none';
+}
+function saveNSOUpd(col,idx){
+  var k=col.replace(/ /g,'_');
+  var ta=document.getElementById('uta-'+k+'-'+idx);
+  if(!ta) return;
+  var v=ta.value;
+  var r=allData[idx]; if(!r) return;
+  var sn=(r['Site Name']||'').trim();
+  // Store in NSO_UPDATES and in row
+  NSO_UPDATES[sn]=NSO_UPDATES[sn]||{};
+  NSO_UPDATES[sn][col]=v;
+  r[col]=v;
+  saveNSOUpdates();
+  // Update view mode
+  var t=document.getElementById('utxt-'+k+'-'+idx);
+  if(t){t.textContent=v;t.className='utxt';t.style.display='block';}
+  var e=document.getElementById('ued-'+k+'-'+idx);
+  if(e) e.style.display='none';
+  toast('Saved');
+  applyFilters();renderKPIs();
+}
+function addNSOUpd(idx){
+  var d=document.getElementById('nd-nso-'+idx);
+  var ta=document.getElementById('nt-nso-'+idx);
+  if(!d||!ta) return;
+  var col=d.value.trim();
+  var v=ta.value.trim();
+  if(!col||!v){toast('Fill date and update text');return;}
+  var r=allData[idx]; if(!r) return;
+  var sn=(r['Site Name']||'').trim();
+  if(dateCols.indexOf(col)<0) dateCols.push(col);
+  NSO_UPDATES[sn]=NSO_UPDATES[sn]||{};
+  NSO_UPDATES[sn][col]=v;
+  r[col]=v;
+  saveNSOUpdates();
+  toast('Update added');
+  openModal(idx);
+  applyFilters();renderKPIs();
+}
+function clearNSOUpd(col,idx){
+  var r=allData[idx]; if(!r) return;
+  var sn=(r['Site Name']||'').trim();
+  if(NSO_UPDATES[sn]) delete NSO_UPDATES[sn][col];
+  // Restore CSV value if any (re-apply from row's original CSV value is lost — set to empty)
+  r[col]='';
+  saveNSOUpdates();
+  toast('Manual update cleared');
+  openModal(idx);
+  applyFilters();
+}
+function getTodayColNSO(){
+  var d=new Date();
+  var months=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return d.getDate()+' '+months[d.getMonth()];
+}
+
+// ─────────────────────────────────────────────────────────
 // MODAL
 // ─────────────────────────────────────────────────────────
 function openModal(idx){
   currentModalIdx=idx;
-  var r=allData[idx];
-  if(!r) return;
-
-  // Title — NO T-Live prefix in site name
-  document.getElementById('modal-title').textContent=r['Site Name']||'--';
-  var subParts=[];
-  if(r['Cost Center']) subParts.push('CC: '+r['Cost Center']);
-  if(r['Status']) subParts.push('Status: '+r['Status']);
-  if(r['Replacement']) subParts.push('Replacement: '+r['Replacement']);
-  document.getElementById('modal-sub').textContent=subParts.join(' · ');
-
+  var r=allData[idx]; if(!r) return;
   var tl=getEffectiveTempLive(r);
   var fl=getFinalLive(r);
   var sat=tl?new Date(tl.getTime()+45*86400000):null;
@@ -902,115 +1046,135 @@ function openModal(idx){
   var deptMap=parseDeptStatuses(r);
   var nsoSt=getNSOStatus(r);
   var itFilled=(r['IT form Filled']||'').toLowerCase()==='yes';
+  var sn=(r['Site Name']||'').trim();
+
+  document.getElementById('modal-title').textContent=sn||'--';
+  var subParts=[];
+  if(r['Cost Center']) subParts.push('CC: '+r['Cost Center']);
+  if(r['Status']) subParts.push('Status: '+r['Status']);
+  if(r['Replacement']) subParts.push('Replacement: '+r['Replacement']);
+  document.getElementById('modal-sub').textContent=subParts.join(' · ');
 
   var html='';
 
-  // ── Key Info section (T-Live shown prominently here in modal)
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">Site Overview</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px">';
-  function infoCell(lbl,val,alert){
-    return '<div style="padding:10px;background:var(--surface);border-radius:8px;border:1px solid '+(alert?'#fca5a5':'var(--border)')+'">'
-      +'<div style="font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:4px">'+esc(lbl)+'</div>'
-      +'<div style="font-size:13px;font-weight:700;color:'+(alert?'#dc2626':'var(--text)')+'">'+esc(val)+'</div>'
-      +'</div>';
+  // ── Site Overview
+  html+='<div class="msec"><div class="mst">Site Overview</div><div class="mgrid">';
+  function mc(l,v,alert){
+    return '<div class="mi"><div class="ml">'+esc(l)+'</div>'
+      +'<div class="mv" style="color:'+(alert?'#dc2626':'var(--text)')+'">'+esc(v||'--')+'</div></div>';
   }
-  html+=infoCell('T-Live',tl?fmtDate(tl):'Not Set',!tl);
-  html+=infoCell('Revised T-Live',getRevisedTempLive(r)?fmtDate(getRevisedTempLive(r)):'--',false);
-  html+=infoCell('Final Live',fl?fmtDate(fl):'--',false);
-  html+=infoCell('Est. SAT (T-Live+45d)',sat?fmtDate(sat):'--',false);
-  html+=infoCell('Est. UAT (SAT+10d)',uat?fmtDate(uat):'--',false);
-  html+=infoCell('Days to T-Live',d!==null?(d<0?Math.abs(d)+'d overdue':d+'d away'):'Unknown',d!==null&&d<0);
-  html+=infoCell('IT Form',itFilled?'Filled':'Pending',!itFilled);
-  html+=infoCell('Temp Furniture',r['Temp Furniture']||'--',false);
-  html+='</div>';
-  html+='</div>';
+  html+=mc('Temp Live',tl?fmtDate(tl):'Not Set',!tl);
+  html+=mc('Revised T-Live',getRevisedTempLive(r)?fmtDate(getRevisedTempLive(r)):'--',false);
+  html+=mc('Final Live',fl?fmtDate(fl):'--',false);
+  html+=mc('Est. SAT (T+45d)',sat?fmtDate(sat):'--',false);
+  html+=mc('Est. UAT (SAT+10d)',uat?fmtDate(uat):'--',false);
+  html+=mc('Days to T-Live',d!==null?(d<0?Math.abs(d)+'d overdue':d+'d away'):'Unknown',d!==null&&d<0);
+  html+=mc('IT Form',itFilled?'Filled':'Pending',!itFilled);
+  html+=mc('Temp Furniture',r['Temp Furniture']||'--',false);
+  html+='</div></div>';
 
   // ── NSO Status
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">NSO Status (929 Checklist)</div>';
   var nsoBg=nsoSt.status==='done'?'#f0fdf4':nsoSt.status==='pending'?'#fffbeb':'var(--surface)';
   var nsoClr=nsoSt.status==='done'?'#16a34a':nsoSt.status==='pending'?'#d97706':'var(--muted)';
-  html+='<div style="padding:12px;border-radius:8px;background:'+nsoBg+';border:1px solid '+(nsoSt.status==='done'?'#86efac':nsoSt.status==='pending'?'#fde68a':'var(--border)')+'">'
+  var nsoBorder=nsoSt.status==='done'?'#86efac':nsoSt.status==='pending'?'#fde68a':'var(--border)';
+  html+='<div class="msec"><div class="mst">NSO Status (929 Checklist)</div>'
+    +'<div style="padding:10px 12px;border-radius:8px;background:'+nsoBg+';border:1px solid '+nsoBorder+'">'
     +'<div style="font-size:12px;font-weight:700;color:'+nsoClr+';margin-bottom:4px">'
     +(nsoSt.status==='done'?'✅ 929 Done':nsoSt.status==='pending'?'⏳ 929 Pending':'— No NSO Update')
     +'</div>'
     +(nsoSt.text?'<div style="font-size:11px;color:var(--muted)">'+esc(nsoSt.text)+'</div>':'')
-    +'</div>';
-  html+='</div>';
+    +'</div></div>';
 
   // ── Department Status
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">Department Status (Latest Updates)</div>';
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px">';
+  html+='<div class="msec"><div class="mst">Department Status</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:7px">';
   DEPTS.forEach(function(dept){
     var status=(deptMap[dept]||'').trim();
     var clr=DEPT_COLOR[dept]||{bg:'var(--surface)',color:'var(--muted)',border:'var(--border)'};
-    html+='<div style="padding:8px 12px;border-radius:7px;background:'+clr.bg+';border:1px solid '+clr.border+';opacity:'+(status?1:.6)+'">'
-      +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+clr.color+';margin-bottom:4px">'+esc(dept)+'</div>'
-      +'<div style="font-size:11px;color:var(--text);line-height:1.4">'+(status?esc(status):'<span style="color:var(--muted)">No update yet</span>')+'</div>'
+    html+='<div style="padding:7px 10px;border-radius:7px;background:'+clr.bg+';border:1px solid '+clr.border+';opacity:'+(status?1:.55)+'">'
+      +'<div style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:'+clr.color+';margin-bottom:3px">'+esc(dept)+'</div>'
+      +'<div style="font-size:11px;color:var(--text);line-height:1.4">'+(status?esc(status):'<span style="color:var(--muted)">—</span>')+'</div>'
       +'</div>';
   });
-  html+='</div>';
-  html+='</div>';
+  html+='</div></div>';
 
-  // ── Daily Updates (editable)
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title" style="display:flex;align-items:center;justify-content:space-between">'
-    +'<span>Daily Updates</span>'
-    +'<span style="font-size:10px;color:var(--muted);font-weight:400">Click any cell to edit · Changes save locally</span>'
-    +'</div>';
-
-  if(dateCols.length){
-    html+='<div style="overflow-x:auto"><table class="upd-table">';
-    html+='<thead><tr><th style="text-align:left;position:sticky;left:0;z-index:2">Date</th><th>Update</th></tr></thead>';
-    html+='<tbody>';
-    dateCols.slice().reverse().forEach(function(col){
-      var val=(r[col]||'').trim();
-      html+='<tr>'
-        +'<td style="font-size:11px;font-weight:600;white-space:nowrap;padding:6px 10px;vertical-align:top;color:var(--muted);min-width:80px">'+esc(col)+'</td>'
-        +'<td style="padding:4px">'
-        +'<div class="upd-cell" contenteditable="true" data-col="'+esc(col)+'" data-idx="'+idx+'" '
-        +'onblur="saveUpdate(this)" onkeydown="if(event.key===\'Escape\')this.blur()"'
-        +'>'+esc(val)+'</div>'
-        +'</td>'
-        +'</tr>';
-    });
-    html+='</tbody></table></div>';
-  } else {
-    html+='<div style="font-size:11px;color:var(--muted)">No date columns detected in the uploaded CSV.</div>';
+  // ── Daily Updates (projects-tracker style)
+  var siteEdits=NSO_UPDATES[sn]||{};
+  // Collect cols that have content (manual or CSV) in reverse order
+  var visibleCols=dateCols.slice().reverse().filter(function(col){
+    return (siteEdits[col]!==undefined&&siteEdits[col]!=='')||(r[col]||'').trim();
+  });
+  // Also find carry-forward: latest col with no content but a prior manual edit
+  var cfCol=null,cfText='',cfFromCol='';
+  for(var ci=dateCols.length-1;ci>=0;ci--){
+    var cc=dateCols[ci];
+    if((siteEdits[cc]!==undefined&&siteEdits[cc]!=='')||(r[cc]||'').trim()) break; // has content, no need for cf
+    // empty — check if there's a prior manual edit
+    var cf=getEffectiveUpdate(r,cc);
+    if(cf&&cf.source==='carried'){cfCol=cc;cfText=cf.text;cfFromCol=cf.fromCol;break;}
   }
-  html+='</div>';
+
+  var updEntries='';
+  visibleCols.forEach(function(col){
+    var eff=getEffectiveUpdate(r,col);
+    var k=col.replace(/ /g,'_');
+    var isManual=eff.source==='manual';
+    var badge=isManual?'<span class="u-m">Manual</span>':'';
+    var clearBtn=isManual?'<button class="btn btn-o btn-sm" style="font-size:10px;padding:2px 7px;color:#dc2626;border-color:#fca5a5" onclick="clearNSOUpd(\''+esc(col)+'\','+idx+')">Clear</button>':'';
+    updEntries+='<div class="uentry">'
+      +'<div class="ubar">'
+      +'<span class="udlbl">'+esc(col)+badge+'</span>'
+      +'<div style="display:flex;gap:5px">'+clearBtn+'<button class="btn btn-o btn-sm" onclick="toggleNSOUpd(\''+esc(col)+'\','+idx+')">Edit</button></div>'
+      +'</div>'
+      +'<div class="utxt" id="utxt-'+k+'-'+idx+'">'+esc(eff.text)+'</div>'
+      +'<div class="uedit" id="ued-'+k+'-'+idx+'">'
+      +'<textarea id="uta-'+k+'-'+idx+'">'+esc(eff.text)+'</textarea>'
+      +'<div class="erow">'
+      +'<button class="btn btn-p btn-sm" onclick="saveNSOUpd(\''+esc(col)+'\','+idx+')">Save</button>'
+      +'<button class="btn btn-o btn-sm" onclick="cancelNSOUpd(\''+esc(col)+'\','+idx+')">Cancel</button>'
+      +'</div></div></div>';
+  });
+  if(cfCol){
+    var cfk=cfCol.replace(/ /g,'_');
+    updEntries+='<div class="uentry" style="opacity:.7">'
+      +'<div class="ubar">'
+      +'<span class="udlbl">'+esc(cfCol)+'<span class="u-cf">↑ carried from '+esc(cfFromCol)+'</span></span>'
+      +'<button class="btn btn-o btn-sm" onclick="toggleNSOUpd(\''+esc(cfCol)+'\','+idx+')">Edit</button>'
+      +'</div>'
+      +'<div class="utxt u-carried" id="utxt-'+cfk+'-'+idx+'">'+esc(cfText)+'</div>'
+      +'<div class="uedit" id="ued-'+cfk+'-'+idx+'">'
+      +'<textarea id="uta-'+cfk+'-'+idx+'">'+esc(cfText)+'</textarea>'
+      +'<div class="erow">'
+      +'<button class="btn btn-p btn-sm" onclick="saveNSOUpd(\''+esc(cfCol)+'\','+idx+')">Save</button>'
+      +'<button class="btn btn-o btn-sm" onclick="cancelNSOUpd(\''+esc(cfCol)+'\','+idx+')">Cancel</button>'
+      +'</div></div></div>';
+  }
+  if(!updEntries) updEntries='<div style="font-size:12px;color:var(--muted);padding:6px 0">No updates yet. Add one below.</div>';
+
+  var todayColVal=getTodayColNSO();
+  html+='<div class="msec"><div class="mst">Daily Updates</div>'
+    +updEntries
+    +'<div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>'
+    +'<div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span>'
+    +'<input type="text" id="nd-nso-'+idx+'" value="'+esc(todayColVal)+'" placeholder="e.g. 17 May">'
+    +'</div><textarea id="nt-nso-'+idx+'" placeholder="Write update… (supports multi-line, dept labels like NSO:, IT:)"></textarea>'
+    +'<div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addNSOUpd('+idx+')">Add Update</button></div>'
+    +'</div></div></div>';
 
   // ── Manual T-Live entry
-  html+='<div class="modal-section">';
-  html+='<div class="modal-section-title">Manual Temp Live Date Entry</div>';
-  html+='<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">';
-  html+='<input type="text" id="manual-tlive" placeholder="e.g. 15 Jul 26" value="'+esc(r['Temp Live Date']||'')+'" '
-    +'style="padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:\'Inter\',sans-serif;outline:none;width:160px">';
-  html+='<button class="btn btn-p btn-sm" onclick="saveManualTLive('+idx+')">Save T-Live</button>';
-  html+='<span style="font-size:11px;color:var(--muted)">Updates the "Temp Live Date" field for this site locally.</span>';
-  html+='</div>';
-  html+='</div>';
+  html+='<div class="msec"><div class="mst">Manual Temp Live Date</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">'
+    +'<input type="text" id="manual-tlive" placeholder="e.g. 15 Jul 26" value="'+esc(r['Temp Live Date']||'')+'" '
+    +'style="padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:\'Inter\',sans-serif;outline:none;width:160px">'
+    +'<button class="btn btn-p btn-sm" onclick="saveManualTLive('+idx+')">Save T-Live</button>'
+    +'<span style="font-size:11px;color:var(--muted)">Updates Temp Live Date locally.</span>'
+    +'</div></div>';
 
   document.getElementById('modal-body').innerHTML=html;
   document.getElementById('modal-overlay').classList.add('open');
 }
 
 function closeModal(){ document.getElementById('modal-overlay').classList.remove('open'); }
-
-// Editable update cell save
-function saveUpdate(el){
-  var col=el.getAttribute('data-col');
-  var idx=parseInt(el.getAttribute('data-idx'));
-  var newVal=el.textContent||'';
-  if(!allData[idx]) return;
-  allData[idx][col]=newVal;
-  // Re-parse filtered, re-render KPIs (don't close modal)
-  applyFilters();
-  renderKPIs();
-  toast('Update saved locally — re-upload CSV to persist');
-}
 
 function saveManualTLive(idx){
   var inp=document.getElementById('manual-tlive');
@@ -1046,19 +1210,39 @@ function exportNSOCSV(){
 }
 
 // ─────────────────────────────────────────────────────────
-// AUTO-LOAD FROM WORKER
+// LOAD FROM WORKER (auto-load + manual button)
 // ─────────────────────────────────────────────────────────
-(function loadFromWorker(){
-  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0) return;
-  C24Uploader.fetchText(WORKER_URL+NSO_TOOL_PATH+'.csv',{cache:'no-store'})
+function loadFromServer(manual){
+  if(!WORKER_URL||WORKER_URL.indexOf('REPLACE-ME')>=0){
+    if(manual) toast('Worker URL not configured');
+    return;
+  }
+  // Load manual updates first so they survive the CSV merge
+  loadNSOUpdates();
+  var url=WORKER_URL.replace(/\/+$/,'')+'/'+NSO_TOOL_PATH+'.csv';
+  var btn=document.getElementById('load-server-btn');
+  if(btn){btn.disabled=true;btn.textContent='Loading…';}
+  C24Uploader.fetchText(url,{skeleton:false})
     .then(function(text){
-      if(!text||text.trim().length<10) return;
+      if(btn){btn.disabled=false;btn.textContent='↓ Load from Server';}
+      if(!text||text.trim().length<10){
+        toast('⚠ Worker returned empty data — is nso-tracker.csv uploaded?');
+        console.warn('[NSO] Worker returned empty/short response for',url);
+        return;
+      }
       loadNSOData(text);
-      toast('NSO data loaded from server');
+      toast('✓ NSO data loaded from server ('+allData.length+' sites)');
     })
-    .catch(function(){
-      // Silently fail — user can upload manually
+    .catch(function(err){
+      if(btn){btn.disabled=false;btn.textContent='↓ Load from Server';}
+      var msg=err&&err.message?err.message:'fetch failed';
+      toast('✗ Worker error: '+msg);
+      console.error('[NSO] Worker fetch failed:',url,err);
     });
+}
+
+(function autoLoad(){
+  loadFromServer(false);
 })();
 
 // ─────────────────────────────────────────────────────────
@@ -1071,6 +1255,7 @@ function exportNSOCSV(){
   if(allData.length){ buildFilters(); renderKPIs(); }
   renderCurrentView();
   document.getElementById('count-chip').textContent=allData.length+' sites';
+  loadNSOUpdates();
 })();
 </script>
 </body>

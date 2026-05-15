@@ -1751,6 +1751,9 @@ function saveU(d,idx){
   if(!ta) return;
   const v=ta.value;
   allData[idx][d]=v;
+  // Persist manual edit
+  const sn=(allData[idx]['Site Name']||'').trim();
+  if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=v; saveHOTPUpdates(); }
   const t=document.getElementById(`utxt-${k}-${idx}`);
   if(t){t.textContent=v;t.style.display='block';}
   const e2=document.getElementById(`ued-${k}-${idx}`);
@@ -1764,6 +1767,9 @@ function addU(idx){
   if(!d||!t2){toast('Fill date and update','err');return;}
   if(!DATE_COLS.includes(d)) DATE_COLS.push(d);
   allData[idx][d]=t2;
+  // Persist manual edit
+  const sn=(allData[idx]['Site Name']||'').trim();
+  if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=t2; saveHOTPUpdates(); }
   toast('Added','ok');
   openModal(idx);
   applyFilters();
@@ -1837,6 +1843,7 @@ function handleCSV(event){
       const parsed=parseCSV(e.target.result);
       if(!parsed.length){toast('No data found','err');return;}
       allData=parsed.filter(function(r){return (r['Site Name']||'').trim();});filteredData=[...allData];
+      applyHOTPUpdates();
       buildFilters();renderKPIs();renderAll();
       stampCSV('hotp');
       var sv=document.getElementById('slackv');if(sv&&sv.style.display!=='none') renderSlackTab();
@@ -4273,6 +4280,45 @@ const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
 const TICKET_TOOL_PATH = 'tickets';
 const EMAIL_LOG_KEY = '__email_log';
+const HOTP_UPDATES_TOOL = 'hotp-updates';
+var HOTP_UPDATES = {};  // { siteName: { dateCol: text } }
+var _hotpUpdatesDirty = false;
+
+function loadHOTPUpdates(){
+  if(location.protocol==='file:') return Promise.resolve();
+  var url=WORKER_URL+HOTP_UPDATES_TOOL+'-mappings.json';
+  return fetch(url,{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():{}; })
+    .then(function(data){
+      HOTP_UPDATES=(data&&typeof data==='object'&&!Array.isArray(data))?data:{};
+      applyHOTPUpdates();
+    })
+    .catch(function(e){ console.warn('loadHOTPUpdates failed:',e); });
+}
+
+function saveHOTPUpdates(){
+  if(location.protocol==='file:') return;
+  var url=WORKER_URL.replace(/\/+$/,'')+'/mappings';
+  fetch(url,{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Tool-Path':HOTP_UPDATES_TOOL},
+    body:JSON.stringify(HOTP_UPDATES)
+  }).then(function(r){return r.json();})
+    .then(function(j){if(!j.success) toast('Update save failed: '+(j.error||r.status),'err');})
+    .catch(function(e){ toast('Network error saving update','err'); });
+}
+
+function applyHOTPUpdates(){
+  allData.forEach(function(row){
+    var sn=(row['Site Name']||'').trim();
+    var edits=HOTP_UPDATES[sn];
+    if(!edits) return;
+    Object.keys(edits).forEach(function(col){
+      row[col]=edits[col];
+      if(!DATE_COLS.includes(col)) DATE_COLS.push(col);
+    });
+  });
+}
 
 // In-memory email sent log: { siteName: { sat_delay: {sentAt, count}, ... } }
 var EMAIL_LOG = {};
@@ -4380,7 +4426,8 @@ function emailLogBadge(siteName, emailType){
   if (location.protocol === 'file:') return;
   Promise.all([
     C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
-    loadEmailLog()
+    loadEmailLog(),
+    loadHOTPUpdates()
   ]).then(function(results){
       var text = results[0];
       var parsed = parseCSV(text);
@@ -4388,6 +4435,7 @@ function emailLogBadge(siteName, emailType){
         __originLoaded = true;
         allData = parsed.filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
+        applyHOTPUpdates();
         buildFilters();
         renderKPIs();
         renderAll();
