@@ -267,6 +267,44 @@ td{padding:7px 12px;vertical-align:middle}
 .toast.show{opacity:1;transform:translateY(0)}
 .toast.ok{background:#16a34a}.toast.err{background:#dc2626}
 ::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+@media(max-width:640px){
+  html,body{height:auto;overflow:auto}
+  #main-scroll{overflow:visible;flex:none;min-height:60vh}
+  header{padding:8px 12px;gap:8px}
+  .logo img{height:26px}
+  .logo h1{font-size:13px}
+  .logo p{display:none}
+  .hdr-r{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;padding-bottom:2px;scrollbar-width:none;max-width:calc(100vw - 160px)}
+  .hdr-r::-webkit-scrollbar{display:none}
+  .kpi{min-width:60px;padding:6px 0}
+  .kpi-v{font-size:16px}
+  .kpi-l,.kpi-s{font-size:9px}
+  .toolbar{padding:6px 10px;gap:5px}
+  .sw{min-width:130px}
+  .vtabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  .vtabs::-webkit-scrollbar{display:none}
+  .vtab{white-space:nowrap;padding:4px 9px;font-size:10px}
+  .chk-btn{min-width:110px;font-size:11px}
+  .su-grid{grid-template-columns:1fr!important}
+  .mgrid{grid-template-columns:1fr!important}
+  .overlay{padding:0;align-items:flex-end}
+  .modal{border-radius:13px 13px 0 0;max-height:90vh;max-width:100%}
+  .inv-tabs{padding:0 10px;overflow-x:auto;flex-wrap:nowrap}
+  .inv-tab{white-space:nowrap;padding:8px 12px;font-size:11px}
+  .inv-content{padding:10px 12px}
+  .ig-grid{grid-template-columns:1fr}
+  .warn-card-top{flex-direction:column;gap:6px}
+  .warn-days{font-size:18px}
+  .warn-meta{gap:8px}
+  .su-grid{grid-template-columns:1fr}
+  #suv,#taskv,#pmsv,#tickv,#slackv,#bdv{padding:10px 12px}
+  #taskv{overflow-y:visible;flex:none}
+  .mbody{padding:12px 14px}
+  .mgrid{grid-template-columns:1fr}
+  .date-badge,.warn-badge{font-size:11px;padding:4px 8px}
+  .btn{padding:5px 10px;font-size:11px}
+  .btn-sm{padding:3px 7px;font-size:10px}
+}
 @media(max-width:600px){.mgrid{grid-template-columns:1fr}.su-grid{grid-template-columns:1fr}header{padding:8px 12px}.toolbar{padding:7px 12px}}
 
 #main-scroll{flex:1;overflow-y:auto;overflow-x:auto;min-height:0}
