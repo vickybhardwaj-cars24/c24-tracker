@@ -383,7 +383,12 @@ function parseExcel(buffer) {
         newInitiatives: Number(r[14])||0,
         itCost: Number(r[15])||0,
         hrcTotal: Number(r[16])||0,
+        hrcCapex: Number(r[17])||0,
+        hrcItCost: Number(r[18])||0,
+        hrcMaint: Number(r[19])||0,
         totalMaint: Number(r[20])||0,
+        infraMaint: Number(r[21])||0,
+        vmMaint: Number(r[22])||0,
         grandTotal: Number(r[23])||0,
       });
     }
@@ -391,9 +396,11 @@ function parseExcel(buffer) {
 
   if (c2bSheet) {
     const raw = XLSX.utils.sheet_to_json(c2bSheet, {header:1, defval:null});
-    for (let i = 1; i < raw.length; i++) {
+    let c2bHi = raw.findIndex(r => r && r.some(c => String(c||'').includes('Hub Name')));
+    if (c2bHi < 0) c2bHi = 2;
+    for (let i = c2bHi+1; i < raw.length; i++) {
       const r = raw[i];
-      if (!r || !r[0]) continue;
+      if (!r || !r[0] || String(r[0]).trim()==='Hub Name') continue;
       c2bRows.push({
         hub: String(r[0]||'').trim(),
         city: String(r[1]||'').trim(),
