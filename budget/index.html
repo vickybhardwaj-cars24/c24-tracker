@@ -1,0 +1,851 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>Capex Budget FY 26-27 — CARS24</title>
+<script src="/shared/c24-favicon.js"></script>
+<script src="/shared/c24-uploader.js"></script>
+<script>
+  (function(){
+    try{var t=localStorage.getItem('c24-theme');if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(_){}
+  })();
+  tailwind.config={darkMode:'class'}
+</script>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  *{box-sizing:border-box}
+  body{font-family:'Inter',sans-serif;margin:0;padding:0}
+  ::-webkit-scrollbar{width:5px;height:5px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:#4736FE55;border-radius:3px}
+  .fade-in{animation:fadeIn .2s ease}
+  @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  td,th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .tooltip-box{pointer-events:none;z-index:9999}
+</style>
+</head>
+<body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
+<div id="root"></div>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useRef, useMemo, useCallback } = React;
+
+// ── Data ──────────────────────────────────────────────────────────────────
+
+const GS_HUB_DATA = [
+  // Delhi/NCR
+  {costCenter:'',hub:'CARS24 Hub, Rajouri Garden',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Minor Upgrade',parking:'Covered',slots:90,totalCapex:1470000,infraCost:1000000,slotMarking:0,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2070000},
+  {costCenter:'',hub:'CARS24 Hub, Metro Walk, Rohini',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Major Upgrade',parking:'Open',slots:150,totalCapex:2220000,infraCost:500000,slotMarking:0,vm:100000,newInitiatives:1420000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2970000},
+  {costCenter:'Rohini Existing HRC',hub:'Rohini Existing HRC',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1050000,totalMaint:0,grandTotal:1050000},
+  {costCenter:'06,10,237,1001u',hub:'Cars24 Hub, DLF South Court, Saket',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Minor Upgrade',parking:'Covered',slots:80,totalCapex:1560000,infraCost:1000000,slotMarking:90000,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2160000},
+  {costCenter:'06,14,206,1493/06,14,237,1401b',hub:'CARS24 Hub, Gaur City Mall, Greater Noida',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:1035000,infraCost:500000,slotMarking:90000,vm:25000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1635000},
+  {costCenter:'06,11,237,1101b/06,11,206,1101c',hub:'CARS24 Hub, M3M Urbana, Gurugram',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:250,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
+  {costCenter:'',hub:'CARS24 Hub, Gurgaon Sector 18',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Major Upgrade',parking:'Open',slots:100,totalCapex:5670000,infraCost:3750000,slotMarking:200000,vm:100000,newInitiatives:1420000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:6420000},
+  {costCenter:'New Gurgaon HRC',hub:'New Gurgaon HRC',city:'Delhi/NCR',stage:'Active',zone:'North',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
+  {costCenter:'Gurgaon Existing HRC',hub:'Gurgaon Existing HRC',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1050000,totalMaint:0,grandTotal:1050000},
+  {costCenter:'',hub:'CARS24, Soul City Mall, Dwarka',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:77,totalCapex:420000,infraCost:0,slotMarking:0,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1020000},
+  {costCenter:'',hub:'CARS24 Hub, Faridabad',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Open',slots:81,totalCapex:1320000,infraCost:0,slotMarking:0,vm:0,newInitiatives:1120000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2070000},
+  {costCenter:'',hub:'CARS24 Hub, GNB Mall, Ghaziabad',city:'Delhi/NCR',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
+  {costCenter:'Vikaspuri',hub:'Vikaspuri',city:'Delhi/NCR',stage:'YTL',zone:'North',category:'NSO',parking:'Covered',slots:0,totalCapex:2180000,infraCost:1500000,slotMarking:30000,vm:130000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:500000,grandTotal:2680000},
+  {costCenter:'Sonipat',hub:'Sonipat',city:'Delhi/NCR',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5550000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:570000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6150000},
+  {costCenter:'Karnal',hub:'Karnal',city:'Delhi/NCR',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5550000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:570000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6150000},
+  {costCenter:'MLCP Noida Replacement',hub:'MLCP Noida Replacement',city:'Delhi/NCR',stage:'YTL',zone:'North',category:'Replacement',parking:'Covered',slots:0,totalCapex:2690000,infraCost:2000000,slotMarking:90000,vm:180000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:3290000},
+  // Bangalore
+  {costCenter:'',hub:'CARS24 Hub, Bellahalli, Jakkur Post',city:'Bangalore',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Open',slots:300,totalCapex:4245000,infraCost:1200000,slotMarking:200000,vm:225000,newInitiatives:2420000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4995000},
+  {costCenter:'Jakkur Existing HRC',hub:'Jakkur Existing HRC',city:'Bangalore',stage:'Active',zone:'South',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1700000,totalMaint:0,grandTotal:1700000},
+  {costCenter:'06,15,279,1589/06,15,264,1536',hub:'CARS24 Hub, GT World Mall',city:'Bangalore',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Covered',slots:120,totalCapex:2450000,infraCost:1340000,slotMarking:90000,vm:600000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:3050000},
+  {costCenter:'',hub:'CARS24 Hub, Bhoruka Tech Park, Whitefield',city:'Bangalore',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Covered',slots:130,totalCapex:2350000,infraCost:1340000,slotMarking:90000,vm:500000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2950000},
+  {costCenter:'',hub:'CARS24 Hub, Right Parking MLCP, Gandhi Nagar',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:120,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
+  {costCenter:'',hub:'CARS24 Hub, Nexus Whitefield Mall',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:116,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
+  {costCenter:'',hub:'CARS24 Hub, Vaishnavi Sapphire Centre, Yeswanthpur',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
+  {costCenter:'Bangalore Prem Hub',hub:'Bangalore Prem Hub',city:'Bangalore',stage:'YTD',zone:'South',category:'NSO',parking:'Open',slots:50,totalCapex:7650000,infraCost:5900000,slotMarking:80000,vm:500000,newInitiatives:870000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8400000},
+  {costCenter:'',hub:'CARS24 Hub, Nexus Mall Koramangala',city:'Bangalore',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:90,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
+  // Hyderabad
+  {costCenter:'',hub:'CARS24 Hub, Mantra Mall, Attapur',city:'Hyderabad',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:80,totalCapex:900000,infraCost:340000,slotMarking:90000,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1500000},
+  {costCenter:'',hub:'CARS24 Hub, Kompally',city:'Hyderabad',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Open',slots:250,totalCapex:3945000,infraCost:1150000,slotMarking:200000,vm:25000,newInitiatives:2370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4695000},
+  {costCenter:'Kompally Existing HRC',hub:'Kompally Existing HRC',city:'Hyderabad',stage:'Active',zone:'South',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:2400000,totalMaint:0,grandTotal:2400000},
+  {costCenter:'',hub:'CARS24 Hub, Bachupally',city:'Hyderabad',stage:'Active',zone:'South',category:'To be replaced',parking:'Open',slots:86,totalCapex:150000,infraCost:0,slotMarking:0,vm:150000,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:0,grandTotal:150000},
+  {costCenter:'Bachupally Replacement',hub:'Bachupally Replacement',city:'Hyderabad',stage:'YTL',zone:'South',category:'Replacement',parking:'YTD',slots:0,totalCapex:9870000,infraCost:7700000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:10620000},
+  {costCenter:'',hub:'CARS24 Hub, GVK One Mall',city:'Hyderabad',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:60,totalCapex:535000,infraCost:0,slotMarking:90000,vm:25000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1135000},
+  {costCenter:'Uppal',hub:'Uppal',city:'Hyderabad',stage:'YTD',zone:'South',category:'NSO',parking:'Open',slots:0,totalCapex:7850000,infraCost:5900000,slotMarking:80000,vm:700000,newInitiatives:870000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8600000},
+  // Chennai
+  {costCenter:'',hub:'CARS24 Hub, Karapakkam, OMR Road',city:'Chennai',stage:'Active',zone:'South',category:'Major Upgrade',parking:'Open',slots:113,totalCapex:3320000,infraCost:1250000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4070000},
+  {costCenter:'',hub:'CARS24 Hub, JP Parking Yard, Thiruverkadu',city:'Chennai',stage:'Active',zone:'South',category:'To be replaced',parking:'Open',slots:150,totalCapex:500000,infraCost:0,slotMarking:200000,vm:300000,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:0,grandTotal:500000},
+  {costCenter:'Thiruverkadu Replacement',hub:'Thiruverkadu Replacement',city:'Chennai',stage:'YTD',zone:'South',category:'Replacement',parking:'YTD',slots:0,totalCapex:6370000,infraCost:4200000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:7120000},
+  {costCenter:'06,20,206,2097/06,20,237,2001f',hub:'CARS24 Hub, Nexus Vijaya Mall, Vadapalani',city:'Chennai',stage:'Active',zone:'South',category:'Basic Upgrade',parking:'Covered',slots:100,totalCapex:900000,infraCost:340000,slotMarking:90000,vm:50000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1500000},
+  // Mumbai
+  {costCenter:'06,16,264,1674/06,16,237,1689',hub:'CARS24 Hub, Goregaon',city:'Mumbai',stage:'Active',zone:'West',category:'To be replaced',parking:'Covered',slots:100,totalCapex:90000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:600000,grandTotal:690000},
+  {costCenter:'Goregaon Replacement',hub:'Goregaon Replacement',city:'Mumbai',stage:'YTD',zone:'West',category:'Replacement',parking:'YTD',slots:0,totalCapex:5310000,infraCost:4200000,slotMarking:90000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5910000},
+  {costCenter:'',hub:'CARS24 Hub, Belapur',city:'Mumbai',stage:'Active',zone:'West',category:'Minor Upgrade',parking:'Covered',slots:100,totalCapex:1585000,infraCost:1000000,slotMarking:90000,vm:75000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:2185000},
+  {costCenter:'',hub:'CARS24 Hub, Kandivali',city:'Mumbai',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:92,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
+  {costCenter:'',hub:'CARS24 Hub, Regency Anantam, Dombivli East',city:'Mumbai',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:100,totalCapex:4210000,infraCost:1640000,slotMarking:200000,vm:0,newInitiatives:2170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4960000},
+  {costCenter:'Dombivli Existing HRC',hub:'Dombivli Existing HRC',city:'Mumbai',stage:'Active',zone:'West',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1750000,totalMaint:0,grandTotal:1750000},
+  {costCenter:'Dombivli New HRC',hub:'Dombivli New HRC',city:'Mumbai',stage:'YTD',zone:'West',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:4200000,totalMaint:0,grandTotal:4200000},
+  {costCenter:'',hub:'CARS24 Hub, Korum Mall, Thane West',city:'Mumbai',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:98,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
+  {costCenter:'Vasai-vihar',hub:'Vasai-vihar',city:'Mumbai',stage:'YTD',zone:'West',category:'NSO',parking:'Covered',slots:0,totalCapex:5550000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:570000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6150000},
+  // Pune
+  {costCenter:'06,17,206,1796/06,17,237,1784',hub:'CARS24 Hub, Tathawade',city:'Pune',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:300,totalCapex:4520000,infraCost:600000,slotMarking:200000,vm:150000,newInitiatives:3370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:5270000},
+  {costCenter:'Pune Existing HRC',hub:'Pune Existing HRC',city:'Pune',stage:'Active',zone:'West',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1200000,totalMaint:0,grandTotal:1200000},
+  {costCenter:'Pune New Hub',hub:'Pune New Hub',city:'Pune',stage:'YTD',zone:'West',category:'NSO',parking:'Open',slots:100,totalCapex:7650000,infraCost:5900000,slotMarking:80000,vm:500000,newInitiatives:870000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8400000},
+  {costCenter:'',hub:'CARS24 Hub, Amanora Mall',city:'Pune',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:270,totalCapex:850000,infraCost:340000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1450000},
+  // Ahmedabad
+  {costCenter:'',hub:'CARS24 Hub, Karnavati Club, S.G. Highway',city:'Ahmedabad',stage:'Active',zone:'West',category:'To be Replaced',parking:'Open',slots:150,totalCapex:400000,infraCost:0,slotMarking:200000,vm:200000,newInitiatives:0,itCost:0,hrcTotal:0,totalMaint:400000,grandTotal:800000},
+  {costCenter:'Karnavati Replacement',hub:'Karnavati Replacement',city:'Ahmedabad',stage:'YTD',zone:'West',category:'Replacement',parking:'YTD',slots:0,totalCapex:8070000,infraCost:5900000,slotMarking:200000,vm:500000,newInitiatives:1170000,itCost:300000,hrcTotal:0,totalMaint:750000,grandTotal:8820000},
+  {costCenter:'Naroda New HRC',hub:'Naroda New HRC',city:'Ahmedabad',stage:'YTD',zone:'West',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:2787500,totalMaint:0,grandTotal:2787500},
+  {costCenter:'',hub:'CARS24 Hub, Naroda',city:'Ahmedabad',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:200,totalCapex:4920000,infraCost:1000000,slotMarking:200000,vm:150000,newInitiatives:3370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:5670000},
+  // Other cities
+  {costCenter:'',hub:'Cars24 Hub, Bestech Mall, Chandigarh',city:'Chandigarh',stage:'Active',zone:'North',category:'Basic Upgrade',parking:'Covered',slots:110,totalCapex:810000,infraCost:0,slotMarking:90000,vm:300000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1410000},
+  {costCenter:'New Chandigarh HRC',hub:'New Chandigarh HRC',city:'Chandigarh',stage:'YTD',zone:'North',category:'HRC',parking:'Covered',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
+  {costCenter:'06,47,237,4787/06,47,206,4793',hub:'CARS24 Hub, Nishal Arcade, Surat',city:'Surat',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:75,totalCapex:1010000,infraCost:500000,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1610000},
+  {costCenter:'Surat HRC',hub:'Surat HRC',city:'Surat',stage:'YTD',zone:'West',category:'HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
+  {costCenter:'06,33,237,3390',hub:'Cars24 Hub, C21 Malhar Mall, Indore',city:'Indore',stage:'Active',zone:'West',category:'Basic Upgrade',parking:'Covered',slots:80,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
+  {costCenter:'',hub:'CARS24 Hub, Mansarovar, Jaipur',city:'Jaipur',stage:'Active',zone:'West',category:'Major Upgrade',parking:'Open',slots:160,totalCapex:3135000,infraCost:840000,slotMarking:200000,vm:525000,newInitiatives:1370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:3885000},
+  {costCenter:'Jaipur Existing HRC',hub:'Jaipur Existing HRC',city:'Jaipur',stage:'Active',zone:'West',category:'Existing HRC',parking:'Open',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:1350000,totalMaint:0,grandTotal:1350000},
+  {costCenter:'',hub:'CARS24 Hub, Avani Riverside Mall, Kolkata',city:'Kolkata',stage:'Active',zone:'East',category:'Basic Upgrade',parking:'Covered',slots:68,totalCapex:510000,infraCost:0,slotMarking:90000,vm:0,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1110000},
+  {costCenter:'',hub:'CARS24 Hub, Astra Tower, Kolkata',city:'Kolkata',stage:'Active',zone:'East',category:'Basic Upgrade',parking:'Covered',slots:120,totalCapex:610000,infraCost:0,slotMarking:90000,vm:100000,newInitiatives:270000,itCost:150000,hrcTotal:0,totalMaint:600000,grandTotal:1210000},
+  {costCenter:'Kolkata HRC',hub:'Kolkata HRC',city:'Kolkata',stage:'YTD',zone:'East',category:'HRC',parking:'Covered',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
+  {costCenter:'',hub:'CARS24 Hub, OP Road, Vadodara',city:'Vadodara',stage:'Active',zone:'West',category:'Minor Upgrade',parking:'Open',slots:90,totalCapex:1570000,infraCost:0,slotMarking:200000,vm:0,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2320000},
+  {costCenter:'',hub:'CARS24 Hub, Info Park, Kochi',city:'Kochi',stage:'Active',zone:'South',category:'Minor Upgrade',parking:'Open',slots:250,totalCapex:1670000,infraCost:0,slotMarking:200000,vm:100000,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2420000},
+  {costCenter:'',hub:'CARS24 Hub, Gomti Nagar, Lucknow',city:'Lucknow',stage:'Active',zone:'North',category:'To be replaced',parking:'Covered',slots:200,totalCapex:460000,infraCost:0,slotMarking:140000,vm:50000,newInitiatives:270000,itCost:0,hrcTotal:0,totalMaint:0,grandTotal:460000},
+  {costCenter:'Lucknow Replacement',hub:'Lucknow Replacement',city:'Lucknow',stage:'YTD',zone:'North',category:'Replacement',parking:'Covered',slots:0,totalCapex:5910000,infraCost:4200000,slotMarking:90000,vm:500000,newInitiatives:870000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:6510000},
+  {costCenter:'New Lucknow HRC',hub:'New Lucknow HRC',city:'Lucknow',stage:'YTD',zone:'North',category:'HRC',parking:'Covered',slots:0,totalCapex:0,infraCost:0,slotMarking:0,vm:0,newInitiatives:0,itCost:0,hrcTotal:5100000,totalMaint:0,grandTotal:5100000},
+  {costCenter:'',hub:'CARS24 Hub, Atal Path, Patna',city:'Patna',stage:'Active',zone:'East',category:'Major Upgrade',parking:'Open',slots:70,totalCapex:3610000,infraCost:1340000,slotMarking:200000,vm:500000,newInitiatives:1370000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:4360000},
+  {costCenter:'',hub:'CARS24 Hub, Vivekananda Nagar, Coimbatore',city:'Coimbatore',stage:'Active',zone:'South',category:'Minor Upgrade',parking:'Open',slots:100,totalCapex:2110000,infraCost:340000,slotMarking:200000,vm:200000,newInitiatives:1170000,itCost:200000,hrcTotal:0,totalMaint:750000,grandTotal:2860000},
+  {costCenter:'Kanpur',hub:'Kanpur',city:'Kanpur',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+  {costCenter:'Dehradun',hub:'Dehradun',city:'Dehradun',stage:'YTD',zone:'North',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+  {costCenter:'Bhopal',hub:'Bhopal',city:'Bhopal',stage:'YTD',zone:'West',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+  {costCenter:'Vizag',hub:'Vizag',city:'Vizag',stage:'YTD',zone:'South',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+  {costCenter:'Bhubaneshwar',hub:'Bhubaneshwar',city:'Bhubaneshwar',stage:'YTD',zone:'East',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+  {costCenter:'Ranchi/Raipur',hub:'Ranchi/Raipur',city:'Ranchi/Raipur',stage:'YTD',zone:'East',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+  {costCenter:'Rajkot',hub:'Rajkot',city:'Rajkot',stage:'YTD',zone:'West',category:'NSO',parking:'Covered',slots:50,totalCapex:5250000,infraCost:4200000,slotMarking:30000,vm:500000,newInitiatives:270000,itCost:250000,hrcTotal:0,totalMaint:600000,grandTotal:5850000},
+];
+
+const C2B_DATA = [
+  {hub:'Pune_Cars24 Parking',zone:'West'},
+  {hub:'Ahmedabad-3 Parking',zone:'West'},
+  {hub:'Surat-3 Parking',zone:'West'},
+  {hub:'Rajkot-2 Parking',zone:'West'},
+  {hub:'Bhopal-2 Parking',zone:'West'},
+  {hub:'Gwalior Parking',zone:'West'},
+  {hub:'Indore Parking',zone:'West'},
+  {hub:'Raipur Parking',zone:'West'},
+  {hub:'Nagpur Parking',zone:'West'},
+  {hub:'Aurangabad Parking',zone:'West'},
+  {hub:'Nashik Parking',zone:'West'},
+  {hub:'Mumbai Parking',zone:'West'},
+  {hub:'Bhubaneswar Parking',zone:'West'},
+  {hub:'Chennai Parking',zone:'South'},
+  {hub:'Hyderabad-2 Parking',zone:'South'},
+  {hub:'Bangalore Parking',zone:'South'},
+  {hub:'Kochi Parking',zone:'South'},
+  {hub:'Mysore Parking',zone:'South'},
+  {hub:'Jaipur Parking-2',zone:'RON'},
+  {hub:'Lucknow Parking',zone:'RON'},
+  {hub:'Meerut Parking',zone:'RON'},
+  {hub:'Dehradun Parking',zone:'RON'},
+  {hub:'Chandigarh Parking',zone:'RON'},
+  {hub:'Ludhiana Parking',zone:'RON'},
+  {hub:'Gurgaon Parking 2',zone:'North'},
+  {hub:'Noida Sec-37 Parking',zone:'North'},
+  {hub:'Metrowalk Parking Yard',zone:'North'},
+].map(r => ({...r, totalCapex:300000, infraNetworking:200000, rack:100000}));
+
+const ASSUMPTIONS = {
+  infraCost: {
+    'NSO': [
+      {label:'CEC (Civil, Electrical, Carpentry)', amount:2000000},
+      {label:'OPS Setup', amount:1000000},
+      {label:'Delivery Area', amount:500000},
+      {label:'VM Branding', amount:700000},
+    ],
+    'Major Upgrade': [
+      {label:'CEC Works', amount:1000000},
+      {label:'Ops Upgrade', amount:500000},
+      {label:'Delivery Area', amount:200000},
+    ],
+    'Minor Upgrade': [
+      {label:'Painting', amount:80000},
+      {label:'Washroom Renovation', amount:60000},
+      {label:'Electrical & AC', amount:50000},
+      {label:'Yard Repairs & Revamp', amount:100000},
+      {label:'Furniture', amount:50000},
+    ],
+    'Basic Upgrade': [
+      {label:'Painting', amount:80000},
+      {label:'Washroom Renovation', amount:60000},
+      {label:'Electrical & AC', amount:50000},
+      {label:'Yard Repairs', amount:100000},
+      {label:'Furniture', amount:50000},
+    ],
+    'Replacement': [
+      {label:'Full hub rebuild — same as NSO package', amount:null},
+    ],
+    'HRC': [
+      {label:'Studio Setup', amount:1200000},
+      {label:'Shed and PCC', amount:800000},
+      {label:'Paint Booth', amount:400000},
+      {label:'Washroom Renovation', amount:300000},
+      {label:'Lift (4 nos)', amount:650000},
+      {label:'Compressor & Pneumatic Lines', amount:250000},
+      {label:'New Paint Booth', amount:1000000},
+      {label:'Misc Equipments', amount:150000},
+    ],
+  },
+  itCost: {
+    'Covered': [{label:'IT Equipment (Covered Hub)', amount:150000}],
+    'Open': [{label:'IT Equipment (Open Hub)', amount:200000}],
+    'NSO-Open': [{label:'IT NSO Setup', amount:250000},{label:'Router', amount:50000}],
+    'NSO-Covered': [{label:'IT NSO Setup', amount:200000},{label:'Router', amount:50000}],
+    'HRC': [{label:'IT Work — HRC', amount:200000}],
+  },
+  vm: {
+    'default': [{label:'VM Initiatives & Branding', amount:null},{label:'Pylon/Mascot/Digital Host/Markers as applicable', amount:null}],
+    'NSO': [{label:'VM Branding (included in Infra Cost)', amount:0}],
+  },
+  slotMarking: {
+    'NSO': [{label:'Slot Marking & Painting — NSO', amount:30000}],
+    'Upgrade-Covered': [{label:'Slot Marking & Painting', amount:90000}],
+    'Upgrade-Open': [{label:'Slot Marking & Painting', amount:200000}],
+  },
+  totalMaint: {
+    'Covered': [{label:'Infra Maintenance', amount:300000},{label:'VM Maintenance (Closed Hub)', amount:300000}],
+    'Open': [{label:'Infra Maintenance', amount:400000},{label:'VM Maintenance (Open Hub)', amount:350000}],
+    'NSO-Covered': [{label:'Infra Maintenance', amount:300000},{label:'VM Maintenance', amount:200000}],
+    'NSO-Open': [{label:'Infra Maintenance', amount:400000},{label:'VM Maintenance', amount:350000}],
+  },
+  hrcTotal: {
+    'Existing HRC': [{label:'HRC Maintenance (12 months)', amount:null},{label:'~10.5L per HRC per year', amount:null}],
+    'New HRC': [{label:'New HRC Full Setup — see Infra Cost breakdown', amount:null}],
+    'HRC': [{label:'HRC Setup (Capex)', amount:null},{label:'See Infra Cost column for breakdown', amount:null}],
+  },
+};
+
+// ── Helpers ───────────────────────────────────────────────────────────────
+
+function fmtMoney(v, short=false) {
+  if (!v || v === 0) return '—';
+  if (short) {
+    if (v >= 10000000) return `₹${(v/10000000).toFixed(2)}Cr`;
+    if (v >= 100000) return `₹${(v/100000).toFixed(2)}L`;
+    if (v >= 1000) return `₹${(v/1000).toFixed(1)}K`;
+  }
+  return '₹' + Math.round(v).toLocaleString('en-IN');
+}
+
+function fmtL(v) {
+  if (!v) return '—';
+  return `₹${(v/100000).toFixed(2)}L`;
+}
+
+function uniqSorted(arr) { return [...new Set(arr.filter(Boolean))].sort(); }
+
+function getAssumptions(col, row) {
+  const cat = row.category || '';
+  const park = row.parking || '';
+  if (col === 'infraCost') {
+    const key = cat.includes('NSO') ? 'NSO' : cat.includes('Major') ? 'Major Upgrade' : cat.includes('Minor') ? 'Minor Upgrade' : cat.includes('Basic') ? 'Basic Upgrade' : cat.includes('Replacement') ? 'Replacement' : cat === 'HRC' ? 'HRC' : null;
+    return key ? (ASSUMPTIONS.infraCost[key] || []) : [];
+  }
+  if (col === 'itCost') {
+    const key = cat.includes('NSO') ? (park==='Open'?'NSO-Open':'NSO-Covered') : cat==='HRC'?'HRC' : park==='Open'?'Open':'Covered';
+    return ASSUMPTIONS.itCost[key] || [];
+  }
+  if (col === 'vm') {
+    return cat.includes('NSO') ? ASSUMPTIONS.vm['NSO'] : ASSUMPTIONS.vm['default'];
+  }
+  if (col === 'slotMarking') {
+    const key = cat.includes('NSO') ? 'NSO' : park==='Open' ? 'Upgrade-Open' : 'Upgrade-Covered';
+    return ASSUMPTIONS.slotMarking[key] || [];
+  }
+  if (col === 'totalMaint') {
+    const key = cat.includes('NSO') ? (park==='Open'?'NSO-Open':'NSO-Covered') : park==='Open'?'Open':'Covered';
+    return ASSUMPTIONS.totalMaint[key] || [];
+  }
+  if (col === 'hrcTotal') {
+    const key = cat==='Existing HRC' ? 'Existing HRC' : cat==='HRC' ? 'HRC' : 'New HRC';
+    return ASSUMPTIONS.hrcTotal[key] || [];
+  }
+  return [];
+}
+
+// ── Tooltip ───────────────────────────────────────────────────────────────
+
+function Tooltip({ items, x, y }) {
+  if (!items || !items.length) return null;
+  return (
+    <div className="tooltip-box fixed bg-gray-900 border border-gray-700 rounded-xl shadow-2xl p-3 text-xs min-w-[200px] max-w-[280px]"
+      style={{left: Math.min(x+12, window.innerWidth-300), top: Math.min(y-8, window.innerHeight-200)}}>
+      {items.map((it, i) => (
+        <div key={i} className="flex justify-between gap-3 py-0.5">
+          <span className="text-gray-300">{it.label}</span>
+          <span className="text-white font-semibold">{it.amount!=null ? fmtL(it.amount) : ''}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── Icons ─────────────────────────────────────────────────────────────────
+
+function Ico({ n, size=16, cls='' }) {
+  const d = {
+    back:   <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
+    moon:   <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>,
+    sun:    <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></>,
+    filter: <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
+    search: <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    x:      <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    copy:   <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+  };
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+      strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
+      {d[n]}
+    </svg>
+  );
+}
+
+// ── MultiCheck ────────────────────────────────────────────────────────────
+
+function MultiCheck({ label, options, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useEffect(() => {
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  const count = selected.size;
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={()=>setOpen(o=>!o)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
+          ${count>0 ? 'border-[#4736FE] bg-[#4736FE]/10 text-[#4736FE]' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'}`}>
+        <Ico n="filter" size={11}/>{label}{count>0&&` (${count})`}
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-30 min-w-[180px] bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 max-h-64 overflow-y-auto fade-in">
+          <div className="flex items-center justify-between px-1 pb-1 mb-1 border-b border-gray-100 dark:border-gray-800">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</span>
+            {count>0 && <button onClick={()=>onChange(new Set())} className="text-[10px] text-[#4736FE] hover:underline">Clear</button>}
+          </div>
+          {options.map(o => (
+            <label key={o} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-white/[0.04] cursor-pointer">
+              <input type="checkbox" checked={selected.has(o)}
+                onChange={e=>{const s=new Set(selected);e.target.checked?s.add(o):s.delete(o);onChange(s);}}
+                className="accent-[#4736FE] w-3.5 h-3.5"/>
+              <span className="text-xs text-gray-600 dark:text-gray-300">{o}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Summary Tab ───────────────────────────────────────────────────────────
+
+function SummaryTab() {
+  const totalCapexGS = GS_HUB_DATA.reduce((s,r)=>s+r.totalCapex,0);
+  const totalGrandGS = GS_HUB_DATA.reduce((s,r)=>s+r.grandTotal,0);
+  const totalC2B = C2B_DATA.reduce((s,r)=>s+r.totalCapex,0);
+  const overall = totalGrandGS + totalC2B;
+
+  const byZone = useMemo(() => {
+    const m = {};
+    GS_HUB_DATA.forEach(r => { m[r.zone] = (m[r.zone]||0) + r.grandTotal; });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  }, []);
+
+  const byCat = useMemo(() => {
+    const m = {};
+    GS_HUB_DATA.forEach(r => {
+      const c = r.category.includes('NSO') ? 'NSO' : r.category.includes('HRC') ? 'HRC' : r.category.includes('Replacement') ? 'Replacement' : 'Upgrade';
+      m[c] = (m[c]||0) + r.grandTotal;
+    });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  }, []);
+
+  const byStage = useMemo(() => {
+    const m = {};
+    GS_HUB_DATA.forEach(r => { m[r.stage] = (m[r.stage]||0) + r.grandTotal; });
+    return Object.entries(m).sort((a,b)=>b[1]-a[1]);
+  }, []);
+
+  const maxZone = Math.max(...byZone.map(([,v])=>v));
+  const maxCat = Math.max(...byCat.map(([,v])=>v));
+  const maxStage = Math.max(...byStage.map(([,v])=>v));
+
+  const zoneColors = {North:'bg-blue-500',South:'bg-green-500',West:'bg-amber-500',East:'bg-purple-500'};
+  const catColors = {NSO:'bg-[#4736FE]',HRC:'bg-rose-500',Replacement:'bg-orange-500',Upgrade:'bg-teal-500'};
+  const stageColors = {Active:'bg-green-500',YTD:'bg-amber-500',YTL:'bg-blue-500'};
+
+  function Card({label, value, sub, color}) {
+    const cls = {indigo:'bg-[#4736FE]/10 border-[#4736FE]/30 text-[#4736FE]',amber:'bg-amber-500/10 border-amber-500/30 text-amber-400',green:'bg-green-500/10 border-green-500/30 text-green-400',purple:'bg-purple-500/10 border-purple-500/30 text-purple-400'}[color];
+    return (
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+        <div className={`text-xs font-semibold mb-1 ${cls?.split(' ').pop()}`}>{label}</div>
+        <div className="text-2xl font-bold mb-0.5">{value}</div>
+        {sub && <div className="text-xs text-gray-400">{sub}</div>}
+      </div>
+    );
+  }
+
+  function BarChart({title, data, colorMap, maxVal}) {
+    return (
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+        <div className="text-sm font-semibold mb-4">{title}</div>
+        <div className="space-y-3">
+          {data.map(([k,v]) => (
+            <div key={k}>
+              <div className="flex justify-between text-xs mb-1">
+                <span className="font-medium">{k}</span>
+                <span className="text-gray-400">{fmtL(v)}</span>
+              </div>
+              <div className="h-2 bg-gray-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
+                <div className={`h-full rounded-full ${colorMap[k]||'bg-gray-400'}`} style={{width:`${(v/maxVal*100).toFixed(1)}%`}}/>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fade-in space-y-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <Card label="GS Hubs Capex" value={fmtL(totalCapexGS)} sub="Excl. HRC & Maintenance" color="indigo"/>
+        <Card label="GS Hubs Grand Total" value={fmtL(totalGrandGS)} sub="Incl. HRC, Maintenance" color="amber"/>
+        <Card label="C2B Total" value={fmtL(totalC2B)} sub={`${C2B_DATA.length} parking hubs × ₹3L`} color="green"/>
+        <Card label="Overall Grand Total" value={fmtL(overall)} sub="GS + C2B combined" color="purple"/>
+      </div>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <BarChart title="By Zone (Grand Total)" data={byZone} colorMap={zoneColors} maxVal={maxZone}/>
+        <BarChart title="By Category" data={byCat} colorMap={catColors} maxVal={maxCat}/>
+        <BarChart title="By Stage" data={byStage} colorMap={stageColors} maxVal={maxStage}/>
+      </div>
+    </div>
+  );
+}
+
+// ── GS Hubs Tab ───────────────────────────────────────────────────────────
+
+function GSHubsTab() {
+  const [fZone, setFZone] = useState(new Set());
+  const [fCity, setFCity] = useState(new Set());
+  const [fCat, setFCat] = useState(new Set());
+  const [fStage, setFStage] = useState(new Set());
+  const [search, setSearch] = useState('');
+  const [expanded, setExpanded] = useState(null);
+  const [tooltip, setTooltip] = useState({visible:false, x:0, y:0, items:[]});
+
+  const opts = useMemo(() => ({
+    zones: uniqSorted(GS_HUB_DATA.map(r=>r.zone)),
+    cities: uniqSorted(GS_HUB_DATA.map(r=>r.city)),
+    cats: uniqSorted(GS_HUB_DATA.map(r=>r.category)),
+    stages: uniqSorted(GS_HUB_DATA.map(r=>r.stage)),
+  }), []);
+
+  const filtered = useMemo(() => {
+    let rows = GS_HUB_DATA;
+    if (fZone.size>0) rows = rows.filter(r=>fZone.has(r.zone));
+    if (fCity.size>0) rows = rows.filter(r=>fCity.has(r.city));
+    if (fCat.size>0) rows = rows.filter(r=>fCat.has(r.category));
+    if (fStage.size>0) rows = rows.filter(r=>fStage.has(r.stage));
+    if (search.trim()) {
+      const q = search.trim().toLowerCase();
+      rows = rows.filter(r => r.hub.toLowerCase().includes(q) || r.city.toLowerCase().includes(q) || r.costCenter.toLowerCase().includes(q));
+    }
+    return rows;
+  }, [fZone, fCity, fCat, fStage, search]);
+
+  const totals = useMemo(() => ({
+    totalCapex: filtered.reduce((s,r)=>s+r.totalCapex,0),
+    infraCost: filtered.reduce((s,r)=>s+r.infraCost,0),
+    slotMarking: filtered.reduce((s,r)=>s+r.slotMarking,0),
+    vm: filtered.reduce((s,r)=>s+r.vm,0),
+    itCost: filtered.reduce((s,r)=>s+r.itCost,0),
+    hrcTotal: filtered.reduce((s,r)=>s+r.hrcTotal,0),
+    totalMaint: filtered.reduce((s,r)=>s+r.totalMaint,0),
+    grandTotal: filtered.reduce((s,r)=>s+r.grandTotal,0),
+  }), [filtered]);
+
+  const activeFilters = fZone.size+fCity.size+fCat.size+fStage.size;
+
+  function MoneyCell({value, col, row}) {
+    if (!value) return <td className="px-3 py-2.5 text-right text-gray-400 text-xs">—</td>;
+    const items = getAssumptions(col, row);
+    return (
+      <td className="px-3 py-2.5 text-right text-xs font-medium cursor-help"
+        onMouseEnter={e => items.length && setTooltip({visible:true, x:e.clientX, y:e.clientY, items})}
+        onMouseMove={e => items.length && setTooltip(t => ({...t, x:e.clientX, y:e.clientY}))}
+        onMouseLeave={() => setTooltip(t=>({...t,visible:false}))}>
+        {fmtL(value)}
+      </td>
+    );
+  }
+
+  const stageCls = {Active:'bg-green-500/15 text-green-400', YTD:'bg-amber-500/15 text-amber-400', YTL:'bg-blue-500/15 text-blue-400'};
+
+  return (
+    <div className="fade-in">
+      {tooltip.visible && <Tooltip items={tooltip.items} x={tooltip.x} y={tooltip.y}/>}
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative flex-1 min-w-[180px] max-w-xs">
+          <Ico n="search" size={14} cls="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search hub, city…"
+            className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] transition-colors"/>
+        </div>
+        <MultiCheck label="Zone" options={opts.zones} selected={fZone} onChange={setFZone}/>
+        <MultiCheck label="City" options={opts.cities} selected={fCity} onChange={setFCity}/>
+        <MultiCheck label="Category" options={opts.cats} selected={fCat} onChange={setFCat}/>
+        <MultiCheck label="Stage" options={opts.stages} selected={fStage} onChange={setFStage}/>
+        {(activeFilters>0||search) && (
+          <button onClick={()=>{setFZone(new Set());setFCity(new Set());setFCat(new Set());setFStage(new Set());setSearch('');}}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 border border-red-400/30 hover:bg-red-500/10 transition-colors">
+            <Ico n="x" size={11}/> Clear
+          </button>
+        )}
+        <span className="ml-auto text-xs text-gray-400">{filtered.length} hubs</span>
+      </div>
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[1100px]">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
+                {['Cost Center','Hub','City','Zone','Category','Stage','Parking','Slots','Total Capex','Infra Cost','Slot Marking','VM','New Init.','IT Cost','HRC Total','Maintenance','Grand Total'].map(h=>(
+                  <th key={h} className="text-left px-3 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r,i) => (
+                <React.Fragment key={i}>
+                  <tr className="border-b border-gray-50 dark:border-gray-800/60 cursor-pointer hover:brightness-95 dark:hover:brightness-110 transition-all"
+                    onClick={()=>setExpanded(expanded===i?null:i)}>
+                    <td className="px-3 py-2.5 font-mono text-[10px] text-gray-400 max-w-[140px] truncate" title={r.costCenter}>
+                      {r.costCenter ? (
+                        <a href={`/pr-po-tracker/?costCenter=${encodeURIComponent(r.costCenter)}`}
+                          className="text-[#4736FE] hover:underline" onClick={e=>e.stopPropagation()}>
+                          {r.costCenter}
+                        </a>
+                      ) : '—'}
+                    </td>
+                    <td className="px-3 py-2.5 font-medium max-w-[200px] truncate" title={r.hub}>{r.hub}</td>
+                    <td className="px-3 py-2.5 text-gray-500">{r.city}</td>
+                    <td className="px-3 py-2.5 text-gray-500">{r.zone}</td>
+                    <td className="px-3 py-2.5">
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500">{r.category}</span>
+                    </td>
+                    <td className="px-3 py-2.5">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${stageCls[r.stage]||'bg-gray-100 text-gray-400'}`}>{r.stage}</span>
+                    </td>
+                    <td className="px-3 py-2.5 text-gray-500">{r.parking}</td>
+                    <td className="px-3 py-2.5 text-right text-gray-500">{r.slots||'—'}</td>
+                    <td className="px-3 py-2.5 text-right font-semibold text-[#4736FE]">{fmtL(r.totalCapex)}</td>
+                    <MoneyCell value={r.infraCost} col="infraCost" row={r}/>
+                    <MoneyCell value={r.slotMarking} col="slotMarking" row={r}/>
+                    <MoneyCell value={r.vm} col="vm" row={r}/>
+                    <td className="px-3 py-2.5 text-right text-xs">{r.newInitiatives ? fmtL(r.newInitiatives) : '—'}</td>
+                    <MoneyCell value={r.itCost} col="itCost" row={r}/>
+                    <MoneyCell value={r.hrcTotal} col="hrcTotal" row={r}/>
+                    <MoneyCell value={r.totalMaint} col="totalMaint" row={r}/>
+                    <td className="px-3 py-2.5 text-right font-bold">{fmtL(r.grandTotal)}</td>
+                  </tr>
+                  {expanded===i && (
+                    <tr>
+                      <td colSpan="17" className="px-5 py-4 bg-[#4736FE]/5 border-b border-gray-100 dark:border-gray-800">
+                        <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                          {[['Infra Cost',r.infraCost],['Slot Marking',r.slotMarking],['VM',r.vm],['New Initiatives',r.newInitiatives],['IT Cost',r.itCost],['HRC Total',r.hrcTotal],['Maintenance',r.totalMaint],['Grand Total',r.grandTotal]].map(([l,v])=>(
+                            <div key={l} className="bg-white dark:bg-black/20 rounded-xl p-3">
+                              <div className="text-[10px] text-gray-400 mb-1">{l}</div>
+                              <div className="text-sm font-bold">{fmtL(v)}</div>
+                            </div>
+                          ))}
+                        </div>
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t-2 border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-white/[0.03] font-bold">
+                <td colSpan="8" className="px-3 py-3 text-xs text-gray-500">TOTAL ({filtered.length} hubs)</td>
+                <td className="px-3 py-3 text-right text-xs text-[#4736FE]">{fmtL(totals.totalCapex)}</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.infraCost)}</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.slotMarking)}</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.vm)}</td>
+                <td className="px-3 py-3 text-right text-xs">—</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.itCost)}</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.hrcTotal)}</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.totalMaint)}</td>
+                <td className="px-3 py-3 text-right text-xs">{fmtL(totals.grandTotal)}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── C2B Tab ───────────────────────────────────────────────────────────────
+
+function C2BTab() {
+  const byZone = useMemo(() => {
+    const m = {};
+    C2B_DATA.forEach(r => { if (!m[r.zone]) m[r.zone]=[]; m[r.zone].push(r); });
+    return Object.entries(m);
+  }, []);
+  const total = C2B_DATA.reduce((s,r)=>s+r.totalCapex,0);
+
+  return (
+    <div className="fade-in space-y-4">
+      <div className="flex items-center gap-4 bg-[#4736FE]/10 border border-[#4736FE]/30 rounded-2xl px-5 py-4">
+        <div>
+          <div className="text-xs text-gray-400 mb-1">C2B Parking Hubs Total</div>
+          <div className="text-2xl font-bold text-[#4736FE]">{fmtL(total)}</div>
+        </div>
+        <div className="ml-6 text-xs text-gray-400">
+          {C2B_DATA.length} hubs × ₹3L each | Infra/Networking: ₹2L + Rack: ₹1L per hub
+        </div>
+      </div>
+      {byZone.map(([zone, rows]) => (
+        <div key={zone} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+          <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+            <span className="font-semibold text-sm">{zone} Zone</span>
+            <span className="text-xs text-gray-400">{rows.length} hubs · {fmtL(rows.reduce((s,r)=>s+r.totalCapex,0))}</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-50 dark:border-gray-800/60 bg-gray-50 dark:bg-white/[0.02]">
+                  {['#','Hub Name','Infra/Networking','Rack','Total Capex'].map(h=>(
+                    <th key={h} className="text-left px-4 py-2 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((r,i) => (
+                  <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60">
+                    <td className="px-4 py-2.5 text-gray-400">{i+1}</td>
+                    <td className="px-4 py-2.5 font-medium">{r.hub}</td>
+                    <td className="px-4 py-2.5 text-right">{fmtL(r.infraNetworking)}</td>
+                    <td className="px-4 py-2.5 text-right">{fmtL(r.rack)}</td>
+                    <td className="px-4 py-2.5 text-right font-bold text-[#4736FE]">{fmtL(r.totalCapex)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ── NSO Pipeline Tab ──────────────────────────────────────────────────────
+
+function NSOTab() {
+  const rows = useMemo(() => {
+    return GS_HUB_DATA
+      .filter(r => ['NSO','Replacement'].includes(r.category) || ['YTD','YTL'].includes(r.stage))
+      .sort((a,b) => {
+        const ord = {YTL:0, YTD:1, Active:2};
+        return (ord[a.stage]??3) - (ord[b.stage]??3);
+      });
+  }, []);
+
+  const total = rows.reduce((s,r)=>s+r.grandTotal,0);
+  const capex = rows.reduce((s,r)=>s+r.totalCapex,0);
+
+  const stageCls = {Active:'bg-green-500/15 text-green-400', YTD:'bg-amber-500/15 text-amber-400', YTL:'bg-blue-500/15 text-blue-400'};
+
+  return (
+    <div className="fade-in space-y-4">
+      <div className="flex flex-wrap gap-4">
+        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
+          <div className="text-xs text-gray-400 mb-1">Sites in Pipeline</div>
+          <div className="text-2xl font-bold">{rows.length}</div>
+        </div>
+        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
+          <div className="text-xs text-gray-400 mb-1">Total Capex Budget</div>
+          <div className="text-2xl font-bold text-[#4736FE]">{fmtL(capex)}</div>
+        </div>
+        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
+          <div className="text-xs text-gray-400 mb-1">Grand Total (incl. Maint)</div>
+          <div className="text-2xl font-bold text-amber-400">{fmtL(total)}</div>
+        </div>
+      </div>
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[700px]">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
+                {['#','Hub','City','Zone','Stage','Category','Total Capex','Grand Total'].map(h=>(
+                  <th key={h} className="text-left px-4 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r,i) => (
+                <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60">
+                  <td className="px-4 py-2.5 text-gray-400">{i+1}</td>
+                  <td className="px-4 py-2.5 font-medium max-w-[200px] truncate" title={r.hub}>{r.hub}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{r.city}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{r.zone}</td>
+                  <td className="px-4 py-2.5"><span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${stageCls[r.stage]||''}`}>{r.stage}</span></td>
+                  <td className="px-4 py-2.5"><span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[#4736FE]/15 text-[#4736FE]">{r.category}</span></td>
+                  <td className="px-4 py-2.5 text-right font-semibold text-[#4736FE]">{fmtL(r.totalCapex)}</td>
+                  <td className="px-4 py-2.5 text-right font-bold">{fmtL(r.grandTotal)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Assumptions Tab ───────────────────────────────────────────────────────
+
+function AssumptionsTab() {
+  const infra = ASSUMPTIONS.infraCost;
+  const packages = [
+    {label:'NSO', items:infra['NSO'], note:'New Store Opening — full fit-out'},
+    {label:'Major Upgrade', items:infra['Major Upgrade'], note:'Significant civil + ops upgrade'},
+    {label:'Minor Upgrade', items:infra['Minor Upgrade'], note:'Cosmetic + maintenance upgrade'},
+    {label:'Basic Upgrade', items:infra['Basic Upgrade'], note:'Painting, minor repairs'},
+    {label:'Replacement', items:infra['Replacement'], note:'Full hub rebuild at new location'},
+    {label:'HRC (new setup)', items:infra['HRC'], note:'Hub Reconditioning Centre — new'},
+  ];
+
+  const standards = [
+    {label:'IT Cost — Covered Hub', value:'₹1.5L'},
+    {label:'IT Cost — Open Hub', value:'₹2L'},
+    {label:'IT Cost — NSO Open', value:'₹3L (Setup ₹2.5L + Router ₹0.5L)'},
+    {label:'IT Cost — NSO Covered', value:'₹2.5L (Setup ₹2L + Router ₹0.5L)'},
+    {label:'Maintenance — Covered Hub/yr', value:'₹6L (Infra ₹3L + VM ₹3L)'},
+    {label:'Maintenance — Open Hub/yr', value:'₹7.5L (Infra ₹4L + VM ₹3.5L)'},
+    {label:'Slot Marking — NSO', value:'₹0.3L'},
+    {label:'Slot Marking — Covered (Upgrade)', value:'₹0.9L'},
+    {label:'Slot Marking — Open (Upgrade)', value:'₹2L'},
+    {label:'HRC — New Setup Total', value:'₹45.5L (full setup)'},
+    {label:'HRC — Existing Maintenance/yr', value:'₹10.5L per HRC'},
+    {label:'C2B Parking Hub', value:'₹3L (Infra/Networking ₹2L + Rack ₹1L)'},
+  ];
+
+  return (
+    <div className="fade-in space-y-5">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {packages.map(p => (
+          <div key={p.label} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+            <div className="font-semibold text-sm mb-1">{p.label}</div>
+            <div className="text-xs text-gray-400 mb-3">{p.note}</div>
+            <div className="space-y-2">
+              {p.items.map((it,i) => (
+                <div key={i} className="flex justify-between gap-2 text-xs border-b border-gray-50 dark:border-gray-800/50 pb-1.5">
+                  <span className="text-gray-600 dark:text-gray-300">{it.label}</span>
+                  <span className="font-semibold text-right">{it.amount!=null ? fmtL(it.amount) : '—'}</span>
+                </div>
+              ))}
+              <div className="flex justify-between gap-2 text-xs pt-1">
+                <span className="font-bold">Total</span>
+                <span className="font-bold text-[#4736FE]">{fmtL(p.items.filter(it=>it.amount!=null).reduce((s,it)=>s+(it.amount||0),0))}</span>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
+        <div className="font-semibold text-sm mb-4">Standard Package Costs</div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {standards.map((s,i) => (
+            <div key={i} className="flex justify-between gap-3 text-xs py-2 border-b border-gray-50 dark:border-gray-800/50">
+              <span className="text-gray-500">{s.label}</span>
+              <span className="font-semibold">{s.value}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── App ───────────────────────────────────────────────────────────────────
+
+function App() {
+  const [tab, setTab] = useState('summary');
+  const [theme, setTheme] = useState(()=>{ try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';} });
+
+  function toggleTheme() {
+    const next = theme==='dark'?'light':'dark';
+    setTheme(next);
+    try{localStorage.setItem('c24-theme',next);}catch{}
+    if(next==='dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }
+
+  // Pre-filter from URL if ?costCenter=XX (redirects to GS tab)
+  useEffect(() => {
+    const cc = new URLSearchParams(window.location.search).get('costCenter');
+    if (cc) setTab('hubs');
+  }, []);
+
+  const tabs = [
+    ['summary','📊 Summary'],
+    ['hubs','🏢 GS Hubs'],
+    ['c2b','🚗 C2B'],
+    ['nso','🏗 NSO Pipeline'],
+    ['assumptions','📐 Assumptions'],
+  ];
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-20 bg-gray-50/90 dark:bg-[#111]/90 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <a href="/" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4736FE] transition-colors">
+            <Ico n="back" size={14}/> Hub
+          </a>
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"/>
+          <a href="/pr-po-tracker/" className="text-sm text-gray-400 hover:text-[#4736FE] transition-colors font-medium">📋 PR/PO Tracker</a>
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"/>
+          <span className="font-bold text-sm">Capex Budget FY 26-27</span>
+        </div>
+        <button onClick={toggleTheme} className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-[#4736FE] hover:border-[#4736FE] transition-colors">
+          {theme==='dark'?<Ico n="sun" size={14}/>:<Ico n="moon" size={14}/>}
+        </button>
+      </header>
+
+      <main className="flex-1 px-4 sm:px-6 py-5 max-w-screen-2xl mx-auto w-full">
+        <div className="flex items-center gap-1 mb-5 flex-wrap">
+          {tabs.map(([t,l]) => (
+            <button key={t} onClick={()=>setTab(t)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab===t?'bg-[#4736FE] text-white':'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {tab==='summary' && <SummaryTab/>}
+        {tab==='hubs' && <GSHubsTab/>}
+        {tab==='c2b' && <C2BTab/>}
+        {tab==='nso' && <NSOTab/>}
+        {tab==='assumptions' && <AssumptionsTab/>}
+      </main>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>
