@@ -27,10 +27,6 @@ body{font-family:'Inter',sans-serif;margin:0;padding:0}
 .spin{animation:spin 1s linear infinite}
 @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
 
-/* CSS vars for sticky col — update on theme toggle */
-:root{--sc-bg:#ffffff;--sc-txt:#111827;--sc-hbg:#f3f4f6;--sc-htxt:#6b7280;--sc-cbg:#eef2ff;--sc-ctxt:#4338ca}
-html.dark{--sc-bg:#1e1e1e;--sc-txt:#e5e7eb;--sc-hbg:#252525;--sc-htxt:#9ca3af;--sc-cbg:#1e1e2e;--sc-ctxt:#a5b4fc}
-
 /* Sticky table */
 .tbl-wrap{overflow:auto;max-height:calc(100vh - 260px)}
 .tbl-wrap table{border-collapse:separate;border-spacing:0}
@@ -39,9 +35,6 @@ html.dark{--sc-bg:#1e1e1e;--sc-txt:#e5e7eb;--sc-hbg:#252525;--sc-htxt:#9ca3af;--
 .tbl-wrap thead tr:nth-child(3) th{top:72px}
 .tbl-wrap .s-col{position:sticky;left:0;z-index:5;border-right:1px solid rgba(120,120,160,0.15)}
 .tbl-wrap thead .s-col{z-index:30}
-.tbl-wrap tbody td.s-col{background:var(--sc-bg)!important;color:var(--sc-txt)!important}
-.tbl-wrap thead th.s-col{background:var(--sc-hbg)!important;color:var(--sc-htxt)!important}
-.tbl-wrap .city-row td.s-col{background:var(--sc-cbg)!important;color:var(--sc-ctxt)!important}
 td,th{overflow:hidden;text-overflow:ellipsis}
 .tooltip-box{pointer-events:none;z-index:9999;position:fixed}
 </style>
@@ -670,8 +663,8 @@ const COL_GROUPS = [
 const HubRow = memo(function HubRow({r, visCols, showTip, hideTip, stageCls}) {
   const tdB = "px-2 py-2 text-xs";
   return (
-    <tr className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-[#4736FE]/5">
-      <td className={`${tdB} s-col font-medium w-44 max-w-[176px] truncate`} title={r.hub}>{r.hub}</td>
+    <tr className="group border-b border-gray-50 dark:border-gray-800/60 hover:bg-[#4736FE]/5">
+      <td className={`${tdB} s-col font-medium w-44 max-w-[176px] truncate bg-white dark:bg-[#111] group-hover:bg-[#4736FE]/5`} title={r.hub}>{r.hub}</td>
       <td className={`${tdB} text-gray-400 whitespace-nowrap`}>{r.city}</td>
       <td className={`${tdB} text-gray-400`}>{r.zone}</td>
       <td className={tdB}><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
@@ -769,7 +762,7 @@ function GSHubsTab({ gsData }) {
   function CitySubtotal({rows}) {
     return (
       <tr className="city-row text-xs font-semibold border-t border-b border-gray-200 dark:border-gray-700">
-        <td className="px-2 py-2 s-col w-44 text-gray-400 whitespace-nowrap text-[10px]">Subtotal</td>
+        <td className="px-2 py-2 s-col w-44 text-gray-400 whitespace-nowrap text-[10px] bg-gray-50 dark:bg-[#151515]">Subtotal</td>
         <td colSpan="6" className="px-2 py-2"></td>
         {visCols.map(col=>{
           const v=rows.reduce((s,r)=>s+(r[col.key]||0),0);
@@ -870,9 +863,9 @@ function GSHubsTab({ gsData }) {
                 visCols.forEach(c=>{cityTotals[c.key]=rows.reduce((s,r)=>s+(r[c.key]||0),0);});
                 return (
                   <React.Fragment key={city}>
-                    <tr className="bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/[0.09]"
+                    <tr className="group bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/[0.09]"
                       onClick={()=>{const s=new Set(collapsedCities);collapsed?s.delete(city):s.add(city);setCollapsedCities(s);}}>
-                      <td className="px-2 py-2 s-col w-44 font-bold text-xs text-[#4736FE] whitespace-nowrap truncate">
+                      <td className="px-2 py-2 s-col w-44 font-bold text-xs text-[#4736FE] whitespace-nowrap truncate bg-gray-100 dark:bg-white/[0.06] group-hover:bg-gray-200 dark:group-hover:bg-white/[0.09]">
                         {collapsed?'▶':'▼'} {city} <span className="text-gray-400 font-normal ml-1">({rows.length})</span>
                       </td>
                       <td colSpan="6" className="px-2 py-2"></td>
