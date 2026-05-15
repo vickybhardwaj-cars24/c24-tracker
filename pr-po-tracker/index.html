@@ -131,6 +131,17 @@ function parseCSVText(text) {
 
 function uniq(arr) { return [...new Set(arr.filter(Boolean))].sort(); }
 
+function getFY(dateStr) {
+  const d = parseDate(dateStr);
+  if (!d) return null;
+  const m = d.getMonth(); // 0=Jan
+  const y = d.getFullYear();
+  const fyStart = m >= 3 ? y : y - 1; // Apr=3
+  const s2 = String(fyStart).slice(2);
+  const e2 = String(fyStart + 1).slice(2);
+  return `FY ${s2}-${e2}`;
+}
+
 // ── Icons ─────────────────────────────────────────────────────────────────
 
 function Ico({ n, size=16, cls='' }) {
@@ -540,6 +551,83 @@ function DataTable({ rows, onRowClick }) {
   );
 }
 
+// ── Invoicing Pending Tab ─────────────────────────────────────────────────
+
+function InvoicingPending({ rows, fyFilter, fyOptions, onFYChange }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const pending = useMemo(() => {
+    let r = rows.filter(row => rowStatus(row) === 'po_issued');
+    if (fyFilter.size > 0) r = r.filter(row => fyFilter.has(getFY(row['PR Date'])));
+    return r.map(row => {
+      const poD = parseDate(row['PO Date']);
+      const daysSincePO = poD ? daysDiff(poD, today) : null;
+      return { ...row, _daysSincePO: daysSincePO };
+    }).sort((a,b) => (b._daysSincePO||0) - (a._daysSincePO||0));
+  }, [rows, fyFilter]);
+
+  const totalPOVal = pending.reduce((s,r)=>s+parseNum(r['PO with GST Value']),0);
+  const oldest = pending.length ? pending[0]._daysSincePO : null;
+
+  const [copied, setCopied] = useState(false);
+  const slackText = `*🧾 Invoicing Pending* — ${today.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}\n${pending.length} POs pending invoicing | Total ${fmtMoney(totalPOVal,true)} | Oldest: ${oldest!=null?oldest+'d':'—'}`;
+
+  function daysBadge(d) {
+    if (d == null) return <span className="text-gray-400">—</span>;
+    const cls = d < 30 ? 'bg-green-500/15 text-green-400' : d <= 60 ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400';
+    return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${cls}`}>{d}d</span>;
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <div className="text-sm font-semibold mb-0.5">Invoicing Pending</div>
+          <div className="text-xs text-gray-400">{pending.length} POs · Total PO value: <span className="font-semibold text-amber-400">{fmtMoney(totalPOVal,true)}</span> · Oldest: <span className="font-semibold text-red-400">{oldest!=null?oldest+'d':'—'}</span></div>
+        </div>
+        <div className="flex items-center gap-2">
+          <MultiCheck label="FY" options={fyOptions} selected={fyFilter} onChange={onFYChange}/>
+          <button onClick={()=>navigator.clipboard.writeText(slackText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);})}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 border border-purple-500/30 transition-colors">
+            <Ico n={copied?'check':'slack'} size={12}/>{copied?'Copied!':'Slack'}
+          </button>
+        </div>
+      </div>
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[900px]">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
+                {['#','Location','Cost Center','EMSS POC','Vendor','PO Number','PO Date','PO Value (GST)','PR→PO Days','Days Since PO'].map(h=>(
+                  <th key={h} className="text-left px-3 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((r,i)=>(
+                <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:brightness-95 dark:hover:brightness-110 transition-all row-po_issued">
+                  <td className="px-3 py-2.5 text-gray-400">{i+1}</td>
+                  <td className="px-3 py-2.5 font-medium max-w-[160px] truncate" title={r['Location']}>{r['Location']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 font-mono text-[10px]">{r['Cost Center']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500">{r['EMSS POC']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 max-w-[130px] truncate" title={r['Vendor Name']}>{r['Vendor Name']||'—'}</td>
+                  <td className="px-3 py-2.5 font-mono text-[10px] text-[#4736FE]">{r['PO Number']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-400">{r['PO Date']||'—'}</td>
+                  <td className="px-3 py-2.5 text-right font-medium">{fmtMoney(parseNum(r['PO with GST Value']),true)}</td>
+                  <td className="px-3 py-2.5 text-gray-400 text-center">{r['Diff.days Between PR & PO']||'—'}</td>
+                  <td className="px-3 py-2.5 text-center">{daysBadge(r._daysSincePO)}</td>
+                </tr>
+              ))}
+              {pending.length === 0 && (
+                <tr><td colSpan="10" className="px-4 py-8 text-center text-gray-400 text-sm">No POs pending invoicing ✓</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Dashboard ─────────────────────────────────────────────────────────────
 
 function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
@@ -554,6 +642,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
   const [fVendors, setFVendors]       = useState(new Set());
   const [fStatus, setFStatus]         = useState(new Set());
   const [fCostCenter, setFCostCenter] = useState(urlCC ? new Set([urlCC]) : new Set());
+  const [fFY, setFFY]                 = useState(new Set());
   const [detailRow, setDetailRow]     = useState(null);
   const [uploading, setUploading]     = useState(false);
 
@@ -564,6 +653,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
     vendors:     uniq(data.map(r=>r['Vendor Name'])),
     statuses:    ['PR Issued','PO Issued','Invoiced','Cancelled'],
     costCenters: uniq(data.map(r=>r['Cost Center'])),
+    fyOptions:   [...new Set(data.map(r=>getFY(r['PR Date'])).filter(Boolean))].sort().reverse(),
   }), [data]);
 
   const filtered = useMemo(() => {
@@ -577,9 +667,10 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
       const m={'PR Issued':'pr_only','PO Issued':'po_issued','Invoiced':'invoiced','Cancelled':'cancelled'};
       rows=rows.filter(r=>[...fStatus].some(s=>rowStatus(r)===m[s]));
     }
+    if (fFY.size>0) rows=rows.filter(r=>fFY.has(getFY(r['PR Date'])));
     if (search.trim()) { const q=search.trim().toLowerCase(); rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); }
     return rows;
-  }, [data,fCostCenter,fTypes,fPOCs,fLocations,fVendors,fStatus,search]);
+  }, [data,fCostCenter,fTypes,fPOCs,fLocations,fVendors,fStatus,fFY,search]);
 
   const metrics = useMemo(() => {
     const active=filtered.filter(r=>rowStatus(r)!=='cancelled');
@@ -594,7 +685,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
   const pendingL1   = useMemo(()=>data.filter(r=>r['PR Number']&&!(r['L1 Approval']||'').trim()),[data]);
   const pendingBizFin = useMemo(()=>data.filter(r=>(r['L1 Approval']||'').trim()&&!(r['Bizfin']||'').trim()),[data]);
 
-  const activeFilters = fCostCenter.size+fTypes.size+fPOCs.size+fLocations.size+fVendors.size+fStatus.size;
+  const activeFilters = fCostCenter.size+fTypes.size+fPOCs.size+fLocations.size+fVendors.size+fStatus.size+fFY.size;
 
   function handleUpload(e) {
     const file = e.target.files[0];
@@ -619,7 +710,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
 
   function clearFilters() {
     setFCostCenter(new Set()); setFTypes(new Set()); setFPOCs(new Set());
-    setFLocations(new Set()); setFVendors(new Set()); setFStatus(new Set()); setSearch('');
+    setFLocations(new Set()); setFVendors(new Set()); setFStatus(new Set()); setFFY(new Set()); setSearch('');
   }
 
   return (
@@ -671,7 +762,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
         </div>
 
         <div className="flex items-center gap-1 mb-5">
-          {[['table','📊 Dashboard'],['approval','⏱ Approval TAT']].map(([t,l])=>(
+          {[['table','📊 Dashboard'],['approval','⏱ Approval TAT'],['invoicing','🧾 Invoicing Pending']].map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab===t?'bg-[#4736FE] text-white':'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>
               {l}
@@ -693,6 +784,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
               <MultiCheck label="Vendor"   options={opts.vendors}     selected={fVendors}    onChange={setFVendors}/>
               <MultiCheck label="Status"   options={opts.statuses}    selected={fStatus}     onChange={setFStatus}/>
               <MultiCheck label="Cost Ctr" options={opts.costCenters} selected={fCostCenter} onChange={setFCostCenter}/>
+              <MultiCheck label="FY" options={opts.fyOptions} selected={fFY} onChange={setFFY}/>
               {activeFilters>0 && (
                 <button onClick={clearFilters}
                   className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 border border-red-400/30 hover:bg-red-500/10 transition-colors">
@@ -706,10 +798,18 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
 
         {tab==='approval' && (
           <div className="fade-in">
-            <SlackPanel pendingL1={pendingL1} pendingBizFin={pendingBizFin}/>
-            <TatSection title={`Pending L1 Approval (${pendingL1.length})`}        rows={pendingL1}     dateKey="PR Date"     dateLabel="PR Date" color="red"/>
-            <TatSection title={`Pending BizFin Approval — L1 Done (${pendingBizFin.length})`} rows={pendingBizFin} dateKey="L1 Approval" dateLabel="L1 Date" color="amber"/>
+            <div className="flex items-center gap-2 mb-4">
+              <MultiCheck label="FY" options={opts.fyOptions} selected={fFY} onChange={setFFY}/>
+              {fFY.size>0 && <button onClick={()=>setFFY(new Set())} className="text-xs text-[#4736FE] hover:underline">Clear FY</button>}
+            </div>
+            <SlackPanel pendingL1={fFY.size>0?pendingL1.filter(r=>fFY.has(getFY(r['PR Date']))):pendingL1} pendingBizFin={fFY.size>0?pendingBizFin.filter(r=>fFY.has(getFY(r['PR Date']))):pendingBizFin}/>
+            <TatSection title={`Pending L1 Approval`} rows={fFY.size>0?pendingL1.filter(r=>fFY.has(getFY(r['PR Date']))):pendingL1} dateKey="PR Date" dateLabel="PR Date" color="red"/>
+            <TatSection title={`Pending BizFin Approval — L1 Done`} rows={fFY.size>0?pendingBizFin.filter(r=>fFY.has(getFY(r['PR Date']))):pendingBizFin} dateKey="L1 Approval" dateLabel="L1 Date" color="amber"/>
           </div>
+        )}
+
+        {tab==='invoicing' && (
+          <InvoicingPending rows={data} fyFilter={fFY} fyOptions={opts.fyOptions} onFYChange={setFFY}/>
         )}
       </main>
 
