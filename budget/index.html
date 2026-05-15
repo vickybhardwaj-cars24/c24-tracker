@@ -659,14 +659,12 @@ const COL_GROUPS = [
 ];
 
 // Module-level memoized row (avoids re-render when tooltip state changes in parent)
+// Column order: Hub (sticky) | City | Zone | Cat | Stage | Parking | Slots | ...money... | Cost Center
 const HubRow = memo(function HubRow({r, visCols, showTip, hideTip, stageCls}) {
   const tdB = "px-2 py-2 text-xs";
   return (
     <tr className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-[#4736FE]/5">
-      <td className={`${tdB} s-col font-mono text-[9px] text-gray-400 max-w-[120px] truncate`} title={r.costCenter}>
-        {r.costCenter ? <a href={`/pr-po-tracker/?costCenter=${encodeURIComponent(r.costCenter)}`} className="text-[#4736FE] hover:underline" onClick={e=>e.stopPropagation()}>{r.costCenter}</a> : '—'}
-      </td>
-      <td className={`${tdB} font-medium max-w-[200px] truncate`} title={r.hub}>{r.hub}</td>
+      <td className={`${tdB} s-col font-medium max-w-[220px] truncate`} title={r.hub}>{r.hub}</td>
       <td className={`${tdB} text-gray-400 whitespace-nowrap`}>{r.city}</td>
       <td className={`${tdB} text-gray-400`}>{r.zone}</td>
       <td className={tdB}><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
@@ -686,6 +684,9 @@ const HubRow = memo(function HubRow({r, visCols, showTip, hideTip, stageCls}) {
           </td>
         );
       })}
+      <td className={`${tdB} text-gray-400 text-[9px] font-mono max-w-[110px] truncate`} title={r.costCenter}>
+        {r.costCenter ? <a href={`/pr-po-tracker/?costCenter=${encodeURIComponent(r.costCenter)}`} className="text-[#4736FE]/70 hover:text-[#4736FE]" onClick={e=>e.stopPropagation()}>{r.costCenter}</a> : '—'}
+      </td>
     </tr>
   );
 });
@@ -761,11 +762,13 @@ function GSHubsTab({ gsData }) {
   function CitySubtotal({rows}) {
     return (
       <tr className="city-row bg-[#1c1c2e] dark:bg-[#1c1c2e] text-xs font-semibold border-b border-gray-700">
-        <td className="px-2 py-2 s-col text-gray-300 whitespace-nowrap" colSpan="8">Subtotal</td>
+        <td className="px-2 py-2 s-col text-gray-400 whitespace-nowrap text-[10px]">Subtotal</td>
+        <td colSpan="6" className="px-2 py-2"></td>
         {visCols.map(col=>{
           const v=rows.reduce((s,r)=>s+(r[col.key]||0),0);
           return <td key={col.key} className={`px-2 py-2 text-right whitespace-nowrap ${col.key==='grandTotal'?'text-[#4736FE]':'text-gray-300'}`}>{v?fmtAmt(v):'—'}</td>;
         })}
+        <td className="px-2 py-2"></td>
       </tr>
     );
   }
@@ -799,20 +802,21 @@ function GSHubsTab({ gsData }) {
         <div className="tbl-wrap">
           <table className="w-full text-xs min-w-[1100px]">
             <thead>
-              {/* Row 1: Totals (aligns with row 3 column structure) */}
+              {/* Row 1: Totals */}
               <tr>
-                <th className={`${thB} s-col text-left`} colSpan="8">
-                  <span className="text-[#4736FE] font-bold">TOTALS — {filtered.length} hubs</span>
-                </th>
+                <th className={`${thB} s-col text-left`}><span className="text-[#4736FE] font-bold">TOTALS — {filtered.length}</span></th>
+                <th className={thB} colSpan="6"></th>
                 {visCols.map(col=>(
                   <th key={'t-'+col.key} className={`${thB} text-right whitespace-nowrap ${col.key==='grandTotal'?'text-[#4736FE] font-bold':''}`}>
                     {totals[col.key]?fmtAmt(totals[col.key]):'—'}
                   </th>
                 ))}
+                <th className={thB}></th>
               </tr>
-              {/* Row 2: Group labels with colSpan (click to expand/collapse) */}
+              {/* Row 2: Group labels with colSpan */}
               <tr>
-                <th className={`${thB} s-col`} colSpan="8"></th>
+                <th className={`${thB} s-col`}></th>
+                <th className={thB} colSpan="6"></th>
                 {COL_GROUPS.map(g=>{
                   const isOpen = openGroups.has(g.key);
                   return (
@@ -825,10 +829,11 @@ function GSHubsTab({ gsData }) {
                   );
                 })}
                 <th className={`${thB} text-right font-bold text-[#4736FE]`}>Grand Total</th>
+                <th className={thB}></th>
               </tr>
-              {/* Row 3: Column names (aligns with row 1) */}
+              {/* Row 3: Column names */}
               <tr>
-                {['Cost Center','Hub','City','Zone','Cat.','Stage','Parking','Slots'].map((h,i)=>(
+                {['Hub','City','Zone','Cat.','Stage','Parking','Slots'].map((h,i)=>(
                   <th key={'c-'+h} className={`${thB} ${i===0?'s-col ':''} text-left whitespace-nowrap`}>{h}</th>
                 ))}
                 {visCols.map(col=>{
@@ -848,6 +853,7 @@ function GSHubsTab({ gsData }) {
                     </th>
                   );
                 })}
+                <th className={`${thB} text-left text-gray-300`}>Cost Center</th>
               </tr>
             </thead>
             <tbody>
@@ -859,14 +865,16 @@ function GSHubsTab({ gsData }) {
                   <React.Fragment key={city}>
                     <tr className="bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700 cursor-pointer hover:bg-gray-200 dark:hover:bg-white/[0.09]"
                       onClick={()=>{const s=new Set(collapsedCities);collapsed?s.delete(city):s.add(city);setCollapsedCities(s);}}>
-                      <td className="px-2 py-2 s-col font-bold text-xs text-[#4736FE] whitespace-nowrap" colSpan="8">
+                      <td className="px-2 py-2 s-col font-bold text-xs text-[#4736FE] whitespace-nowrap">
                         {collapsed?'▶':'▼'} {city} <span className="text-gray-400 font-normal ml-1">({rows.length})</span>
                       </td>
+                      <td colSpan="6" className="px-2 py-2"></td>
                       {visCols.map(col=>(
                         <td key={col.key} className={`px-2 py-2 text-right text-xs font-bold ${col.key==='grandTotal'?'text-[#4736FE]':'text-gray-600 dark:text-gray-300'} whitespace-nowrap`}>
                           {cityTotals[col.key]?fmtAmt(cityTotals[col.key]):'—'}
                         </td>
                       ))}
+                      <td className="px-2 py-2"></td>
                     </tr>
                     {!collapsed && rows.map((r,i)=><HubRow key={i} r={r} visCols={visCols} showTip={showTip} hideTip={hideTip} stageCls={stageCls}/>)}
                     {!collapsed && <CitySubtotal rows={rows}/>}
