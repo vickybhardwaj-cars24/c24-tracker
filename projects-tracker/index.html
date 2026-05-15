@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v3.59</title>
+<title>Cars24 Projects Tracker v3.60</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1198,7 +1198,9 @@ function commCard(entry,type){
   const revDateLine=type==='SAT'&&revDateVal
     ?'<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-weight:600">Revised on: <span style="font-weight:700">'+esc(revDateVal)+'</span></div>'
     :'';
-  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:'+bg+';border:1px solid '+border+';border-radius:8px;gap:10px;flex-wrap:wrap">'    +'<div style="flex:1;min-width:150px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:12px;font-weight:700">'+esc(r['Site Name']||'—')+revBadge+'</div>'    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(r['Owner']||'—')+' · '+esc(r['Vendor']||'—')+'</div>'    +revDateLine    +'</div>'    +'<div style="text-align:center;min-width:80px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:13px;font-weight:800;color:'+diffColor+'">'+dateLabel+'</div>'    +'<div style="font-size:10px;color:'+diffColor+'">'+diffLabel+'</div>'    +'</div>'    +'<a href="'+gmailUrl+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;flex-shrink:0">📧 Email HEM + Design</a>'    +'</div>';
+  const _commType=(type==='SAT'?'hem_design_sat':'hem_design_uat');
+  const _siteName=r['Site Name']||'';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:'+bg+';border:1px solid '+border+';border-radius:8px;gap:10px;flex-wrap:wrap">'    +'<div style="flex:1;min-width:150px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:12px;font-weight:700">'+esc(_siteName)+revBadge+'</div>'    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(r['Owner']||'—')+' · '+esc(r['Vendor']||'—')+'</div>'    +revDateLine    +'</div>'    +'<div style="text-align:center;min-width:80px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:13px;font-weight:800;color:'+diffColor+'">'+dateLabel+'</div>'    +'<div style="font-size:10px;color:'+diffColor+'">'+diffLabel+'</div>'    +'</div>'    +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'    +'<a href="'+gmailUrl+'" target="_blank" onclick="markEmailSent('+JSON.stringify(_siteName)+',\''+_commType+'\',\''+gmailUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\');return true;" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Email HEM + Design</a>'    +emailLogBadge(_siteName,_commType)    +'</div>'    +'</div>';
 }
 
 function renderSatUat(){
@@ -1392,7 +1394,7 @@ function renderSatUat(){
       +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['SAT Date']||'--')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600;color:#7c3aed">'+(revUAT!='--'?revUAT:'<span style="color:var(--muted);font-size:10px">None</span>')+'</td>'
-      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a></td>':'<td></td>')
+      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" onclick="event.stopPropagation();markEmailSent('+JSON.stringify(u.r['Site Name']||'')+',\'uat_delay\',\''+vendorDelayMail(u.r).replace(/'/g,"\\'")+'\')" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'</td>':'<td></td>')
       +(u.gap>10?'<td style="padding:6px 10px;text-align:center"><span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;border:1px solid #fecaca">🚨 UAT Date Missing</span></td>':'<td></td>')
       +'</tr>';
   }
@@ -1492,7 +1494,6 @@ function renderWarnings(container){
   function wCard(r){
     const idx=allData.findIndex(x=>x['Site Name']===r['Site Name']);
     const isCrit=r._gap>30;
-    const isNotified=notifiedSet.has(r['Site Name']);
     const upd=getLatestUpdate(r).substring(0,200);
     const lastCol=getLatestUpdateDate(r)||'—';
     const satD=r['SAT Date']||'—';
@@ -1502,9 +1503,10 @@ function renderWarnings(container){
     const warnSubj='UAT Delay Warning — '+site+' ('+gap+' days post SAT)';
     const warnBody='Dear '+owner+',\n\nThis is a formal reminder that '+site+' completed SAT on '+satD+' and UAT has not been recorded after '+gap+' days, which exceeds the 15-day SLA.\n\nPlease initiate UAT immediately and share the UAT completion date at the earliest.\n\nAny further delay may result in a Show Cause Notice (SCN) as per CARS24 project compliance policy.\n\nRegards,\nVicky Bhardwaj\nHead of Projects, CARS24';
     const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(warnSubj)+'&body='+encodeURIComponent(warnBody);
-    const notifyBtn = isNotified
-      ? '<span class="notified-tag">✓ Warning email sent this session</span>'
-      : '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation();notifiedSet.add(\''+site.replace(/'/g,"\\'")+'\');setTimeout(function(){renderWarnings();},200);">📧 Send Warning Email to '+esc(owner)+'</a>';
+    const _warnLogged=EMAIL_LOG[site]&&EMAIL_LOG[site]['uat_warning'];
+    const notifyBtn = _warnLogged
+      ? '<span class="notified-tag">✓ Warning sent'+(_warnLogged.count>1?' ×'+_warnLogged.count:'')+' · '+_warnLogged.lastSentDate+'</span>'
+      : '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation();markEmailSent('+JSON.stringify(site)+',\'uat_warning\',\''+gmailUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\');setTimeout(function(){renderWarnings();},300);">📧 Send Warning Email to '+esc(owner)+'</a>';
     return '<div class="warn-card'+(isCrit?'':' w-orange')+'" onclick="openModal('+idx+')">' +
       '<div class="warn-card-top">' +
       '<div>' +
@@ -1560,9 +1562,10 @@ function markNotifiedByIdx(btn) {
   const html='<div style="font-size:14px;font-weight:700;margin-bottom:12px">🔔 Warning — '+esc(site)+'</div>'
     +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+gap+' days since SAT · Owner: '+esc(owner)+'</div>'
     +'<div style="background:#f8fafc;border:1px solid var(--border);border-radius:8px;padding:12px;font-size:12px;white-space:pre-wrap;margin-bottom:12px" id="warn-email-body">'+esc(body)+'</div>'
-    +'<div style="display:flex;gap:8px">'
-    +'<a href="'+gmailUrl+'" target="_blank" class="btn btn-p btn-sm">📧 Open in Gmail</a>'
+    +'<div style="display:flex;gap:8px;align-items:center">'
+    +'<a href="'+gmailUrl+'" target="_blank" class="btn btn-p btn-sm" onclick="markEmailSent('+JSON.stringify(site)+',\'uat_warning\',\''+gmailUrl.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">📧 Open in Gmail</a>'
     +'<button class="btn btn-o btn-sm" onclick="copyWarnEmail()">📋 Copy Email</button>'
+    +emailLogBadge(site,'uat_warning')
     +'</div>';
   document.getElementById('overlay').classList.add('open');
   document.getElementById('mttl').textContent='';
@@ -3934,7 +3937,12 @@ function renderBDTab(){
     var teamBtns=['IT','NSO','Admin','HEM'].map(function(team){
       var url=bdTeamMail(r,team,tld,fld);
       var style=show30?activeBtnStyle:inactiveBtnStyle;
-      return '<a href="'+url+'" target="_blank" style="'+style+'">📧 '+team+'</a>';
+      var eType='bd_'+team.toLowerCase();
+      var sn=r['Site Name']||'';
+      return '<span style="display:inline-flex;align-items:center;gap:3px">'
+        +'<a href="'+url+'" target="_blank" style="'+style+'" onclick="markEmailSent('+JSON.stringify(sn)+',\''+eType+'\',\''+url.replace(/\\/g,'\\\\').replace(/'/g,"\\'")+'\')">📧 '+team+'</a>'
+        +emailLogBadge(sn,eType)
+        +'</span>';
     }).join(' ');
 
     html+='<div style="margin-bottom:12px;border:1.5px solid '+cardBorder+';border-radius:10px;overflow:hidden">';
