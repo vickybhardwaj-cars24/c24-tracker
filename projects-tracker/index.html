@@ -1922,6 +1922,9 @@ function parseCSV(txt) {
   };
   const hdrs = rows[0].map(h => {
     const clean = h.replace(/^\uFEFF/, '').trim();
+    // Normalize full datetime headers: "Wed May 13 2026 00:00:00 GMT+0530 (...)" \u2192 "13 May"
+    const dtm = clean.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+\d{4}/);
+    if (dtm) return dtm[2]+' '+dtm[1];
     return HDR_ALIASES[clean.toLowerCase()] || clean;
   });
   DATE_COLS.length = 0;
