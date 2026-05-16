@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.2</title>
+<title>Cars24 Projects Tracker v4.3</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -629,22 +629,11 @@ const notifiedSet = new Set(); // track notified sites in session
 // ═══════════════════════════════════════════════════════════════
 // GEMINI AI
 // ═══════════════════════════════════════════════════════════════
-const GEMINI_KEY = '';
-
-function getGeminiKey() {
-  let k = localStorage.getItem('c24_gemini_key') || '';
-  if (!k) {
-    k = prompt('Enter your Gemini API key (saved locally in your browser, never sent to any server except Google):');
-    if (k && k.trim()) localStorage.setItem('c24_gemini_key', k.trim());
-  }
-  return (k || '').trim();
-}
+const GEMINI_KEY = 'AIzaSyD0tzfwA_deKuLrek8qOgn-OsQpdXM336g';
 
 async function askGemini(prompt) {
-  const key = getGeminiKey();
-  if (!key) throw new Error('No Gemini API key provided.');
   const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
     { method:'POST', headers:{'Content-Type':'application/json'},
       body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
   );
@@ -715,6 +704,105 @@ async function runSiteAI(idx) {
     out.style.display = 'block';
   }
   btn.disabled = false; btn.textContent = '✨ Regenerate';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI — TASKS ACTION PLAN
+// ═══════════════════════════════════════════════════════════════
+let _aiTaskRunning = false;
+async function runTaskAI() {
+  if (_aiTaskRunning) return;
+  const btn = document.getElementById('ai-task-btn');
+  const out = document.getElementById('ai-task-out');
+  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
+  _aiTaskRunning = true;
+  btn.disabled = true; btn.textContent = '⏳ Thinking…';
+  out.style.display = 'none';
+  const today = new Date(); today.setHours(0,0,0,0);
+  // Collect all tasks with aging
+  const tasks = [];
+  allData.forEach(r => {
+    const siteName = r['Site Name'] || '?';
+    const owner = r['Owner'] || '?';
+    const status = r['Status'] || '?';
+    // Find first DATE_COL containing "Task:" to calculate age
+    let firstTaskCol = null;
+    for (let i = 0; i < DATE_COLS.length; i++) {
+      if (/task\s*:/i.test(r[DATE_COLS[i]] || '')) { firstTaskCol = DATE_COLS[i]; break; }
+    }
+    // Get latest task text
+    let latestTaskText = '';
+    for (let i = DATE_COLS.length - 1; i >= 0; i--) {
+      const txt = r[DATE_COLS[i]] || '';
+      const m = txt.match(/task\s*:\s*([\s\S]*)/i);
+      if (m) { latestTaskText = m[1].trim(); break; }
+    }
+    if (!latestTaskText) return;
+    // Calculate age from first logged task col
+    let ageDays = '?';
+    if (firstTaskCol) {
+      const colDate = pd(firstTaskCol);
+      if (colDate) ageDays = Math.round((today - colDate) / 86400000);
+    }
+    latestTaskText.split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean).forEach(item => {
+      tasks.push(`- ${siteName} | Owner: ${owner} | Status: ${status} | Age: ${ageDays}d | Task: ${item}`);
+    });
+  });
+  if (!tasks.length) {
+    out.innerHTML = '<div style="font-size:12px;color:#fff;opacity:.7">No tasks found. Add "Task: ..." entries in daily updates.</div>';
+    out.style.display = 'block';
+    _aiTaskRunning = false; btn.disabled = false; btn.textContent = '✨ AI Action Plan'; return;
+  }
+  const prompt = `You are a project manager at CARS24 overseeing construction/fit-out sites across India. Below are open action items extracted from daily updates, with how many days each has been pending.\n\n${tasks.join('\n')}\n\nRespond in exactly this format (plain text, no markdown symbols):\n\nCRITICAL - ACT TODAY:\n1. [Site] – [task] – [age]d pending – PM: [owner]\n\nTHIS WEEK:\n2. [Site] – [task] – [age]d pending – PM: [owner]\n\nFOLLOW UP NEXT WEEK:\n3. [Site] – [task]\n\nOVERALL ASSESSMENT: [1 line on backlog health and biggest bottleneck]`;
+  try {
+    const text = await askGemini(prompt);
+    out.innerHTML = text.split('\n').map(line => {
+      line = line.trim(); if (!line) return '';
+      if (/^(CRITICAL|THIS WEEK|FOLLOW UP|OVERALL)/.test(line)) {
+        const color = /CRITICAL/.test(line) ? '#fca5a5' : /THIS WEEK/.test(line) ? '#fde68a' : /OVERALL/.test(line) ? '#86efac' : '#cbd5e1';
+        return `<div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:${color};margin-top:10px;margin-bottom:3px">${esc(line)}</div>`;
+      }
+      return `<div style="font-size:12px;padding:2px 0 2px 8px;border-left:2px solid rgba(255,255,255,.25);margin-bottom:3px">${esc(line)}</div>`;
+    }).join('');
+    out.style.display = 'block';
+  } catch(e) {
+    out.innerHTML = `<div style="color:#fca5a5;font-size:12px">⚠ ${esc(e.message)}</div>`;
+    out.style.display = 'block';
+  }
+  _aiTaskRunning = false; btn.disabled = false; btn.textContent = '✨ Regenerate Action Plan';
+}
+
+// ═══════════════════════════════════════════════════════════════
+// AI — SLACK DRAFT
+// ═══════════════════════════════════════════════════════════════
+let _aiSlackRunning = false;
+async function runSlackAI() {
+  if (_aiSlackRunning) return;
+  const btn = document.getElementById('ai-slack-btn');
+  const out = document.getElementById('ai-slack-out');
+  const wrap = document.getElementById('ai-slack-wrap');
+  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
+  _aiSlackRunning = true;
+  btn.disabled = true; btn.textContent = '⏳ Thinking…';
+  if (wrap) wrap.style.display = 'block';
+  out.textContent = '';
+  const today = new Date(); today.setHours(0,0,0,0);
+  const rows = allData.map(r => {
+    const blockers = extractBlockers(getTodayUpdate(r));
+    const stale = daysSinceUpdate(r);
+    const satD = pd(r['SAT Date']), uatD = pd(r['UAT DATE']);
+    const uatOverdue = satD && !uatD ? Math.round((today - satD) / 86400000) : 0;
+    const handle = slackHandle(r['Owner'] || '');
+    return `- ${r['Site Name']||'?'} | PM: ${r['Owner']||'?'} (${handle}) | Status: ${r['Status']||'?'} | ${r['Percentage Completion']||'?'}%${blockers.length ? ' | Blockers: '+blockers.join(', ') : ''}${stale >= 5 ? ' | STALE '+stale+'d' : ''}${uatOverdue > 10 ? ' | UAT OVERDUE '+uatOverdue+'d' : ''} | Update: ${(getTodayUpdate(r)||'').substring(0,120)}`;
+  }).join('\n');
+  const dateStr = new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
+  const prompt = `You are a project coordinator at CARS24. Generate a ready-to-paste Slack message for a weekly cross-functional update meeting. Use Slack formatting (*bold*, _italic_, bullet points with •). Keep it professional, concise, and action-oriented.\n\nSite data:\n${rows}\n\nFormat the message exactly like this:\n\n🚦 *Weekly Cross-Functional Update — ${dateStr}*\n\n🔴 *Urgent — Action Needed Today:*\n• *[Site]* [Blocker team] — [issue + days pending] — [Slack handle]\n\n🟡 *This Week:*\n• *[Site]* [Blocker team] — [issue] — [Slack handle]\n\n✅ *On Track / No Blockers:*\n• [Site list]\n\n📊 *Portfolio Summary:* [1 line — total sites, % on track, key risk]\n\n_AI-generated summary | ${dateStr}_`;
+  try {
+    out.textContent = await askGemini(prompt);
+  } catch(e) {
+    out.textContent = `⚠ ${e.message}`;
+  }
+  _aiSlackRunning = false; btn.disabled = false; btn.textContent = '✨ Regenerate';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1714,7 +1802,7 @@ function showInvTab(tab,btn){
 
 function renderInsights(){
   const aiCard=document.getElementById('ai-digest-wrap');
-  if(aiCard && !aiCard.hasChildNodes()) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions · <span style="cursor:pointer;text-decoration:underline" onclick="localStorage.removeItem('c24_gemini_key');toast('API key cleared','ok')">Reset key</span></div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
+  if(aiCard && !aiCard.hasChildNodes()) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions</div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
   const g=document.getElementById('igg');
   const sMap={},oMap={},vMap={};
   allData.forEach(r=>{
@@ -3003,6 +3091,15 @@ function renderTaskTab(){
     +'<div style="font-size:14px;font-weight:700">📋 Action Items</div>'
     +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
+  // AI Action Plan card (render once)
+  html+='<div id="ai-task-card" style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:14px 16px;margin-bottom:16px;color:#fff">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">🧠 AI Action Plan</div>'
+    +'<div style="font-size:10px;opacity:.8">Prioritises tasks by aging — Critical / This Week / Follow Up</div></div>'
+    +'<button id="ai-task-btn" onclick="runTaskAI()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ AI Action Plan</button>'
+    +'</div>'
+    +'<div id="ai-task-out" style="display:none;margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:10px;line-height:1.6"></div>'
+    +'</div>';
   dateCols.forEach(function(col){
     html+='<div style="margin-bottom:16px">';
     html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border)">'+esc(col)+'</div>';
@@ -3716,6 +3813,18 @@ function renderSlackTab(subTab){
   var nav='<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSlackTab(\'crossfunc\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='crossfunc'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Cross-Functional</button>'
     +'<button onclick="renderSlackTab(\'pmupdate\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='pmupdate'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">PM Update</button>'
+    +'</div>'
+    +'<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:14px 16px;margin-bottom:16px;color:#fff">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0">'
+    +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">✨ AI Slack Draft</div>'
+    +'<div style="font-size:10px;opacity:.8">AI generates a polished cross-functional Slack post — ready to copy & paste</div></div>'
+    +'<div style="display:flex;gap:6px">'
+    +'<button id="ai-slack-btn" onclick="runSlackAI()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ Generate</button>'
+    +'<button onclick="copyToClipboard(\'ai-slack-out\')" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer">📋 Copy</button>'
+    +'</div></div>'
+    +'<div id="ai-slack-wrap" style="display:none;margin-top:12px">'
+    +'<pre id="ai-slack-out" style="background:#0d1117;color:#c9d1d9;padding:12px;border-radius:8px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6;margin:0"></pre>'
+    +'</div>'
     +'</div>';
   if(subTab==='crossfunc'){
     var bt={'IT':[],'Design':[],'Commercial':[],'HEM':[],'BD':[],'Other':[]};
