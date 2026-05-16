@@ -422,19 +422,16 @@ function detectDateCols(headers){
 // DEPARTMENT PARSING
 // ─────────────────────────────────────────────────────────
 function parseDeptStatuses(row){
-  // For each dept, find the latest non-empty status across all date columns
   var result={};
   DEPTS.forEach(function(dept){ result[dept]=''; });
-
-  // Build sorted date columns (latest first)
   var cols=dateCols.slice().reverse();
   cols.forEach(function(col){
-    var txt=(row[col]||'').trim();
+    var txt=(row[col]||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n').trim();
     if(!txt) return;
     DEPTS.forEach(function(dept){
-      if(result[dept]) return; // already found latest
-      // Match "DEPT:" or "DEPT :" pattern (case insensitive)
-      var re=new RegExp('(?:^|\\n)'+escRe(dept)+'\\s*:\\s*([^\\n]*(?:\\n(?!'+DEPTS.map(escRe).join('|')+'\\s*:)[^\\n]*)*)','im');
+      if(result[dept]) return;
+      var deptAlts='(?:'+DEPTS.map(escRe).join('|')+')\\s*:';
+      var re=new RegExp('(?:^|\\n)'+escRe(dept)+'\\s*:\\s*([^\\n]*(?:\\n(?!'+deptAlts+')[^\\n]*)*)','im');
       var m=txt.match(re);
       if(m) result[dept]=(m[1]||'').trim();
     });
@@ -493,9 +490,25 @@ function handleNSOUpload(event){
   event.target.value='';
 }
 
+function normalizeDateHeader(h){
+  // "Wed May 13 2026 00:00:00 GMT+0530 (India Standard Time)" → "13 May"
+  var m=h.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+\d{4}/);
+  if(m) return m[2]+' '+m[1];
+  return h;
+}
+
 function loadNSOData(csvText){
+  csvText=csvText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   var parsed=parseCSV(csvText);
   if(!parsed.length){toast('No valid data found in CSV');return;}
+  // Remap full datetime column keys to "DD Mon" format
+  parsed=parsed.map(function(row){
+    var newRow={};
+    Object.keys(row).forEach(function(k){
+      newRow[normalizeDateHeader(k)]=row[k];
+    });
+    return newRow;
+  });
   var keys=Object.keys(parsed[0]);
   dateCols=detectDateCols(keys);
   allData=parsed;
