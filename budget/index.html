@@ -672,7 +672,7 @@ function SummaryTab({ gsData, c2bData }) {
       </div>
       <div className="flex items-center gap-3">
         <div className="text-sm font-semibold text-gray-400">View</div>
-        {[['charts','Charts'],['table','Data Table'],['lastyear','Last Year Spends']].map(([v,l])=>(
+        {[['charts','Charts'],['table','Data Table'],['lastyear','Last Year Spends'],['waterfall','FY26-27 Budget']].map(([v,l])=>(
           <button key={v} onClick={()=>setView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${view===v?'bg-[#4736FE] text-white':'text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>{l}</button>
         ))}
       </div>
@@ -769,6 +769,76 @@ function SummaryTab({ gsData, c2bData }) {
               </table>
             </div>
           </div>
+        </div>
+      )}
+      {view==='waterfall' && (
+        <div className="space-y-4">
+          <div className="bg-[#4736FE]/10 border border-[#4736FE]/30 rounded-xl px-4 py-3 text-xs text-[#4736FE]">
+            📊 FY 26-27 Capex Budget — Consolidated waterfall summary. All values in Crores (₹ Cr).
+          </div>
+          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full text-xs min-w-[600px]">
+                <thead>
+                  <tr className="bg-[#1a3a5c] text-white">
+                    <th className="px-4 py-3 text-left font-bold text-sm">Type</th>
+                    <th className="px-4 py-3 text-right font-bold text-sm whitespace-nowrap">Capex for Existing Hub</th>
+                    <th className="px-4 py-3 text-right font-bold text-sm whitespace-nowrap">Capex for New Hub<br/>(City Expansion)</th>
+                    <th className="px-4 py-3 text-right font-bold text-sm">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {[
+                    {label:'Total Capex + Maint + HRC + C2B + New Office', existing:22.32, newHub:9.43, total:45.74, isGrandTotal:true},
+                    {label:'GS Hub Capex',       existing:11.22, newHub:7.87,  total:19.10, isSection:true},
+                    {label:'Infra Cost',          existing:5.14,  newHub:6.12,  total:11.26, isSub:true},
+                    {label:'Slot Marking',        existing:0.59,  newHub:0.06,  total:0.65,  isSub:true},
+                    {label:'VM',                  existing:0.78,  newHub:0.68,  total:1.46,  isSub:true},
+                    {label:'New Initiatives',     existing:3.93,  newHub:0.65,  total:4.57,  isSub:true},
+                    {label:'IT Cost',             existing:0.80,  newHub:0.37,  total:1.16,  isSub:true},
+                    {label:'HRC Total',           existing:6.29,  newHub:0.00,  total:6.29,  isSection:true},
+                    {label:'HRC Capex',           existing:5.70,  newHub:0.00,  total:5.70,  isSub:true},
+                    {label:'HRC IT Cost',         existing:0.34,  newHub:0.00,  total:0.34,  isSub:true},
+                    {label:'HRC Maintenance',     existing:0.26,  newHub:0.00,  total:0.26,  isSub:true},
+                    {label:'Total Maintenance',   existing:3.00,  newHub:0.88,  total:3.87,  isSection:true},
+                    {label:'Infra Maintenance',   existing:1.56,  newHub:0.45,  total:2.01,  isSub:true},
+                    {label:'VM Maintenance',      existing:1.44,  newHub:0.43,  total:1.86,  isSub:true},
+                    {label:'C2B Capex',           existing:1.81,  newHub:0.68,  total:2.49,  isSection:true},
+                    {label:'Infra Cost',          existing:1.81,  newHub:0.68,  total:2.49,  isSub:true},
+                    {label:'New Office Capex',    existing:0.00,  newHub:0.00,  total:14.00, isSection:true},
+                    {label:'Infra Cost',          existing:0.00,  newHub:0.00,  total:14.00, isSub:true},
+                  ].map((row,i)=>{
+                    const fmt = v => v===0 ? '—' : v.toFixed(2);
+                    if (row.isGrandTotal) return (
+                      <tr key={i} className="bg-[#1a3a5c] text-white font-bold">
+                        <td className="px-4 py-3 text-sm">{row.label}</td>
+                        <td className="px-4 py-3 text-right">{row.existing.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{row.newHub.toFixed(2)}</td>
+                        <td className="px-4 py-3 text-right">{row.total.toFixed(2)}</td>
+                      </tr>
+                    );
+                    if (row.isSection) return (
+                      <tr key={i} className="bg-[#4736FE]/15 border-b border-[#4736FE]/20 font-bold">
+                        <td className="px-4 py-2.5 text-[#4736FE]">{row.label}</td>
+                        <td className="px-4 py-2.5 text-right text-[#4736FE]">{row.existing.toFixed(2)}</td>
+                        <td className="px-4 py-2.5 text-right text-[#4736FE]">{row.newHub > 0 ? row.newHub.toFixed(2) : '—'}</td>
+                        <td className="px-4 py-2.5 text-right text-[#4736FE] font-bold">{row.total.toFixed(2)}</td>
+                      </tr>
+                    );
+                    return (
+                      <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
+                        <td className="px-4 py-2 pl-8 text-gray-500 dark:text-gray-400">{row.label}</td>
+                        <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{fmt(row.existing)}</td>
+                        <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{fmt(row.newHub)}</td>
+                        <td className="px-4 py-2 text-right font-semibold">{row.total.toFixed(2)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <p className="text-[10px] text-gray-400">All values in ₹ Crores. Existing Hub = upgrades/replacements/maintenance of live sites. New Hub = city expansion NSO capex.</p>
         </div>
       )}
     </div>
@@ -1347,16 +1417,18 @@ const FOUR_YEAR_PLAN = [
   {metric:'New Hubs (NSO/Repl.)',  fy2425:5,   fy2526:8,   fy2627:12,  fy2728:12,  fy2829:12,  isCount:true},
   {metric:'Closed/Exited Hubs',    fy2425:2,   fy2526:3,   fy2627:4,   fy2728:4,   fy2829:4,   isCount:true},
   {metric:'Avg Capex/New Hub (₹L)',fy2425:78,  fy2526:82,  fy2627:86,  fy2728:90,  fy2829:95,  isLakh:true},
-  {metric:'Total Capex — New Hubs',fy2425:3900000,fy2526:6560000,fy2627:10320000,fy2728:10800000,fy2829:11400000},
+  {metric:'Total Capex — New Hubs',fy2425:3900000,fy2526:6560000,fy2627:78700000,fy2728:10800000,fy2829:11400000},
   {metric:'Replacement Capex',     fy2425:1800000,fy2526:2100000,fy2627:3500000,fy2728:2800000,fy2829:2000000},
   {metric:'HRC Count',             fy2425:8,   fy2526:9,   fy2627:12,  fy2728:15,  fy2829:18,  isCount:true},
-  {metric:'HRC Capex',             fy2425:2000000,fy2526:5100000,fy2627:8200000,fy2728:9000000,fy2829:9000000},
+  {metric:'HRC Capex',             fy2425:2000000,fy2526:5100000,fy2627:62900000,fy2728:9000000,fy2829:9000000},
   {metric:'Major Upgrade Count',   fy2425:10,  fy2526:12,  fy2627:15,  fy2728:14,  fy2829:12,  isCount:true},
   {metric:'Major Upgrade Capex',   fy2425:3500000,fy2526:4200000,fy2627:5200000,fy2728:4900000,fy2829:4200000},
   {metric:'Minor/Basic Upgrade Capex',fy2425:1800000,fy2526:2200000,fy2627:2800000,fy2728:2600000,fy2829:2500000},
-  {metric:'Annual Maintenance',    fy2425:4200000,fy2526:4800000,fy2627:5600000,fy2728:6200000,fy2829:7000000},
-  {metric:'C2B Parking Capex',     fy2425:5400000,fy2526:6000000,fy2627:8100000,fy2728:8400000,fy2829:9000000},
-  {metric:'Total Capex (all)',     fy2425:22600000,fy2526:30960000,fy2627:43720000,fy2728:44700000,fy2829:45100000, isTotal:true},
+  {metric:'Annual Maintenance',    fy2425:4200000,fy2526:4800000,fy2627:38700000,fy2728:6200000,fy2829:7000000},
+  {metric:'C2B Parking Capex',     fy2425:5400000,fy2526:6000000,fy2627:24900000,fy2728:8400000,fy2829:9000000},
+  {metric:'New Office Capex',      fy2425:0,fy2526:0,fy2627:140000000,fy2728:0,fy2829:0},
+  {metric:'GS Hub Capex (Total)',  fy2425:0,fy2526:0,fy2627:191000000,fy2728:0,fy2829:0},
+  {metric:'Total Capex (all)',     fy2425:22600000,fy2526:30960000,fy2627:457400000,fy2728:44700000,fy2829:45100000, isTotal:true},
 ];
 const FY_YEARS = [{key:'fy2425',label:'FY 24-25\n(Plan)'},{key:'fy2526',label:'FY 25-26\n(Plan)'},{key:'fy2627',label:'FY 26-27\n(AOP)'},{key:'fy2728',label:'FY 27-28\n(Proj.)'},{key:'fy2829',label:'FY 28-29\n(Proj.)'}];
 
