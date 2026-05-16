@@ -490,10 +490,25 @@ function handleNSOUpload(event){
   event.target.value='';
 }
 
+function normalizeDateHeader(h){
+  // "Wed May 13 2026 00:00:00 GMT+0530 (India Standard Time)" → "13 May"
+  var m=h.match(/^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+\d{4}/);
+  if(m) return m[2]+' '+m[1];
+  return h;
+}
+
 function loadNSOData(csvText){
   csvText=csvText.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
   var parsed=parseCSV(csvText);
   if(!parsed.length){toast('No valid data found in CSV');return;}
+  // Remap full datetime column keys to "DD Mon" format
+  parsed=parsed.map(function(row){
+    var newRow={};
+    Object.keys(row).forEach(function(k){
+      newRow[normalizeDateHeader(k)]=row[k];
+    });
+    return newRow;
+  });
   var keys=Object.keys(parsed[0]);
   dateCols=detectDateCols(keys);
   allData=parsed;
