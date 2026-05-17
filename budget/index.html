@@ -454,7 +454,34 @@ function parseExcel(buffer) {
     }
   }
 
-  return { gsRows: gsRows.length ? gsRows : null, c2bRows: c2bRows.length ? c2bRows : null };
+  // Parse Raman (4yr plan) sheet
+  let ramanRows = null;
+  const ramanSheetName = wb.SheetNames.find(n => n.toLowerCase().includes('raman') || n.toLowerCase().includes('4 year') || n.toLowerCase().includes('4yr'));
+  if (ramanSheetName) {
+    const rs = wb.Sheets[ramanSheetName];
+    const raw = XLSX.utils.sheet_to_json(rs, {header:1, defval:null});
+    // Find header row containing year labels like "2024" or "2024-25"
+    let hi = raw.findIndex(r => r && r.some(c => String(c||'').includes('2024')));
+    if (hi >= 0) {
+      // Find column indices for the 6 year columns
+      const hdr = raw[hi];
+      const yKeys = ['2024','2025-2','actual','2026','2027','2028'];
+      const colIdx = yKeys.map(k => hdr.findIndex(c => String(c||'').toLowerCase().includes(k)));
+      ramanRows = [];
+      for (let i = hi+1; i < raw.length; i++) {
+        const r = raw[i];
+        if (!r) continue;
+        const label = String(r[0]||r[1]||'').trim();
+        if (!label) continue;
+        const d = colIdx.map(ci => ci>=0 ? (r[ci]===null||r[ci]===undefined ? null : Number(r[ci])||0) : null);
+        const isTotal = label.toLowerCase().startsWith('total') || label.toLowerCase().includes('capex/year') || label.toLowerCase().includes('contingency');
+        const isCount = !isTotal;
+        ramanRows.push({label, isTotal, isCount, d, g:'parsed'});
+      }
+    }
+  }
+
+  return { gsRows: gsRows.length ? gsRows : null, c2bRows: c2bRows.length ? c2bRows : null, ramanRows: ramanRows && ramanRows.length ? ramanRows : null };
 }
 
 // ── Tooltip ───────────────────────────────────────────────────────────────
@@ -597,20 +624,61 @@ function ToastLayer({toasts}) {
 // ── Summary Tab ───────────────────────────────────────────────────────────
 
 function SummaryTab({ gsData, c2bData }) {
-  const totalCapexGS = gsData.reduce((s,r)=>s+r.totalCapex,0);
-  const totalGrandGS = gsData.reduce((s,r)=>s+r.grandTotal,0);
-  const totalHRC = gsData.reduce((s,r)=>s+r.hrcTotal,0);
-  const totalMaint = gsData.reduce((s,r)=>s+r.totalMaint,0);
-  const totalC2B = c2bData.reduce((s,r)=>s+r.totalCapex,0);
-  const overall = totalGrandGS + totalC2B;
+  const isObj = gsData.length > 0 && typeof gsData[0] === 'object' && !Array.isArray(gsData[0]);
 
-  const byZone = useMemo(()=>{const m={};gsData.forEach(r=>{m[r.zone]=(m[r.zone]||0)+r.grandTotal;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}, [gsData]);
-  const byCat = useMemo(()=>{const m={};gsData.forEach(r=>{const c=r.category.includes('NSO')?'NSO':r.category.includes('HRC')?'HRC':r.category.includes('Replacement')?'Replacement':'Upgrade';m[c]=(m[c]||0)+r.grandTotal;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}, [gsData]);
-  const byStage = useMemo(()=>{const m={};gsData.forEach(r=>{m[r.stage]=(m[r.stage]||0)+r.grandTotal;});return Object.entries(m).sort((a,b)=>b[1]-a[1]);}, [gsData]);
+  const wf = useMemo(() => {
+    const CR = 10000000;
+    if (!isObj) return {
+      gsEx:11.22, gsNw:7.87,
+      infraEx:5.14, infraNw:6.12,
+      slotEx:0.59, slotNw:0.06,
+      vmEx:0.78, vmNw:0.68,
+      initEx:3.93, initNw:0.65,
+      itEx:0.80, itNw:0.37,
+      hrcCap:5.70, hrcIt:0.34, hrcMt:0.26,
+      mEx:3.00, mNw:0.88,
+      imEx:1.56, imNw:0.45,
+      vmMEx:1.44, vmMNw:0.43,
+      c2bEx:1.81, c2bNw:0.68,
+      office:14.00,
+    };
+    const isHRC = r => (r.category||'').toLowerCase().includes('hrc');
+    const ex = gsData.filter(r => r.stage==='Active' && !isHRC(r));
+    const nw = gsData.filter(r => r.stage!=='Active' && !isHRC(r));
+    const hr = gsData.filter(r => isHRC(r));
+    const s = (arr,k) => arr.reduce((a,r)=>a+(r[k]||0),0)/CR;
+    const c2bTot = c2bData.reduce((a,r)=>a+(r.totalCapex||0),0)/CR;
+    return {
+      gsEx:s(ex,'totalCapex'), gsNw:s(nw,'totalCapex'),
+      infraEx:s(ex,'infraCost'), infraNw:s(nw,'infraCost'),
+      slotEx:s(ex,'slotMarking'), slotNw:s(nw,'slotMarking'),
+      vmEx:s(ex,'vm'), vmNw:s(nw,'vm'),
+      initEx:s(ex,'newInitiatives'), initNw:s(nw,'newInitiatives'),
+      itEx:s(ex,'itCost'), itNw:s(nw,'itCost'),
+      hrcCap:s(hr,'hrcCapex'), hrcIt:s(hr,'hrcItCost'), hrcMt:s(hr,'hrcMaint'),
+      mEx:s(ex,'totalMaint'), mNw:s(nw,'totalMaint'),
+      imEx:s(ex,'infraMaint'), imNw:s(nw,'infraMaint'),
+      vmMEx:s(ex,'vmMaint'), vmMNw:s(nw,'vmMaint'),
+      c2bEx:c2bTot, c2bNw:0,
+      office:14.00,
+    };
+  }, [gsData, c2bData, isObj]);
 
-  const zoneColors={North:'bg-blue-500',South:'bg-green-500',West:'bg-amber-500',East:'bg-purple-500',RON:'bg-pink-500'};
-  const catColors={NSO:'bg-[#4736FE]',HRC:'bg-rose-500',Replacement:'bg-orange-500',Upgrade:'bg-teal-500'};
-  const stageColors={Active:'bg-green-500',YTD:'bg-amber-500',YTL:'bg-blue-500'};
+  const [openSec, setOpenSec] = useState({gs:false,hrc:false,maint:false,c2b:false,office:false});
+  const toggle = k => setOpenSec(o=>({...o,[k]:!o[k]}));
+  const expandAll = () => setOpenSec({gs:true,hrc:true,maint:true,c2b:true,office:true});
+  const collapseAll = () => setOpenSec({gs:false,hrc:false,maint:false,c2b:false,office:false});
+
+  const gsTotal = wf.gsEx + wf.gsNw;
+  const hrcTotal = wf.hrcCap + wf.hrcIt + wf.hrcMt;
+  const maintTotal = wf.mEx + wf.mNw;
+  const c2bTotal = wf.c2bEx + wf.c2bNw;
+  const grandEx = wf.gsEx + hrcTotal + wf.mEx + wf.c2bEx;
+  const grandNw = wf.gsNw + wf.mNw + wf.c2bNw;
+  const grandTotal = grandEx + grandNw + wf.office;
+
+  const cr = v => (v||0).toFixed(2);
+  const fmt0 = v => (!v || v===0) ? '—' : v.toFixed(2);
 
   function Card({label,value,sub,color}) {
     const cls={indigo:'text-[#4736FE]',amber:'text-amber-400',green:'text-green-400',purple:'text-purple-400',rose:'text-rose-400'}[color]||'text-gray-400';
@@ -621,226 +689,101 @@ function SummaryTab({ gsData, c2bData }) {
     </div>;
   }
 
-  function BarChart({title,data,colorMap,maxVal}) {
-    return <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
-      <div className="text-sm font-semibold mb-4">{title}</div>
-      <div className="space-y-3">
-        {data.map(([k,v])=>(
-          <div key={k}>
-            <div className="flex justify-between text-xs mb-1"><span className="font-medium">{k}</span><span className="text-gray-400">{fmtAmt(v)}</span></div>
-            <div className="h-2 bg-gray-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
-              <div className={`h-full rounded-full ${colorMap[k]||'bg-gray-400'}`} style={{width:`${(v/maxVal*100).toFixed(1)}%`}}/>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>;
+  function SecRow({label, ex, nw, tot, sKey, children}) {
+    const isOpen = openSec[sKey];
+    return <>
+      <tr className="bg-[#4736FE]/10 border-b border-[#4736FE]/20 cursor-pointer hover:bg-[#4736FE]/18 transition-colors select-none" onClick={()=>toggle(sKey)}>
+        <td className="px-4 py-2.5 font-bold text-[#4736FE]">
+          <span className="inline-block w-4 text-[10px] text-gray-400">{isOpen?'▾':'▸'}</span>{label}
+        </td>
+        <td className="px-4 py-2.5 text-right font-bold text-[#4736FE]">{cr(ex)}</td>
+        <td className="px-4 py-2.5 text-right font-bold text-[#4736FE]">{fmt0(nw)}</td>
+        <td className="px-4 py-2.5 text-right font-bold text-[#4736FE]">{cr(tot)}</td>
+      </tr>
+      {isOpen && children}
+    </>;
   }
 
-  const [view, setView] = useState('charts');
+  function SubRow({label, ex, nw, tot}) {
+    return <tr className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
+      <td className="px-4 py-2 pl-10 text-gray-500 dark:text-gray-400">{label}</td>
+      <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{fmt0(ex)}</td>
+      <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{fmt0(nw)}</td>
+      <td className="px-4 py-2 text-right font-semibold">{cr(tot)}</td>
+    </tr>;
+  }
 
-  // Data table: hub-level summary
-  const hubRows = useMemo(()=>[...gsData].sort((a,b)=>a.city.localeCompare(b.city)),[gsData]);
-  const thT="px-3 py-2 text-gray-400 font-semibold text-[10px] uppercase tracking-wider bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 sticky top-0 whitespace-nowrap";
-
-  // Last Year Spends — from Summary tab B38:Y50 (FY 25-26)
-  const LAST_YEAR = [
-    {particulars:'Upgrades',    bucket:'Minor Upgrade',    fy2526Count:17, fy2526Total:16420000, fy2526Actual:33621929, fy2627Count:6,  fy2627Avg:1977761},
-    {particulars:'',            bucket:'Major Upgrade',    fy2526Count:11, fy2526Total:53330000, fy2526Actual:63479868, fy2627Count:12, fy2627Avg:5770897},
-    {particulars:'Upcoming Hubs',bucket:'New Upcoming',   fy2526Count:10, fy2526Total:52690000, fy2526Actual:42017525, fy2627Count:14, fy2627Avg:4201753},
-    {particulars:'',            bucket:'Replacement',      fy2526Count:12, fy2526Total:70045000, fy2526Actual:46253871, fy2627Count:6,  fy2627Avg:3303848},
-    {particulars:'Upcoming Closures',bucket:'To be closed',fy2526Count:7, fy2526Total:1040000,  fy2526Actual:910117,   fy2627Count:0,  fy2627Avg:130017},
-    {particulars:'',            bucket:'To be replaced',   fy2526Count:12, fy2526Total:1200000,  fy2526Actual:4203639,  fy2627Count:6,  fy2627Avg:350303},
-    {particulars:'Existing Hubs',bucket:'Maintenance',    fy2526Count:0,  fy2526Total:0,        fy2526Actual:0,        fy2627Count:0,  fy2627Avg:0},
-    {particulars:'New Setups',  bucket:'Academy',          fy2526Count:3,  fy2526Total:6000000,  fy2526Actual:0,        fy2627Count:3,  fy2627Avg:0},
-    {particulars:'',            bucket:'VR & Studio',      fy2526Count:5,  fy2526Total:17500000, fy2526Actual:11962755, fy2627Count:7,  fy2627Avg:1708965},
-    {particulars:'Contingency', bucket:'Hub Replacement',  fy2526Count:2,  fy2526Total:10000000, fy2526Actual:0,        fy2627Count:0,  fy2627Avg:0},
-    {particulars:'Fourdoor',    bucket:'Fourdoor',         fy2526Count:1,  fy2526Total:0,        fy2526Actual:965352,   fy2627Count:1,  fy2627Avg:965352},
-  ];
-  const lyTotalBudget = LAST_YEAR.reduce((s,r)=>s+r.fy2526Total,0);
-  const lyTotalActual = LAST_YEAR.reduce((s,r)=>s+r.fy2526Actual,0);
+  const thC = "px-4 py-3 text-right font-bold text-sm whitespace-nowrap";
+  const totalCapexGS = isObj ? gsData.reduce((s,r)=>s+(r.totalCapex||0),0) : 0;
+  const totalHRC = isObj ? gsData.reduce((s,r)=>s+(r.hrcTotal||0),0) : 0;
+  const totalMaint = isObj ? gsData.reduce((s,r)=>s+(r.totalMaint||0),0) : 0;
+  const totalC2B = isObj ? c2bData.reduce((s,r)=>s+(r.totalCapex||0),0) : 0;
 
   return (
     <div className="fade-in space-y-5">
-      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-3">
-        <Card label="GS Capex (excl. HRC/Maint)" value={fmtAmt(totalCapexGS)} sub={`${gsData.length} hubs`} color="indigo"/>
-        <Card label="HRC Budget" value={fmtAmt(totalHRC)} sub="New + Existing" color="rose"/>
-        <Card label="Maintenance Budget" value={fmtAmt(totalMaint)} sub="Annual" color="amber"/>
-        <Card label="GS Grand Total" value={fmtAmt(totalGrandGS)} sub="Capex + HRC + Maint" color="amber"/>
-        <Card label="C2B Parking Total" value={fmtAmt(totalC2B)} sub={`${c2bData.length} hubs`} color="green"/>
-        <Card label="Overall Grand Total" value={fmtAmt(overall)} sub="GS + C2B" color="purple"/>
+      {isObj && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card label="GS Hub Capex" value={fmtAmt(totalCapexGS)} sub={`${gsData.length} hubs`} color="indigo"/>
+          <Card label="HRC Budget" value={fmtAmt(totalHRC)} sub="All HRC" color="rose"/>
+          <Card label="Maintenance" value={fmtAmt(totalMaint)} sub="Annual" color="amber"/>
+          <Card label="C2B Parking" value={fmtAmt(totalC2B)} sub={`${c2bData.length} hubs`} color="green"/>
+        </div>
+      )}
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <div>
+            <div className="font-semibold text-sm">FY 26-27 Capex Budget</div>
+            <div className="text-xs text-gray-400 mt-0.5">All values in ₹ Crores · Click section to expand</div>
+          </div>
+          <div className="flex items-center gap-3">
+            <button onClick={expandAll} className="text-xs text-[#4736FE] hover:underline font-medium">Expand All</button>
+            <button onClick={collapseAll} className="text-xs text-gray-400 hover:underline">Collapse All</button>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[580px]">
+            <thead>
+              <tr className="bg-[#1a3a5c] text-white">
+                <th className="px-4 py-3 text-left font-bold text-sm">Type</th>
+                <th className={thC}>Capex for Existing Hub</th>
+                <th className={thC}>Capex for New Hub<br/>(City Expansion)</th>
+                <th className={thC}>Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className="bg-[#0f2540] text-white font-bold border-b border-[#1a3a5c]">
+                <td className="px-4 py-3 text-sm">Total Capex + Maint + HRC + C2B + New Office</td>
+                <td className="px-4 py-3 text-right">{cr(grandEx)}</td>
+                <td className="px-4 py-3 text-right">{cr(grandNw)}</td>
+                <td className="px-4 py-3 text-right text-amber-300">{cr(grandTotal)}</td>
+              </tr>
+              <SecRow label="GS Hub Capex" ex={wf.gsEx} nw={wf.gsNw} tot={gsTotal} sKey="gs">
+                <SubRow label="Infra Cost" ex={wf.infraEx} nw={wf.infraNw} tot={wf.infraEx+wf.infraNw}/>
+                <SubRow label="Slot Marking" ex={wf.slotEx} nw={wf.slotNw} tot={wf.slotEx+wf.slotNw}/>
+                <SubRow label="VM" ex={wf.vmEx} nw={wf.vmNw} tot={wf.vmEx+wf.vmNw}/>
+                <SubRow label="New Initiatives" ex={wf.initEx} nw={wf.initNw} tot={wf.initEx+wf.initNw}/>
+                <SubRow label="IT Cost" ex={wf.itEx} nw={wf.itNw} tot={wf.itEx+wf.itNw}/>
+              </SecRow>
+              <SecRow label="HRC Total" ex={hrcTotal} nw={0} tot={hrcTotal} sKey="hrc">
+                <SubRow label="HRC Capex" ex={wf.hrcCap} nw={0} tot={wf.hrcCap}/>
+                <SubRow label="HRC IT Cost" ex={wf.hrcIt} nw={0} tot={wf.hrcIt}/>
+                <SubRow label="HRC Maintenance" ex={wf.hrcMt} nw={0} tot={wf.hrcMt}/>
+              </SecRow>
+              <SecRow label="Total Maintenance" ex={wf.mEx} nw={wf.mNw} tot={maintTotal} sKey="maint">
+                <SubRow label="Infra Maintenance" ex={wf.imEx} nw={wf.imNw} tot={wf.imEx+wf.imNw}/>
+                <SubRow label="VM Maintenance" ex={wf.vmMEx} nw={wf.vmMNw} tot={wf.vmMEx+wf.vmMNw}/>
+              </SecRow>
+              <SecRow label="C2B Capex" ex={wf.c2bEx} nw={wf.c2bNw} tot={c2bTotal} sKey="c2b">
+                <SubRow label="Infra Cost" ex={wf.c2bEx} nw={wf.c2bNw} tot={c2bTotal}/>
+              </SecRow>
+              <SecRow label="New Office Capex" ex={0} nw={0} tot={wf.office} sKey="office">
+                <SubRow label="Infra Cost" ex={0} nw={0} tot={wf.office}/>
+              </SecRow>
+            </tbody>
+          </table>
+        </div>
       </div>
-      <div className="flex items-center gap-3">
-        <div className="text-sm font-semibold text-gray-400">View</div>
-        {[['charts','Charts'],['table','Data Table'],['lastyear','Last Year Spends'],['waterfall','FY26-27 Budget']].map(([v,l])=>(
-          <button key={v} onClick={()=>setView(v)} className={`px-3 py-1.5 rounded-lg text-xs font-medium ${view===v?'bg-[#4736FE] text-white':'text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>{l}</button>
-        ))}
-      </div>
-      {view==='charts' && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <BarChart title="By Zone (Grand Total)" data={byZone} colorMap={zoneColors} maxVal={Math.max(...byZone.map(([,v])=>v))}/>
-          <BarChart title="By Category" data={byCat} colorMap={catColors} maxVal={Math.max(...byCat.map(([,v])=>v))}/>
-          <BarChart title="By Stage" data={byStage} colorMap={stageColors} maxVal={Math.max(...byStage.map(([,v])=>v))}/>
-        </div>
-      )}
-      {view==='table' && (
-        <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-          <div className="tbl-wrap">
-            <table className="w-full text-xs min-w-[900px]">
-              <thead><tr>
-                {['Hub','City','Zone','Stage','Category','Capex','HRC','Maint.','Grand Total'].map(h=>(
-                  <th key={h} className={thT}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                {hubRows.map((r,i)=>(
-                  <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
-                    <td className="px-3 py-2 font-medium max-w-[220px] truncate" title={r.hub}>{r.hub}</td>
-                    <td className="px-3 py-2 text-gray-400">{r.city}</td>
-                    <td className="px-3 py-2 text-gray-400">{r.zone}</td>
-                    <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${{Active:'bg-green-500/15 text-green-400',YTD:'bg-amber-500/15 text-amber-400',YTL:'bg-blue-500/15 text-blue-400'}[r.stage]||''}`}>{r.stage}</span></td>
-                    <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded-full text-[9px] bg-gray-100 dark:bg-white/[0.06] text-gray-500">{r.category}</span></td>
-                    <td className="px-3 py-2 text-right">{r.totalCapex?fmtAmt(r.totalCapex):'—'}</td>
-                    <td className="px-3 py-2 text-right">{r.hrcTotal?fmtAmt(r.hrcTotal):'—'}</td>
-                    <td className="px-3 py-2 text-right">{r.totalMaint?fmtAmt(r.totalMaint):'—'}</td>
-                    <td className="px-3 py-2 text-right font-bold text-[#4736FE]">{fmtAmt(r.grandTotal)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
-      {view==='lastyear' && (
-        <div className="space-y-4">
-          <div className="grid grid-cols-3 gap-3">
-            <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
-              <div className="text-xs text-gray-400 mb-1">FY 25-26 Budget</div>
-              <div className="text-xl font-bold">{fmtAmt(lyTotalBudget)}</div>
-              <div className="text-xs text-gray-400 mt-1">50 hubs planned</div>
-            </div>
-            <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
-              <div className="text-xs text-gray-400 mb-1">FY 25-26 Actual Spent</div>
-              <div className="text-xl font-bold text-green-400">{fmtAmt(lyTotalActual)}</div>
-              <div className="text-xs text-gray-400 mt-1">38 hubs executed</div>
-            </div>
-            <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl px-5 py-4">
-              <div className="text-xs text-gray-400 mb-1">Budget Utilisation</div>
-              <div className="text-xl font-bold text-amber-400">{(lyTotalActual/lyTotalBudget*100).toFixed(1)}%</div>
-              <div className="text-xs text-gray-400 mt-1">Actual vs Planned</div>
-            </div>
-          </div>
-          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-            <div className="px-5 py-3 border-b border-gray-100 dark:border-gray-800 font-semibold text-sm">FY 25-26 Spends by Bucket</div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[700px]">
-                <thead><tr className="bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800">
-                  {['Particulars','Bucket','FY25-26 Count','FY25-26 Budget','FY25-26 Actual Spent','Utilisation','FY26-27 Count','FY26-27 Avg/Hub'].map(h=>(
-                    <th key={h} className="px-3 py-2.5 text-left text-gray-400 font-semibold uppercase tracking-wider text-[10px] sticky top-0 bg-gray-50 dark:bg-[#1a1a1a] whitespace-nowrap">{h}</th>
-                  ))}
-                </tr></thead>
-                <tbody>
-                  {LAST_YEAR.map((r,i)=>{
-                    const util = r.fy2526Total>0 ? (r.fy2526Actual/r.fy2526Total*100).toFixed(0)+'%' : '—';
-                    const over = r.fy2526Total>0 && r.fy2526Actual>r.fy2526Total;
-                    return (
-                      <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                        <td className="px-3 py-2.5 font-medium text-gray-500">{r.particulars}</td>
-                        <td className="px-3 py-2.5 font-medium">{r.bucket}</td>
-                        <td className="px-3 py-2.5 text-center text-gray-400">{r.fy2526Count||'—'}</td>
-                        <td className="px-3 py-2.5 text-right">{r.fy2526Total?fmtAmt(r.fy2526Total):'—'}</td>
-                        <td className="px-3 py-2.5 text-right font-semibold text-green-400">{r.fy2526Actual?fmtAmt(r.fy2526Actual):'—'}</td>
-                        <td className={`px-3 py-2.5 text-right font-semibold ${over?'text-red-400':'text-gray-400'}`}>{util}</td>
-                        <td className="px-3 py-2.5 text-center text-[#4736FE] font-semibold">{r.fy2627Count||'—'}</td>
-                        <td className="px-3 py-2.5 text-right text-[#4736FE]">{r.fy2627Avg?fmtAmt(r.fy2627Avg):'—'}</td>
-                      </tr>
-                    );
-                  })}
-                  <tr className="bg-gray-50 dark:bg-white/[0.03] font-bold border-t-2 border-gray-200 dark:border-gray-700">
-                    <td className="px-3 py-2.5 text-gray-400 text-[10px] uppercase tracking-wider" colSpan={2}>Total</td>
-                    <td className="px-3 py-2.5 text-center text-gray-400">{LAST_YEAR.reduce((s,r)=>s+r.fy2526Count,0)}</td>
-                    <td className="px-3 py-2.5 text-right">{fmtAmt(lyTotalBudget)}</td>
-                    <td className="px-3 py-2.5 text-right text-green-400">{fmtAmt(lyTotalActual)}</td>
-                    <td className="px-3 py-2.5 text-right text-amber-400">{(lyTotalActual/lyTotalBudget*100).toFixed(1)}%</td>
-                    <td className="px-3 py-2.5 text-center text-[#4736FE]">{LAST_YEAR.reduce((s,r)=>s+r.fy2627Count,0)}</td>
-                    <td className="px-3 py-2.5"></td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-      {view==='waterfall' && (
-        <div className="space-y-4">
-          <div className="bg-[#4736FE]/10 border border-[#4736FE]/30 rounded-xl px-4 py-3 text-xs text-[#4736FE]">
-            📊 FY 26-27 Capex Budget — Consolidated waterfall summary. All values in Crores (₹ Cr).
-          </div>
-          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full text-xs min-w-[600px]">
-                <thead>
-                  <tr className="bg-[#1a3a5c] text-white">
-                    <th className="px-4 py-3 text-left font-bold text-sm">Type</th>
-                    <th className="px-4 py-3 text-right font-bold text-sm whitespace-nowrap">Capex for Existing Hub</th>
-                    <th className="px-4 py-3 text-right font-bold text-sm whitespace-nowrap">Capex for New Hub<br/>(City Expansion)</th>
-                    <th className="px-4 py-3 text-right font-bold text-sm">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {[
-                    {label:'Total Capex + Maint + HRC + C2B + New Office', existing:22.32, newHub:9.43, total:45.74, isGrandTotal:true},
-                    {label:'GS Hub Capex',       existing:11.22, newHub:7.87,  total:19.10, isSection:true},
-                    {label:'Infra Cost',          existing:5.14,  newHub:6.12,  total:11.26, isSub:true},
-                    {label:'Slot Marking',        existing:0.59,  newHub:0.06,  total:0.65,  isSub:true},
-                    {label:'VM',                  existing:0.78,  newHub:0.68,  total:1.46,  isSub:true},
-                    {label:'New Initiatives',     existing:3.93,  newHub:0.65,  total:4.57,  isSub:true},
-                    {label:'IT Cost',             existing:0.80,  newHub:0.37,  total:1.16,  isSub:true},
-                    {label:'HRC Total',           existing:6.29,  newHub:0.00,  total:6.29,  isSection:true},
-                    {label:'HRC Capex',           existing:5.70,  newHub:0.00,  total:5.70,  isSub:true},
-                    {label:'HRC IT Cost',         existing:0.34,  newHub:0.00,  total:0.34,  isSub:true},
-                    {label:'HRC Maintenance',     existing:0.26,  newHub:0.00,  total:0.26,  isSub:true},
-                    {label:'Total Maintenance',   existing:3.00,  newHub:0.88,  total:3.87,  isSection:true},
-                    {label:'Infra Maintenance',   existing:1.56,  newHub:0.45,  total:2.01,  isSub:true},
-                    {label:'VM Maintenance',      existing:1.44,  newHub:0.43,  total:1.86,  isSub:true},
-                    {label:'C2B Capex',           existing:1.81,  newHub:0.68,  total:2.49,  isSection:true},
-                    {label:'Infra Cost',          existing:1.81,  newHub:0.68,  total:2.49,  isSub:true},
-                    {label:'New Office Capex',    existing:0.00,  newHub:0.00,  total:14.00, isSection:true},
-                    {label:'Infra Cost',          existing:0.00,  newHub:0.00,  total:14.00, isSub:true},
-                  ].map((row,i)=>{
-                    const fmt = v => v===0 ? '—' : v.toFixed(2);
-                    if (row.isGrandTotal) return (
-                      <tr key={i} className="bg-[#1a3a5c] text-white font-bold">
-                        <td className="px-4 py-3 text-sm">{row.label}</td>
-                        <td className="px-4 py-3 text-right">{row.existing.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right">{row.newHub.toFixed(2)}</td>
-                        <td className="px-4 py-3 text-right">{row.total.toFixed(2)}</td>
-                      </tr>
-                    );
-                    if (row.isSection) return (
-                      <tr key={i} className="bg-[#4736FE]/15 border-b border-[#4736FE]/20 font-bold">
-                        <td className="px-4 py-2.5 text-[#4736FE]">{row.label}</td>
-                        <td className="px-4 py-2.5 text-right text-[#4736FE]">{row.existing.toFixed(2)}</td>
-                        <td className="px-4 py-2.5 text-right text-[#4736FE]">{row.newHub > 0 ? row.newHub.toFixed(2) : '—'}</td>
-                        <td className="px-4 py-2.5 text-right text-[#4736FE] font-bold">{row.total.toFixed(2)}</td>
-                      </tr>
-                    );
-                    return (
-                      <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.02]">
-                        <td className="px-4 py-2 pl-8 text-gray-500 dark:text-gray-400">{row.label}</td>
-                        <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{fmt(row.existing)}</td>
-                        <td className="px-4 py-2 text-right text-gray-600 dark:text-gray-300">{fmt(row.newHub)}</td>
-                        <td className="px-4 py-2 text-right font-semibold">{row.total.toFixed(2)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          <p className="text-[10px] text-gray-400">All values in ₹ Crores. Existing Hub = upgrades/replacements/maintenance of live sites. New Hub = city expansion NSO capex.</p>
-        </div>
-      )}
+      <p className="text-[10px] text-gray-400">All values in ₹ Crores. Existing Hub = Active stage sites (upgrades/maintenance). New Hub = YTD/YTL NSO &amp; city expansion. New Office Capex sourced separately.</p>
     </div>
   );
 }
@@ -1432,42 +1375,114 @@ const FOUR_YEAR_PLAN = [
 ];
 const FY_YEARS = [{key:'fy2425',label:'FY 24-25\n(Plan)'},{key:'fy2526',label:'FY 25-26\n(Plan)'},{key:'fy2627',label:'FY 26-27\n(AOP)'},{key:'fy2728',label:'FY 27-28\n(Proj.)'},{key:'fy2829',label:'FY 28-29\n(Proj.)'}];
 
-function FourYearPlanTab() {
-  const thB="px-3 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px] bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 text-right whitespace-nowrap sticky top-0";
+function FourYearPlanTab({ fourYearData }) {
+  const COLS = [
+    {idx:0, label:'2024-25',       thCls:'bg-purple-800 text-white',        tdCls:'text-purple-200'},
+    {idx:1, label:'2025-26',       thCls:'bg-green-800 text-white',         tdCls:'text-green-200'},
+    {idx:2, label:'Actual\n25-26', thCls:'bg-green-700/70 text-green-100',  tdCls:'text-green-300'},
+    {idx:3, label:'2026-27',       thCls:'bg-[#4736FE] text-white',         tdCls:'text-[#a09eff] font-semibold'},
+    {idx:4, label:'2027-28',       thCls:'bg-orange-700 text-white',        tdCls:'text-orange-200'},
+    {idx:5, label:'2028-29',       thCls:'bg-gray-600 text-white',          tdCls:'text-gray-300'},
+  ];
+  const COUNTS = [1253, 2282, 1962, 1426, 379, null];
+
+  const ROWS = fourYearData || [
+    {g:'hubs',  label:'Opening no. of hubs',                      isCount:true,  d:[35,48,48,44,58,null]},
+    {g:'hubs',  label:'New hubs opened',                          isCount:true,  d:[19,22,15,19,2,null]},
+    {g:'hubs',  label:'Completely Revamped Hubs',                 isCount:true,  d:[10,11,10,2,1,null]},
+    {g:'hubs',  label:'No. of hubs closed',                       isCount:true,  d:[6,20,19,5,1,null]},
+    {g:'hubs',  label:'Closing number of hubs',                   isCount:true,  d:[48,50,44,58,59,59]},
+    {g:'new',   label:'Average Capex/New Hub (₹L)',               isCount:true,  d:[33,56,54,57,62,null]},
+    {g:'new',   label:'Total Capex/Year for New Hubs',            isTotal:true,  d:[627,1227,811,1092,124,null]},
+    {g:'vr',    label:'No. of VR/Studio',                         isCount:true,  d:[6,5,7,2,2,null]},
+    {g:'vr',    label:'Total Capex/Year for VR',                  isTotal:true,  d:[138.07637,175,120,70,70,null]},
+    {g:'hrc',   label:'No. of HRC',                               isCount:true,  d:[0,0,0,0,null,null]},
+    {g:'hrc',   label:'Total Capex/Year for HRC',                 isTotal:true,  d:[0,0,0,0,null,null]},
+    {g:'acad',  label:'No. of Academy',                           isCount:true,  d:[0,3,0,0,null,null]},
+    {g:'acad',  label:'Total Capex/Year for Academy',             isTotal:true,  d:[0,60,0,0,null,null]},
+    {g:'maj',   label:'No. of Major Upgrade',                     isCount:true,  d:[10,11,11,2,1,null]},
+    {g:'maj',   label:'Total Capex/Year for Major Upgrades',      isTotal:true,  d:[211.08253,533,635,97,30,null]},
+    {g:'min',   label:'No. of Minor Upgrades',                    isCount:true,  d:[19,27,17,32,29,null]},
+    {g:'min',   label:'Total Capex/Year for Minor Upgrades',      isTotal:true,  d:[221.30025,164,336,115,104,null]},
+    {g:'basic', label:'No. of Basic Upgrade (Capex Cost < 10L)',  isCount:true,  d:[0,0,0,null,null,null]},
+    {g:'basic', label:'Total Capex/Year for Basic Upgrade',       isTotal:true,  d:[0,0,0,null,null,null]},
+    {g:'maint', label:'No. of Maintenance (All Hubs)',            isCount:true,  d:[0,0,0,0,null,null]},
+    {g:'maint', label:'Total Capex/Year for Maintenance',         isTotal:true,  d:[0,0,0,0,null,null]},
+    {g:'clos',  label:'No. of Closure',                           isCount:true,  d:[12,19,19,2,1,null]},
+    {g:'clos',  label:'Total Capex/Year for closure',             isTotal:true,  d:[55.4307,22.4,51,2,1,null]},
+    {g:'four',  label:'Fourdoor',                                 isCount:true,  d:[0,0,1,0,null,null]},
+    {g:'four',  label:'Total Capex/Year for Fourdoor',            isTotal:true,  d:[0,0,10,0,null,null]},
+    {g:'cont',  label:'Total Contingency/Year for closure/Replacement', isTotal:true, d:[0,100,0,50,50,null]},
+  ];
+
+  const fmtCell = (v, isTotal) => {
+    if (v === null || v === undefined) return '—';
+    if (v === 0 && !isTotal) return '—';
+    if (v === 0 && isTotal) return '0';
+    return isTotal ? (Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)) : v;
+  };
+
+  const thBase = "px-3 py-2.5 text-right text-xs font-bold whitespace-pre-line text-center";
+  const tdBase = "px-3 py-2 text-right text-xs";
+
   return (
     <div className="fade-in space-y-4">
-      <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl px-4 py-3 text-xs text-amber-400">
-        📌 Placeholder data — upload the Excel with "4 Year Plan" sheet to populate actual figures.
-      </div>
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
+          <div className="font-semibold text-sm">4-Year Capex Plan</div>
+          <div className="text-xs text-gray-400">All costs are in Lakhs (₹L)</div>
+        </div>
         <div className="tbl-wrap">
-          <table className="w-full text-xs min-w-[700px]">
+          <table className="w-full min-w-[820px]" style={{borderCollapse:'separate',borderSpacing:0}}>
             <thead>
               <tr>
-                <th className={`${thB} text-left sticky left-0 s-col`}>Metric</th>
-                {FY_YEARS.map(y=><th key={y.key} className={`${thB} ${y.key==='fy2627'?'text-[#4736FE]':''}`} style={{whiteSpace:'pre-line'}}>{y.label}</th>)}
+                <th className="px-3 py-2.5 text-left text-xs font-bold bg-gray-800 text-gray-200 sticky top-0 z-20 s-col whitespace-nowrap">Type</th>
+                {COLS.map(c=>(
+                  <th key={c.idx} className={`${thBase} ${c.thCls} sticky top-0 z-10`}>{c.label}</th>
+                ))}
+              </tr>
+              <tr>
+                <td className="px-3 py-1.5 text-[10px] text-gray-400 bg-gray-50 dark:bg-[#1a1a1a] s-col font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Budget (₹L)</td>
+                {COLS.map((c,i)=>(
+                  <td key={i} className={`px-3 py-1.5 text-right text-[10px] font-bold bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-700 ${COUNTS[i]?'text-gray-600 dark:text-gray-300':'text-gray-300'}`}>
+                    {COUNTS[i] ? COUNTS[i].toLocaleString() : '—'}
+                  </td>
+                ))}
               </tr>
             </thead>
             <tbody>
-              {FOUR_YEAR_PLAN.map((row,i)=>(
-                <tr key={i} className={`border-b border-gray-50 dark:border-gray-800/60 ${row.isTotal?'bg-[#4736FE]/10 font-bold':''}`}>
-                  <td className={`px-3 py-2.5 font-medium s-col ${row.isTotal?'text-[#4736FE]':'text-gray-700 dark:text-gray-200'}`}>{row.metric}</td>
-                  {FY_YEARS.map(y=>{
-                    const v=row[y.key];
-                    const display = row.isCount ? v : row.isLakh ? `₹${v}L` : fmtAmt(v);
-                    return (
-                      <td key={y.key} className={`px-3 py-2.5 text-right whitespace-nowrap ${y.key==='fy2627'?'font-semibold text-[#4736FE]':'text-gray-600 dark:text-gray-300'}`}>
-                        {display}
+              {ROWS.map((row, ri) => {
+                const isBlank = !row.label;
+                if (isBlank) return <tr key={ri} className="h-2"><td colSpan={7} className="bg-gray-50 dark:bg-[#161616]"/></tr>;
+                const prevGroup = ri > 0 ? ROWS[ri-1].g : null;
+                const isGroupBorder = prevGroup && prevGroup !== row.g && ri > 0;
+                const borderCls = isGroupBorder ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t border-gray-50 dark:border-gray-800/40';
+                if (row.isTotal) return (
+                  <tr key={ri} className={`${borderCls} bg-gray-50 dark:bg-white/[0.02]`}>
+                    <td className={`px-3 py-2.5 text-xs font-bold s-col bg-gray-50 dark:bg-[#1a1a1a] whitespace-nowrap`}>{row.label}</td>
+                    {COLS.map(c=>(
+                      <td key={c.idx} className={`${tdBase} font-bold ${c.idx===3?'text-[#4736FE]':c.tdCls}`}>
+                        {fmtCell(row.d[c.idx], true)}
                       </td>
-                    );
-                  })}
-                </tr>
-              ))}
+                    ))}
+                  </tr>
+                );
+                return (
+                  <tr key={ri} className={`${borderCls} hover:bg-gray-50 dark:hover:bg-white/[0.02]`}>
+                    <td className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 s-col bg-white dark:bg-[#111] whitespace-nowrap">{row.label}</td>
+                    {COLS.map(c=>(
+                      <td key={c.idx} className={`${tdBase} text-gray-400 dark:text-gray-500`}>
+                        {fmtCell(row.d[c.idx], false)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-gray-400">Note: FY 24-25 and 25-26 are reference years. FY 26-27 is current AOP. FY 27-28/28-29 are projections.</p>
+      <p className="text-[10px] text-gray-400">FY 24-25 &amp; 25-26 are reference years. FY 26-27 is current AOP. FY 27-28/28-29 are projections. All capex figures in Indian Lakhs (₹L).</p>
     </div>
   );
 }
@@ -1477,6 +1492,7 @@ function FourYearPlanTab() {
 function App() {
   const [gsData, setGsData] = useState(HARDCODED_GS);
   const [c2bData, setC2bData] = useState(HARDCODED_C2B);
+  const [fourYearData, setFourYearData] = useState(null);
   const [dataSource, setDataSource] = useState('hardcoded');
   const [tab, setTab] = useState('summary');
   const [theme, setTheme] = useState(()=>{try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';}});
@@ -1517,10 +1533,11 @@ function App() {
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const { gsRows, c2bRows } = parseExcel(new Uint8Array(ev.target.result));
+        const { gsRows, c2bRows, ramanRows } = parseExcel(new Uint8Array(ev.target.result));
         if (!gsRows) { toast('Could not parse GS Capex AOP sheet','err'); setUploading(false); e.target.value=''; return; }
         setGsData(gsRows);
         if (c2bRows) setC2bData(c2bRows);
+        if (ramanRows) setFourYearData(ramanRows);
         setDataSource('uploaded');
         toast(`✓ Parsed ${gsRows.length} GS hubs${c2bRows?` + ${c2bRows.length} C2B hubs`:''}`, 'ok');
 
@@ -1605,7 +1622,7 @@ function App() {
         {tab==='c2b'        && <C2BTab c2bData={c2bData}/>}
         {tab==='nso'        && <NSOTab gsData={gsData}/>}
         {tab==='opex'       && <OpexTab gsData={gsData}/>}
-        {tab==='4yr'        && <FourYearPlanTab/>}
+        {tab==='4yr'        && <FourYearPlanTab fourYearData={fourYearData}/>}
         {tab==='assumptions'&& <AssumptionsTab/>}
       </main>
 
