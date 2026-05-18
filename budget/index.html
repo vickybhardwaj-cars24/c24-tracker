@@ -412,7 +412,7 @@ function parseExcel(buffer) {
       gsRows.push({
         costCenter: String(r[0]||'').trim(),
         hub: String(r[2]||'').trim(),
-        city: String(r[3]||'').trim(),
+        city: String(r[3]||'').trim() || String(r[2]||'').split(',').pop().trim(),
         stage, zone: String(r[5]||'').trim(),
         category: String(r[6]||'').trim(),
         parking: String(r[7]||'').trim(),
@@ -456,20 +456,30 @@ function parseExcel(buffer) {
     }
   }
 
-  // Parse Raman (4yr plan) sheet
+  // Parse 4 Year view sheet (prefer "4 Year view", fall back to Raman sheet)
   let ramanRows = null;
-  const ramanSheetName = wb.SheetNames.find(n => n.toLowerCase().includes('raman') || n.toLowerCase().includes('4 year') || n.toLowerCase().includes('4yr'));
+  const ramanSheetName = wb.SheetNames.find(n => /^4 year view$/i.test(n.trim()))
+    || wb.SheetNames.find(n => n.toLowerCase().includes('4 year') || n.toLowerCase().includes('4yr') || n.toLowerCase().includes('raman'));
   if (ramanSheetName) {
     const rs = wb.Sheets[ramanSheetName];
     const raw = XLSX.utils.sheet_to_json(rs, {header:1, defval:null});
     // Find header row containing year labels like "2024" or "2024-25"
     let hi = raw.findIndex(r => r && r.some(c => String(c||'').includes('2024')));
     if (hi >= 0) {
-      // Find column indices for the 6 year columns
       const hdr = raw[hi];
+      // Map to 6 display columns: 2024-25, 2025-26, Actual 25-26, 2026-27, 2027-28, 2028-29
+      // (skip "Actual 26-27" column if present)
       const yKeys = ['2024','2025-2','actual','2026','2027','2028'];
       const colIdx = yKeys.map(k => hdr.findIndex(c => String(c||'').toLowerCase().includes(k)));
       ramanRows = [];
+      // Row just before the header contains budget totals (e.g. "All costs are in Lakhs" row)
+      if (hi > 0) {
+        const br = raw[hi-1];
+        if (br) {
+          const bd = colIdx.map(ci => ci>=0 ? (br[ci]===null||br[ci]===undefined ? null : Number(br[ci])||null) : null);
+          ramanRows.push({label:'__budget__', isBudget:true, d:bd, isTotal:false, isCount:false, g:'budget'});
+        }
+      }
       for (let i = hi+1; i < raw.length; i++) {
         const r = raw[i];
         if (!r) continue;
@@ -477,8 +487,7 @@ function parseExcel(buffer) {
         if (!label) continue;
         const d = colIdx.map(ci => ci>=0 ? (r[ci]===null||r[ci]===undefined ? null : Number(r[ci])||0) : null);
         const isTotal = label.toLowerCase().startsWith('total') || label.toLowerCase().includes('capex/year') || label.toLowerCase().includes('contingency');
-        const isCount = !isTotal;
-        ramanRows.push({label, isTotal, isCount, d, g:'parsed'});
+        ramanRows.push({label, isTotal, isCount:!isTotal, d, g:'parsed'});
       }
     }
   }
@@ -1448,9 +1457,10 @@ function FourYearPlanTab({ fourYearData }) {
     {idx:4, label:'2027-28',       thCls:'bg-orange-700 text-white',        tdCls:'text-orange-200'},
     {idx:5, label:'2028-29',       thCls:'bg-gray-600 text-white',          tdCls:'text-gray-300'},
   ];
-  const COUNTS = [1253, 2282, 1962, 1426, 379, null];
+  const budgetEntry = fourYearData && fourYearData.find(r => r.isBudget);
+  const COUNTS = budgetEntry ? budgetEntry.d : [1253, 2282, 1962, 1426, 379, null];
 
-  const ROWS = fourYearData || [
+  const ROWS = (fourYearData ? fourYearData.filter(r => !r.isBudget) : null) || [
     {g:'hubs',  label:'Opening no. of hubs',                      isCount:true,  d:[35,48,48,44,58,null]},
     {g:'hubs',  label:'New hubs opened',                          isCount:true,  d:[19,22,15,19,2,null]},
     {g:'hubs',  label:'Completely Revamped Hubs',                 isCount:true,  d:[10,11,10,2,1,null]},
@@ -1493,7 +1503,7 @@ function FourYearPlanTab({ fourYearData }) {
     <div className="fade-in space-y-4">
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
-          <div className="font-semibold text-sm">4-Year Capex Plan</div>
+          <div className="font-semibold text-sm">4-Year Capex View</div>
           <div className="text-xs text-gray-400">All costs are in Lakhs (₹L)</div>
         </div>
         <div className="tbl-wrap">
@@ -1626,7 +1636,7 @@ function App() {
     reader.readAsArrayBuffer(file);
   }
 
-  const tabs=[['summary','📊 Summary'],['hubs','🏢 GS Hubs'],['c2b','🚗 C2B'],['nso','🏗 NSO Pipeline'],['opex','💸 Opex'],['4yr','📅 4yr Plan'],['assumptions','📐 Assumptions']];
+  const tabs=[['summary','📊 Summary'],['hubs','🏢 GS Hubs'],['c2b','🚗 C2B'],['nso','🏗 NSO Pipeline'],['opex','💸 Opex'],['4yr','📅 4 Year View'],['assumptions','📐 Assumptions']];
   const srcBadge={hardcoded:'Hardcoded',uploaded:'Uploaded',cloudflare:'Live (CF)'}[dataSource];
   const srcCls={hardcoded:'text-gray-400',uploaded:'text-amber-400',cloudflare:'text-green-400'}[dataSource];
 
