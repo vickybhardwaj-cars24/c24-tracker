@@ -1083,7 +1083,6 @@ function GSHubsTab({ gsData }) {
                       <td className="px-2 py-2"></td>
                     </tr>
                     {!collapsed && rows.map((r,i)=><HubRow key={i} r={r} visCols={visCols} showTip={showTip} hideTip={hideTip} stageCls={stageCls}/>)}
-                    {!collapsed && <CitySubtotal rows={rows}/>}
                   </React.Fragment>
                 );
               }) : filtered.map((r,i)=><HubRow key={i} r={r} visCols={visCols} showTip={showTip} hideTip={hideTip} stageCls={stageCls}/>)}
