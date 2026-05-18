@@ -1368,7 +1368,7 @@ function FourYearPlanTab({ fourYearData }) {
   const budgetEntry = fourYearData && fourYearData.find(r => r.isBudget);
   const COUNTS = budgetEntry ? budgetEntry.d : [1253, 2282, 1962, 1426, 379, null];
 
-  const ROWS = (fourYearData ? fourYearData.filter(r => !r.isBudget && !/average capex/i.test(r.label||'')) : null) || [
+  const ROWS_RAW = (fourYearData ? fourYearData.filter(r => !r.isBudget && !/average capex/i.test(r.label||'')) : null) || [
     {g:'hubs',  label:'Opening no. of hubs',                      isCount:true,  d:[35,48,48,44,58,null]},
     {g:'hubs',  label:'New hubs opened',                          isCount:true,  d:[19,22,15,19,2,null]},
     {g:'hubs',  label:'Completely Revamped Hubs',                 isCount:true,  d:[10,11,10,2,1,null]},
@@ -1395,6 +1395,8 @@ function FourYearPlanTab({ fourYearData }) {
     {g:'four',  label:'Total Capex/Year for Fourdoor',            isTotal:true,  d:[0,0,10,0,null,null]},
     {g:'cont',  label:'Total Contingency/Year for closure/Replacement', isTotal:true, d:[0,100,0,50,50,null]},
   ];
+  const closingIdx = ROWS_RAW.findIndex(r => /closing number of hubs/i.test(r.label||''));
+  const ROWS = closingIdx >= 0 ? ROWS_RAW.slice(0, closingIdx+1) : ROWS_RAW;
 
   // Totals are in Lakhs in Excel — convert to Cr (÷100) for display
   const fmtCell = (v, isTotal) => {
