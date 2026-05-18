@@ -1245,106 +1245,6 @@ function NSOTab({ gsData }) {
 
 // ── Opex Tab ──────────────────────────────────────────────────────────────
 
-function OpexTab({ gsData }) {
-  const [fZone, setFZone] = useState(new Set());
-  const [fCity, setFCity] = useState(new Set());
-  const opts = useMemo(()=>({zones:uniq(gsData.map(r=>r.zone)),cities:uniq(gsData.map(r=>r.city))}),[gsData]);
-
-  const rows = useMemo(()=>{
-    let r = gsData.filter(x=>x.grossRental>0 || x.totalMaint>0);
-    if (fZone.size>0) r=r.filter(x=>fZone.has(x.zone));
-    if (fCity.size>0) r=r.filter(x=>fCity.has(x.city));
-    return r;
-  },[gsData,fZone,fCity]);
-
-  const totals = useMemo(()=>({
-    grossRental: rows.reduce((s,r)=>s+r.grossRental,0),
-    annualRental: rows.reduce((s,r)=>s+r.grossRental*12,0),
-    totalMaint: rows.reduce((s,r)=>s+r.totalMaint,0),
-    totalOpex: rows.reduce((s,r)=>s+(r.grossRental*12+r.totalMaint),0),
-  }),[rows]);
-
-  // group by city
-  const groups = useMemo(()=>{const m={};rows.forEach(r=>{if(!m[r.city])m[r.city]=[];m[r.city].push(r);});return Object.entries(m);},[rows]);
-
-  const thCls = "px-3 py-2.5 text-left text-gray-400 font-semibold uppercase tracking-wider text-[10px] sticky top-0 bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-100 dark:border-gray-800 whitespace-nowrap";
-
-  return (
-    <div className="fade-in space-y-4">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        {[
-          ['Monthly Gross Rental',fmtAmt(totals.grossRental),'text-[#4736FE]'],
-          ['Annual Gross Rental',fmtAmt(totals.annualRental),'text-amber-400'],
-          ['Annual Maintenance',fmtAmt(totals.totalMaint),'text-rose-400'],
-          ['Total Annual Opex',fmtAmt(totals.totalOpex),'text-green-400'],
-        ].map(([l,v,c])=>(
-          <div key={l} className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5">
-            <div className="text-xs text-gray-400 mb-1">{l}</div>
-            <div className={`text-xl font-bold ${c}`}>{v}</div>
-          </div>
-        ))}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <MultiCheck label="Zone" options={opts.zones} selected={fZone} onChange={setFZone}/>
-        <MultiCheck label="City" options={opts.cities} selected={fCity} onChange={setFCity}/>
-        {(fZone.size+fCity.size>0) && <button onClick={()=>{setFZone(new Set());setFCity(new Set());}} className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs text-red-400 border border-red-400/30 hover:bg-red-500/10"><Ico n="x" size={11}/> Clear</button>}
-        <span className="ml-auto text-xs text-gray-400">{rows.length} hubs with rental data</span>
-      </div>
-      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-        <div className="tbl-wrap">
-          <table className="w-full text-xs min-w-[800px]">
-            <thead>
-              <tr>
-                <th className={thCls} colSpan="5"><span className="text-[#4736FE] font-bold">TOTALS — {rows.length} hubs</span></th>
-                <th className={`${thCls} text-right`}>{fmtAmt(totals.grossRental)}</th>
-                <th className={`${thCls} text-right`}>{fmtAmt(totals.annualRental)}</th>
-                <th className={`${thCls} text-right`}>{fmtAmt(totals.totalMaint)}</th>
-                <th className={`${thCls} text-right text-green-400`}>{fmtAmt(totals.totalOpex)}</th>
-              </tr>
-              <tr>
-                {['Hub','City','Zone','Category','Stage','Monthly Rental','Annual Rental','Annual Maint.','Total Annual Opex'].map(h=>(
-                  <th key={h} className={thCls}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {groups.map(([city, cityRows])=>{
-                const cRental=cityRows.reduce((s,r)=>s+r.grossRental,0);
-                const cMaint=cityRows.reduce((s,r)=>s+r.totalMaint,0);
-                return (
-                  <React.Fragment key={city}>
-                    <tr className="bg-gray-100 dark:bg-white/[0.06] border-b border-gray-200 dark:border-gray-700">
-                      <td className="px-3 py-2 font-bold text-[#4736FE] text-xs" colSpan="5">{city} <span className="text-gray-400 font-normal">({cityRows.length})</span></td>
-                      <td className="px-3 py-2 text-right text-xs font-semibold">{fmtAmt(cRental)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-semibold">{fmtAmt(cRental*12)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-semibold">{fmtAmt(cMaint)}</td>
-                      <td className="px-3 py-2 text-right text-xs font-bold text-green-400">{fmtAmt(cRental*12+cMaint)}</td>
-                    </tr>
-                    {cityRows.map((r,i)=>(
-                      <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
-                        <td className="px-3 py-2 font-medium max-w-[220px] truncate" title={r.hub}>{r.hub}</td>
-                        <td className="px-3 py-2 text-gray-400">{r.city}</td>
-                        <td className="px-3 py-2 text-gray-400">{r.zone}</td>
-                        <td className="px-3 py-2"><span className="px-1.5 py-0.5 rounded-full text-[9px] font-semibold bg-gray-100 dark:bg-white/[0.06] text-gray-500 whitespace-nowrap">{r.category}</span></td>
-                        <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded-full text-[9px] font-semibold ${{Active:'bg-green-500/15 text-green-400',YTD:'bg-amber-500/15 text-amber-400',YTL:'bg-blue-500/15 text-blue-400'}[r.stage]||''}`}>{r.stage}</span></td>
-                        <td className="px-3 py-2 text-right font-medium">{r.grossRental?fmtAmt(r.grossRental):'—'}</td>
-                        <td className="px-3 py-2 text-right font-medium">{r.grossRental?fmtAmt(r.grossRental*12):'—'}</td>
-                        <td className="px-3 py-2 text-right">{r.totalMaint?fmtAmt(r.totalMaint):'—'}</td>
-                        <td className="px-3 py-2 text-right font-bold text-green-400">{(r.grossRental||r.totalMaint)?fmtAmt(r.grossRental*12+r.totalMaint):'—'}</td>
-                      </tr>
-                    ))}
-                  </React.Fragment>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      <p className="text-[10px] text-gray-400">Note: Rental figures are monthly values from AOP sheet. Annual = monthly × 12. Maintenance is the annual budget from Capex AOP.</p>
-    </div>
-  );
-}
-
 // ── Assumptions Tab ───────────────────────────────────────────────────────
 
 function AssumptionsTab() {
@@ -1489,12 +1389,15 @@ function FourYearPlanTab({ fourYearData }) {
     {g:'cont',  label:'Total Contingency/Year for closure/Replacement', isTotal:true, d:[0,100,0,50,50,null]},
   ];
 
+  // Totals are in Lakhs in Excel — convert to Cr (÷100) for display
   const fmtCell = (v, isTotal) => {
     if (v === null || v === undefined) return '—';
     if (v === 0 && !isTotal) return '—';
-    if (v === 0 && isTotal) return '0';
-    return isTotal ? (Number.isInteger(v) ? v.toLocaleString() : v.toFixed(2)) : v;
+    if (v === 0 && isTotal) return '₹0';
+    if (isTotal) { const cr = v / 100; return '₹' + (cr % 1 === 0 ? cr.toLocaleString() : cr.toFixed(2)) + ' Cr'; }
+    return v;
   };
+  const fmtBudget = v => { if (!v) return '—'; const cr = v/100; return '₹'+(cr%1===0?cr.toLocaleString():cr.toFixed(2))+' Cr'; };
 
   const thBase = "px-3 py-2.5 text-right text-xs font-bold whitespace-pre-line text-center";
   const tdBase = "px-3 py-2 text-right text-xs";
@@ -1504,7 +1407,7 @@ function FourYearPlanTab({ fourYearData }) {
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div className="font-semibold text-sm">4-Year Capex View</div>
-          <div className="text-xs text-gray-400">All costs are in Lakhs (₹L)</div>
+          <div className="text-xs text-gray-400">Capex values in ₹ Crores</div>
         </div>
         <div className="tbl-wrap">
           <table className="w-full min-w-[820px]" style={{borderCollapse:'separate',borderSpacing:0}}>
@@ -1516,10 +1419,10 @@ function FourYearPlanTab({ fourYearData }) {
                 ))}
               </tr>
               <tr>
-                <td className="px-3 py-1.5 text-[10px] text-gray-400 bg-gray-50 dark:bg-[#1a1a1a] s-col font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Budget (₹L)</td>
+                <td className="px-3 py-1.5 text-[10px] text-gray-400 bg-gray-50 dark:bg-[#1a1a1a] s-col font-semibold uppercase tracking-wider border-b border-gray-200 dark:border-gray-700">Total Budget (₹ Cr)</td>
                 {COLS.map((c,i)=>(
                   <td key={i} className={`px-3 py-1.5 text-right text-[10px] font-bold bg-gray-50 dark:bg-[#1a1a1a] border-b border-gray-200 dark:border-gray-700 ${COUNTS[i]?'text-gray-600 dark:text-gray-300':'text-gray-300'}`}>
-                    {COUNTS[i] ? COUNTS[i].toLocaleString() : '—'}
+                    {fmtBudget(COUNTS[i])}
                   </td>
                 ))}
               </tr>
@@ -1528,6 +1431,7 @@ function FourYearPlanTab({ fourYearData }) {
               {ROWS.map((row, ri) => {
                 const isBlank = !row.label;
                 if (isBlank) return <tr key={ri} className="h-2"><td colSpan={7} className="bg-gray-50 dark:bg-[#161616]"/></tr>;
+                const isClosing = /closing number of hubs/i.test(row.label);
                 const prevGroup = ri > 0 ? ROWS[ri-1].g : null;
                 const isGroupBorder = prevGroup && prevGroup !== row.g && ri > 0;
                 const borderCls = isGroupBorder ? 'border-t-2 border-gray-200 dark:border-gray-700' : 'border-t border-gray-50 dark:border-gray-800/40';
@@ -1537,6 +1441,16 @@ function FourYearPlanTab({ fourYearData }) {
                     {COLS.map(c=>(
                       <td key={c.idx} className={`${tdBase} font-bold ${c.idx===3?'text-[#4736FE]':c.tdCls}`}>
                         {fmtCell(row.d[c.idx], true)}
+                      </td>
+                    ))}
+                  </tr>
+                );
+                if (isClosing) return (
+                  <tr key={ri} className={`${borderCls} bg-amber-500/10 dark:bg-amber-500/10`}>
+                    <td className="px-3 py-2 text-xs font-bold s-col text-amber-600 dark:text-amber-400 whitespace-nowrap">{row.label} <span className="text-[9px] font-normal opacity-70">= next FY opening</span></td>
+                    {COLS.map(c=>(
+                      <td key={c.idx} className={`${tdBase} font-bold text-amber-600 dark:text-amber-400`}>
+                        {fmtCell(row.d[c.idx], false)}
                       </td>
                     ))}
                   </tr>
@@ -1556,7 +1470,7 @@ function FourYearPlanTab({ fourYearData }) {
           </table>
         </div>
       </div>
-      <p className="text-[10px] text-gray-400">FY 24-25 &amp; 25-26 are reference years. FY 26-27 is current AOP. FY 27-28/28-29 are projections. All capex figures in Indian Lakhs (₹L).</p>
+      <p className="text-[10px] text-gray-400">FY 24-25 &amp; 25-26 are reference years. FY 26-27 is current AOP. FY 27-28/28-29 are projections. All capex values in ₹ Crores. Hub counts are units.</p>
     </div>
   );
 }
@@ -1588,7 +1502,7 @@ function App() {
     window.C24Uploader.fetchText(WORKER_URL + BUDGET_PATH + '.csv', {cache:'no-store'})
       .then(text=>{
         const j = JSON.parse(text);
-        if (j.gs && j.gs.length) { setGsData(j.gs); setC2bData(j.c2b||HARDCODED_C2B); if (j.wf) setWaterfallData(j.wf); setDataSource('cloudflare'); toast('✓ Budget data loaded from Cloudflare','ok'); }
+        if (j.gs && j.gs.length) { setGsData(j.gs); setC2bData(j.c2b||HARDCODED_C2B); if (j.wf) setWaterfallData(j.wf); if (j.fy) setFourYearData(j.fy); setDataSource('cloudflare'); toast('✓ Budget data loaded from Cloudflare','ok'); }
       })
       .catch(()=>{}); // fallback to hardcoded silently
   },[]);
@@ -1622,7 +1536,7 @@ function App() {
         // Save to Cloudflare if authenticated
         if (auth) {
           const wfParsedForSave = parseWaterfallFromExcel(buf);
-          const jsonText = JSON.stringify({gs:gsRows, c2b:c2bRows||HARDCODED_C2B, wf:wfParsedForSave||null, uploadedAt:new Date().toISOString()});
+          const jsonText = JSON.stringify({gs:gsRows, c2b:c2bRows||HARDCODED_C2B, wf:wfParsedForSave||null, fy:ramanRows||null, uploadedAt:new Date().toISOString()});
           window.C24Uploader.upload({csvText:jsonText, workerUrl:WORKER_URL, toolPath:BUDGET_PATH, auth})
             .then(()=>{ setDataSource('cloudflare'); toast('✓ Saved to Cloudflare — all users will see updated data','ok'); })
             .catch(er=>{ if(er.status===401){toast('Session expired','err');}else toast('Parsed OK but CF save failed: '+(er.message||er),'err'); });
@@ -1636,7 +1550,7 @@ function App() {
     reader.readAsArrayBuffer(file);
   }
 
-  const tabs=[['summary','📊 Summary'],['hubs','🏢 GS Hubs'],['c2b','🚗 C2B'],['nso','🏗 NSO Pipeline'],['opex','💸 Opex'],['4yr','📅 4 Year View'],['assumptions','📐 Assumptions']];
+  const tabs=[['summary','📊 Summary'],['hubs','🏢 GS Hubs'],['c2b','🚗 C2B'],['nso','🏗 NSO Pipeline'],['4yr','📅 4 Year View'],['assumptions','📐 Assumptions']];
   const srcBadge={hardcoded:'Hardcoded',uploaded:'Uploaded',cloudflare:'Live (CF)'}[dataSource];
   const srcCls={hardcoded:'text-gray-400',uploaded:'text-amber-400',cloudflare:'text-green-400'}[dataSource];
 
@@ -1700,7 +1614,6 @@ function App() {
         {tab==='hubs'       && <GSHubsTab gsData={gsData}/>}
         {tab==='c2b'        && <C2BTab c2bData={c2bData}/>}
         {tab==='nso'        && <NSOTab gsData={gsData}/>}
-        {tab==='opex'       && <OpexTab gsData={gsData}/>}
         {tab==='4yr'        && <FourYearPlanTab fourYearData={fourYearData}/>}
         {tab==='assumptions'&& <AssumptionsTab/>}
       </main>
