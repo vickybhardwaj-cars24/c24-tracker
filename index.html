@@ -11,7 +11,7 @@
   (function(){
     try {
       var t = localStorage.getItem('c24-theme');
-      if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t;
+      document.documentElement.dataset.theme = (t === 'dark') ? 'dark' : 'light';
     } catch (_) {}
   })();
 </script>

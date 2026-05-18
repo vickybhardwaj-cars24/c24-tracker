@@ -8,7 +8,7 @@
 <script src="/shared/c24-uploader.js"></script>
 <script>
   (function(){
-    try{var t=localStorage.getItem('c24-theme');if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(_){}
+    try{var t=localStorage.getItem('c24-theme');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(_){}
   })();
   tailwind.config={darkMode:'class'}
 </script>
@@ -903,7 +903,7 @@ function App() {
   const [loading, setLoading]   = useState(true);
   const [auth, setAuth]         = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
-  const [theme, setTheme]       = useState(()=>{ try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';} });
+  const [theme, setTheme]       = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
   const { toasts, add: toast }  = useToast();
 
   // Fetch from Cloudflare Worker on mount
