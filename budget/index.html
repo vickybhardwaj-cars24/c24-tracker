@@ -7,7 +7,7 @@
 <script src="/shared/c24-favicon.js"></script>
 <script src="/shared/c24-uploader.js"></script>
 <script>
-  (function(){try{var t=localStorage.getItem('c24-theme');if(t==='light')document.documentElement.classList.remove('dark');else document.documentElement.classList.add('dark');}catch(_){}}());
+  (function(){try{var t=localStorage.getItem('c24-theme');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(_){}}());
   tailwind.config={darkMode:'class'}
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
@@ -1583,7 +1583,7 @@ function App() {
   const [waterfallData, setWaterfallData] = useState(null);
   const [dataSource, setDataSource] = useState('hardcoded');
   const [tab, setTab] = useState('summary');
-  const [theme, setTheme] = useState(()=>{try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';}});
+  const [theme, setTheme] = useState(()=>{try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';}});
   const [auth, setAuth] = useState(null);
   const [loginOpen, setLoginOpen] = useState(false);
   const [uploading, setUploading] = useState(false);
