@@ -484,6 +484,66 @@ function parseExcel(buffer) {
   return { gsRows: gsRows.length ? gsRows : null, c2bRows: c2bRows.length ? c2bRows : null, ramanRows: ramanRows && ramanRows.length ? ramanRows : null };
 }
 
+// Parse waterfall values from the Summary/Capex Summary sheet
+// Returns { gsEx, gsNw, infraEx, infraNw, ... } in Crores, or null if sheet not found
+function parseWaterfallFromExcel(buffer) {
+  try {
+    const wb = XLSX.read(buffer, {type:'array'});
+    const sName = wb.SheetNames.find(n => /summary|capex sum/i.test(n));
+    if (!sName) return null;
+    const raw = XLSX.utils.sheet_to_json(wb.Sheets[sName], {header:1, defval:null});
+    // Find the header row that has "Existing" and "New" columns
+    let hi = raw.findIndex(r => r && r.some(c => /existing/i.test(String(c||''))));
+    if (hi < 0) return null;
+    const hdr = raw[hi];
+    // Column indices: Type=0 (or wherever label is), Existing, New, Total
+    const exCol = hdr.findIndex(c => /existing/i.test(String(c||'')));
+    const nwCol = hdr.findIndex(c => /new.*(hub|store|city)/i.test(String(c||'')));
+    const totCol = hdr.findIndex((c,i) => i > nwCol && /total/i.test(String(c||'')));
+    if (exCol < 0 || nwCol < 0) return null;
+    // Build label→row map
+    const lmap = {};
+    for (let i = hi+1; i < raw.length; i++) {
+      const r = raw[i];
+      if (!r) continue;
+      const lbl = String(r[0]||r[1]||'').trim().toLowerCase();
+      if (!lbl) continue;
+      lmap[lbl] = {ex: Number(r[exCol])||0, nw: Number(r[nwCol])||0, tot: totCol>=0?Number(r[totCol])||0:0};
+    }
+    const g = key => {
+      const hit = Object.entries(lmap).find(([k]) => k.includes(key.toLowerCase()));
+      return hit ? hit[1] : {ex:0, nw:0, tot:0};
+    };
+    const gs = g('gs hub'); const hrc = g('hrc total'); const maint = g('total maint');
+    const infra = g('infra cost'); const slot = g('slot'); const vm = g('vm');
+    const init_ = g('new init'); const it = g('it cost');
+    const hrcCap = g('hrc capex'); const hrcIt = g('hrc it'); const hrcMt = g('hrc maint');
+    const iMaint = g('infra maint'); const vmM = g('vm maint');
+    const c2b = g('c2b');
+    const office = g('new office');
+    // Values come in Rupees from the Excel; divide by 10M to get Crores
+    const CR = 10000000;
+    const cr = v => v/CR;
+    // If values look like they're already in Crores (< 100), use directly
+    const isAlreadyCr = gs.ex < 100;
+    const f = v => isAlreadyCr ? v : cr(v);
+    return {
+      gsEx:f(gs.ex), gsNw:f(gs.nw),
+      infraEx:f(infra.ex), infraNw:f(infra.nw),
+      slotEx:f(slot.ex), slotNw:f(slot.nw),
+      vmEx:f(vm.ex), vmNw:f(vm.nw),
+      initEx:f(init_.ex), initNw:f(init_.nw),
+      itEx:f(it.ex), itNw:f(it.nw),
+      hrcCap:f(hrcCap.ex||hrc.ex), hrcIt:f(hrcIt.ex), hrcMt:f(hrcMt.ex),
+      mEx:f(maint.ex), mNw:f(maint.nw),
+      imEx:f(iMaint.ex), imNw:f(iMaint.nw),
+      vmMEx:f(vmM.ex), vmMNw:f(vmM.nw),
+      c2bEx:f(c2b.ex), c2bNw:f(c2b.nw),
+      office:f(office.tot||office.ex),
+    };
+  } catch(e) { return null; }
+}
+
 // ── Tooltip ───────────────────────────────────────────────────────────────
 
 function TooltipBox({ tooltip }) {
@@ -623,30 +683,39 @@ function ToastLayer({toasts}) {
 
 // ── Summary Tab ───────────────────────────────────────────────────────────
 
-function SummaryTab({ gsData, c2bData }) {
+function SummaryTab({ gsData, c2bData, waterfallData }) {
   const isObj = gsData.length > 0 && typeof gsData[0] === 'object' && !Array.isArray(gsData[0]);
+  // Non-HRC hub rows only (for count and GS capex KPI)
+  const gsHubs = useMemo(() => isObj ? gsData.filter(r=>(r.totalCapex||0)>0) : [], [gsData, isObj]);
+
+  const HARDCODED_WF = {
+    gsEx:11.22, gsNw:7.87,
+    infraEx:5.14, infraNw:6.12,
+    slotEx:0.59, slotNw:0.06,
+    vmEx:0.78, vmNw:0.68,
+    initEx:3.93, initNw:0.65,
+    itEx:0.80, itNw:0.37,
+    hrcCap:5.70, hrcIt:0.34, hrcMt:0.26,
+    mEx:3.00, mNw:0.88,
+    imEx:1.56, imNw:0.45,
+    vmMEx:1.44, vmMNw:0.43,
+    c2bEx:1.81, c2bNw:0.68,
+    office:14.00,
+  };
 
   const wf = useMemo(() => {
+    // Priority 1: parsed directly from Summary sheet
+    if (waterfallData) return waterfallData;
     const CR = 10000000;
-    if (!isObj) return {
-      gsEx:11.22, gsNw:7.87,
-      infraEx:5.14, infraNw:6.12,
-      slotEx:0.59, slotNw:0.06,
-      vmEx:0.78, vmNw:0.68,
-      initEx:3.93, initNw:0.65,
-      itEx:0.80, itNw:0.37,
-      hrcCap:5.70, hrcIt:0.34, hrcMt:0.26,
-      mEx:3.00, mNw:0.88,
-      imEx:1.56, imNw:0.45,
-      vmMEx:1.44, vmMNw:0.43,
-      c2bEx:1.81, c2bNw:0.68,
-      office:14.00,
-    };
-    const isHRC = r => (r.category||'').toLowerCase().includes('hrc');
-    const ex = gsData.filter(r => r.stage==='Active' && !isHRC(r));
-    const nw = gsData.filter(r => r.stage!=='Active' && !isHRC(r));
-    const hr = gsData.filter(r => isHRC(r));
+    // Priority 2: hardcoded (no live data)
+    if (!isObj) return HARDCODED_WF;
+    // Priority 3: computed from GS Capex AOP rows
+    // HRC rows have totalCapex=0; GS hub rows have totalCapex>0
+    const ex = gsData.filter(r => r.stage==='Active' && (r.totalCapex||0)>0);
+    const nw = gsData.filter(r => r.stage!=='Active' && (r.totalCapex||0)>0);
     const s = (arr,k) => arr.reduce((a,r)=>a+(r[k]||0),0)/CR;
+    // HRC: sum hrcCapex/hrcItCost/hrcMaint across ALL rows (HRC rows carry these; non-HRC rows have 0)
+    const sAll = k => gsData.reduce((a,r)=>a+(r[k]||0),0)/CR;
     const c2bTot = c2bData.reduce((a,r)=>a+(r.totalCapex||0),0)/CR;
     return {
       gsEx:s(ex,'totalCapex'), gsNw:s(nw,'totalCapex'),
@@ -655,14 +724,14 @@ function SummaryTab({ gsData, c2bData }) {
       vmEx:s(ex,'vm'), vmNw:s(nw,'vm'),
       initEx:s(ex,'newInitiatives'), initNw:s(nw,'newInitiatives'),
       itEx:s(ex,'itCost'), itNw:s(nw,'itCost'),
-      hrcCap:s(hr,'hrcCapex'), hrcIt:s(hr,'hrcItCost'), hrcMt:s(hr,'hrcMaint'),
+      hrcCap:sAll('hrcCapex'), hrcIt:sAll('hrcItCost'), hrcMt:sAll('hrcMaint'),
       mEx:s(ex,'totalMaint'), mNw:s(nw,'totalMaint'),
       imEx:s(ex,'infraMaint'), imNw:s(nw,'infraMaint'),
       vmMEx:s(ex,'vmMaint'), vmMNw:s(nw,'vmMaint'),
       c2bEx:c2bTot, c2bNw:0,
       office:14.00,
     };
-  }, [gsData, c2bData, isObj]);
+  }, [gsData, c2bData, isObj, waterfallData]);
 
   const [openSec, setOpenSec] = useState({gs:false,hrc:false,maint:false,c2b:false,office:false});
   const toggle = k => setOpenSec(o=>({...o,[k]:!o[k]}));
@@ -714,16 +783,16 @@ function SummaryTab({ gsData, c2bData }) {
   }
 
   const thC = "px-4 py-3 text-right font-bold text-sm whitespace-nowrap";
-  const totalCapexGS = isObj ? gsData.reduce((s,r)=>s+(r.totalCapex||0),0) : 0;
+  const totalCapexGS = gsHubs.reduce((s,r)=>s+(r.totalCapex||0),0);
   const totalHRC = isObj ? gsData.reduce((s,r)=>s+(r.hrcTotal||0),0) : 0;
-  const totalMaint = isObj ? gsData.reduce((s,r)=>s+(r.totalMaint||0),0) : 0;
+  const totalMaint = gsHubs.reduce((s,r)=>s+(r.totalMaint||0),0);
   const totalC2B = isObj ? c2bData.reduce((s,r)=>s+(r.totalCapex||0),0) : 0;
 
   return (
     <div className="fade-in space-y-5">
       {isObj && (
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card label="GS Hub Capex" value={fmtAmt(totalCapexGS)} sub={`${gsData.length} hubs`} color="indigo"/>
+          <Card label="GS Hub Capex" value={fmtAmt(totalCapexGS)} sub={`${gsHubs.length} hubs`} color="indigo"/>
           <Card label="HRC Budget" value={fmtAmt(totalHRC)} sub="All HRC" color="rose"/>
           <Card label="Maintenance" value={fmtAmt(totalMaint)} sub="Annual" color="amber"/>
           <Card label="C2B Parking" value={fmtAmt(totalC2B)} sub={`${c2bData.length} hubs`} color="green"/>
@@ -1493,6 +1562,7 @@ function App() {
   const [gsData, setGsData] = useState(HARDCODED_GS);
   const [c2bData, setC2bData] = useState(HARDCODED_C2B);
   const [fourYearData, setFourYearData] = useState(null);
+  const [waterfallData, setWaterfallData] = useState(null);
   const [dataSource, setDataSource] = useState('hardcoded');
   const [tab, setTab] = useState('summary');
   const [theme, setTheme] = useState(()=>{try{return localStorage.getItem('c24-theme')||'dark';}catch{return'dark';}});
@@ -1533,11 +1603,14 @@ function App() {
     const reader = new FileReader();
     reader.onload = ev => {
       try {
-        const { gsRows, c2bRows, ramanRows } = parseExcel(new Uint8Array(ev.target.result));
+        const buf = new Uint8Array(ev.target.result);
+        const { gsRows, c2bRows, ramanRows } = parseExcel(buf);
         if (!gsRows) { toast('Could not parse GS Capex AOP sheet','err'); setUploading(false); e.target.value=''; return; }
         setGsData(gsRows);
         if (c2bRows) setC2bData(c2bRows);
         if (ramanRows) setFourYearData(ramanRows);
+        const wfParsed = parseWaterfallFromExcel(buf);
+        if (wfParsed) setWaterfallData(wfParsed);
         setDataSource('uploaded');
         toast(`✓ Parsed ${gsRows.length} GS hubs${c2bRows?` + ${c2bRows.length} C2B hubs`:''}`, 'ok');
 
@@ -1617,7 +1690,7 @@ function App() {
             </button>
           ))}
         </div>
-        {tab==='summary'    && <SummaryTab gsData={gsData} c2bData={c2bData}/>}
+        {tab==='summary'    && <SummaryTab gsData={gsData} c2bData={c2bData} waterfallData={waterfallData}/>}
         {tab==='hubs'       && <GSHubsTab gsData={gsData}/>}
         {tab==='c2b'        && <C2BTab c2bData={c2bData}/>}
         {tab==='nso'        && <NSOTab gsData={gsData}/>}
