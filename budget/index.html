@@ -442,14 +442,16 @@ function parseExcel(buffer) {
     if (c2bHi < 0) c2bHi = 2;
     for (let i = c2bHi+1; i < raw.length; i++) {
       const r = raw[i];
-      if (!r || !r[0] || String(r[0]).trim()==='Hub Name') continue;
+      if (!r || !r[2] || String(r[2]).trim()==='Hub Name') continue;
+      const tc = Number(r[7]);
+      if (!tc) continue;
       c2bRows.push({
-        hub: String(r[0]||'').trim(),
+        hub: String(r[2]||'').trim(),
         city: String(r[1]||'').trim(),
-        zone: String(r[2]||'').trim(),
-        totalCapex: Number(r[3])||300000,
-        infraNetworking: Number(r[4])||200000,
-        rack: Number(r[5])||100000,
+        zone: String(r[0]||'').trim(),
+        category: String(r[3]||'').trim(),
+        totalCapex: tc,
+        infraCost: Number(r[8])||0,
       });
     }
   }
@@ -714,14 +716,15 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
     const CR = 10000000;
     // Priority 2: hardcoded (no live data)
     if (!isObj) return HARDCODED_WF;
-    // Priority 3: computed from GS Capex AOP rows
-    // HRC rows have totalCapex=0; GS hub rows have totalCapex>0
+    // Priority 3: computed from GS/C2B Capex AOP rows
     const ex = gsData.filter(r => r.stage==='Active' && (r.totalCapex||0)>0);
     const nw = gsData.filter(r => r.stage!=='Active' && (r.totalCapex||0)>0);
     const s = (arr,k) => arr.reduce((a,r)=>a+(r[k]||0),0)/CR;
-    // HRC: sum hrcCapex/hrcItCost/hrcMaint across ALL rows (HRC rows carry these; non-HRC rows have 0)
     const sAll = k => gsData.reduce((a,r)=>a+(r[k]||0),0)/CR;
-    const c2bTot = c2bData.reduce((a,r)=>a+(r.totalCapex||0),0)/CR;
+    // C2B: New Yard + Office = City Expansion; Live + Replacement = Existing
+    const isNewC2B = r => /new yard|office/i.test(r.category||'');
+    const c2bEx = c2bData.filter(r=>!isNewC2B(r)).reduce((a,r)=>a+(r.totalCapex||0),0)/CR;
+    const c2bNw = c2bData.filter(r=>isNewC2B(r)).reduce((a,r)=>a+(r.totalCapex||0),0)/CR;
     return {
       gsEx:s(ex,'totalCapex'), gsNw:s(nw,'totalCapex'),
       infraEx:s(ex,'infraCost'), infraNw:s(nw,'infraCost'),
@@ -733,7 +736,7 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
       mEx:s(ex,'totalMaint'), mNw:s(nw,'totalMaint'),
       imEx:s(ex,'infraMaint'), imNw:s(nw,'infraMaint'),
       vmMEx:s(ex,'vmMaint'), vmMNw:s(nw,'vmMaint'),
-      c2bEx:c2bTot, c2bNw:0,
+      c2bEx, c2bNw,
       office:14.00,
     };
   }, [gsData, c2bData, isObj, waterfallData]);
@@ -788,21 +791,9 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
   }
 
   const thC = "px-4 py-3 text-right font-bold text-sm whitespace-nowrap";
-  const totalCapexGS = gsHubs.reduce((s,r)=>s+(r.totalCapex||0),0);
-  const totalHRC = isObj ? gsData.reduce((s,r)=>s+(r.hrcTotal||0),0) : 0;
-  const totalMaint = gsHubs.reduce((s,r)=>s+(r.totalMaint||0),0);
-  const totalC2B = isObj ? c2bData.reduce((s,r)=>s+(r.totalCapex||0),0) : 0;
 
   return (
     <div className="fade-in space-y-5">
-      {isObj && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <Card label="GS Hub Capex" value={fmtAmt(totalCapexGS)} sub={`${gsHubs.length} hubs`} color="indigo"/>
-          <Card label="HRC Budget" value={fmtAmt(totalHRC)} sub="All HRC" color="rose"/>
-          <Card label="Maintenance" value={fmtAmt(totalMaint)} sub="Annual" color="amber"/>
-          <Card label="C2B Parking" value={fmtAmt(totalC2B)} sub={`${c2bData.length} hubs`} color="green"/>
-        </div>
-      )}
       <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
         <div className="px-4 py-3 border-b border-gray-100 dark:border-gray-800 flex items-center justify-between">
           <div>
