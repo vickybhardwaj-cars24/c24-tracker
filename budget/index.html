@@ -1363,7 +1363,6 @@ function FourYearPlanTab({ fourYearData }) {
     {idx:2, label:'Actual\n25-26', thCls:'bg-green-700/70 text-green-100',  tdCls:'text-green-300'},
     {idx:3, label:'2026-27',       thCls:'bg-[#4736FE] text-white',         tdCls:'text-[#a09eff] font-semibold'},
     {idx:4, label:'2027-28',       thCls:'bg-orange-700 text-white',        tdCls:'text-orange-200'},
-    {idx:5, label:'2028-29',       thCls:'bg-gray-600 text-white',          tdCls:'text-gray-300'},
   ];
   const budgetEntry = fourYearData && fourYearData.find(r => r.isBudget);
   const COUNTS = budgetEntry ? budgetEntry.d : [1253, 2282, 1962, 1426, 379, null];
