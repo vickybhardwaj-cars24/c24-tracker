@@ -1368,14 +1368,13 @@ function FourYearPlanTab({ fourYearData }) {
   const budgetEntry = fourYearData && fourYearData.find(r => r.isBudget);
   const COUNTS = budgetEntry ? budgetEntry.d : [1253, 2282, 1962, 1426, 379, null];
 
-  const ROWS = (fourYearData ? fourYearData.filter(r => !r.isBudget) : null) || [
+  const ROWS = (fourYearData ? fourYearData.filter(r => !r.isBudget && !/average capex/i.test(r.label||'')) : null) || [
     {g:'hubs',  label:'Opening no. of hubs',                      isCount:true,  d:[35,48,48,44,58,null]},
     {g:'hubs',  label:'New hubs opened',                          isCount:true,  d:[19,22,15,19,2,null]},
     {g:'hubs',  label:'Completely Revamped Hubs',                 isCount:true,  d:[10,11,10,2,1,null]},
     {g:'hubs',  label:'No. of hubs closed',                       isCount:true,  d:[6,20,19,5,1,null]},
     {g:'hubs',  label:'Closing number of hubs',                   isCount:true,  d:[48,50,44,58,59,59]},
-    {g:'new',   label:'Average Capex/New Hub (₹L)',               isCount:true,  d:[33,56,54,57,62,null]},
-    {g:'new',   label:'Total Capex/Year for New Hubs',            isTotal:true,  d:[627,1227,811,1092,124,null]},
+{g:'new',   label:'Total Capex/Year for New Hubs',            isTotal:true,  d:[627,1227,811,1092,124,null]},
     {g:'vr',    label:'No. of VR/Studio',                         isCount:true,  d:[6,5,7,2,2,null]},
     {g:'vr',    label:'Total Capex/Year for VR',                  isTotal:true,  d:[138.07637,175,120,70,70,null]},
     {g:'hrc',   label:'No. of HRC',                               isCount:true,  d:[0,0,0,0,null,null]},
