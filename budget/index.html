@@ -507,9 +507,12 @@ function parseWaterfallFromExcel(buffer) {
     let hi = raw.findIndex(r => r && r.some(c => /existing/i.test(String(c||''))));
     if (hi < 0) return null;
     const hdr = raw[hi];
-    // Column indices: Type=0 (or wherever label is), Existing, New, Total
-    const exCol = hdr.findIndex(c => /existing/i.test(String(c||'')));
-    const nwCol = hdr.findIndex(c => /new.*(hub|store|city)/i.test(String(c||'')));
+    // Prefer the "Existing Location" / "New Location" columns (already in Crores).
+    // Fall back to the raw INR columns "Existing store Capex" / "New Store Capex" (divide later).
+    let exCol = hdr.findIndex(c => /existing.*location/i.test(String(c||'')));
+    if (exCol < 0) exCol = hdr.findIndex(c => /existing/i.test(String(c||'')));
+    let nwCol = hdr.findIndex(c => /new.*location/i.test(String(c||'')));
+    if (nwCol < 0) nwCol = hdr.findIndex(c => /new.*(hub|store|city)/i.test(String(c||'')));
     const totCol = hdr.findIndex((c,i) => i > nwCol && /total/i.test(String(c||'')));
     if (exCol < 0 || nwCol < 0) return null;
     // Build label→row map (skip the grand-total summary row at top)
@@ -551,6 +554,7 @@ function parseWaterfallFromExcel(buffer) {
       initEx:f(init_.ex), initNw:f(init_.nw),
       itEx:f(it.ex), itNw:f(it.nw),
       hrcCap:f(hrcCap.ex||hrc.ex), hrcIt:f(hrcIt.ex), hrcMt:f(hrcMt.ex),
+      hrcCapNw:f(hrcCap.nw), hrcItNw:f(hrcIt.nw), hrcMtNw:f(hrcMt.nw),
       mEx:f(maint.ex), mNw:f(maint.nw),
       imEx:f(iMaint.ex), imNw:f(iMaint.nw),
       vmMEx:f(vmM.ex), vmMNw:f(vmM.nw),
@@ -711,7 +715,8 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
     vmEx:0.78, vmNw:0.68,
     initEx:3.93, initNw:0.65,
     itEx:0.80, itNw:0.37,
-    hrcCap:5.70, hrcIt:0.34, hrcMt:0.26,
+    hrcCap:1.38, hrcIt:0.14, hrcMt:0.11,
+    hrcCapNw:9.72, hrcItNw:0.24, hrcMtNw:0.18,
     mEx:3.00, mNw:0.88,
     imEx:1.56, imNw:0.45,
     vmMEx:1.44, vmMNw:0.43,
@@ -741,7 +746,8 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
       vmEx:s(ex,'vm'), vmNw:s(nw,'vm'),
       initEx:s(ex,'newInitiatives'), initNw:s(nw,'newInitiatives'),
       itEx:s(ex,'itCost'), itNw:s(nw,'itCost'),
-      hrcCap:sAll('hrcCapex'), hrcIt:sAll('hrcItCost'), hrcMt:sAll('hrcMaint'),
+      hrcCap:s(ex,'hrcCapex'), hrcIt:s(ex,'hrcItCost'), hrcMt:s(ex,'hrcMaint'),
+      hrcCapNw:s(nw,'hrcCapex'), hrcItNw:s(nw,'hrcItCost'), hrcMtNw:s(nw,'hrcMaint'),
       mEx:s(ex,'totalMaint'), mNw:s(nw,'totalMaint'),
       imEx:s(ex,'infraMaint'), imNw:s(nw,'infraMaint'),
       vmMEx:s(ex,'vmMaint'), vmMNw:s(nw,'vmMaint'),
@@ -756,12 +762,14 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
   const collapseAll = () => setOpenSec({gs:false,hrc:false,maint:false,c2b:false,office:false});
 
   const gsTotal = wf.gsEx + wf.gsNw;
-  const hrcTotal = wf.hrcCap + wf.hrcIt + wf.hrcMt;
+  const hrcEx = wf.hrcCap + wf.hrcIt + wf.hrcMt;
+  const hrcNw = (wf.hrcCapNw||0) + (wf.hrcItNw||0) + (wf.hrcMtNw||0);
+  const hrcTotal = hrcEx + hrcNw;
   const maintTotal = wf.mEx + wf.mNw;
   const c2bTotal = wf.c2bEx + wf.c2bNw;
-  const grandEx = wf.gsEx + hrcTotal + wf.mEx + wf.c2bEx;
-  const grandNw = wf.gsNw + wf.mNw + wf.c2bNw;
-  const grandTotal = grandEx + grandNw + wf.office;
+  const grandEx = wf.gsEx + hrcEx + wf.mEx + wf.c2bEx;
+  const grandNw = wf.gsNw + hrcNw + wf.mNw + wf.c2bNw + wf.office;
+  const grandTotal = grandEx + grandNw;
 
   const cr = v => (v||0).toFixed(2);
   const fmt0 = v => (!v || v===0) ? '—' : v.toFixed(2);
@@ -838,10 +846,10 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
                 <SubRow label="New Initiatives" ex={wf.initEx} nw={wf.initNw} tot={wf.initEx+wf.initNw}/>
                 <SubRow label="IT Cost" ex={wf.itEx} nw={wf.itNw} tot={wf.itEx+wf.itNw}/>
               </SecRow>
-              <SecRow label="HRC Total" ex={hrcTotal} nw={0} tot={hrcTotal} sKey="hrc">
-                <SubRow label="HRC Capex" ex={wf.hrcCap} nw={0} tot={wf.hrcCap}/>
-                <SubRow label="HRC IT Cost" ex={wf.hrcIt} nw={0} tot={wf.hrcIt}/>
-                <SubRow label="HRC Maintenance" ex={wf.hrcMt} nw={0} tot={wf.hrcMt}/>
+              <SecRow label="HRC Total" ex={hrcEx} nw={hrcNw} tot={hrcTotal} sKey="hrc">
+                <SubRow label="HRC Capex" ex={wf.hrcCap} nw={wf.hrcCapNw||0} tot={wf.hrcCap+(wf.hrcCapNw||0)}/>
+                <SubRow label="HRC IT Cost" ex={wf.hrcIt} nw={wf.hrcItNw||0} tot={wf.hrcIt+(wf.hrcItNw||0)}/>
+                <SubRow label="HRC Maintenance" ex={wf.hrcMt} nw={wf.hrcMtNw||0} tot={wf.hrcMt+(wf.hrcMtNw||0)}/>
               </SecRow>
               <SecRow label="Total Maintenance" ex={wf.mEx} nw={wf.mNw} tot={maintTotal} sKey="maint">
                 <SubRow label="Infra Maintenance" ex={wf.imEx} nw={wf.imNw} tot={wf.imEx+wf.imNw}/>
@@ -850,8 +858,8 @@ function SummaryTab({ gsData, c2bData, waterfallData }) {
               <SecRow label="C2B Capex" ex={wf.c2bEx} nw={wf.c2bNw} tot={c2bTotal} sKey="c2b">
                 <SubRow label="Infra Cost" ex={wf.c2bEx} nw={wf.c2bNw} tot={c2bTotal}/>
               </SecRow>
-              <SecRow label="New Office Capex" ex={0} nw={0} tot={wf.office} sKey="office">
-                <SubRow label="Infra Cost" ex={0} nw={0} tot={wf.office}/>
+              <SecRow label="New Office Capex" ex={0} nw={wf.office} tot={wf.office} sKey="office">
+                <SubRow label="Infra Cost" ex={0} nw={wf.office} tot={wf.office}/>
               </SecRow>
             </tbody>
           </table>
