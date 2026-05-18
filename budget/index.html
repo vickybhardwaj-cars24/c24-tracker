@@ -501,26 +501,31 @@ function parseWaterfallFromExcel(buffer) {
     const nwCol = hdr.findIndex(c => /new.*(hub|store|city)/i.test(String(c||'')));
     const totCol = hdr.findIndex((c,i) => i > nwCol && /total/i.test(String(c||'')));
     if (exCol < 0 || nwCol < 0) return null;
-    // Build label→row map
+    // Build label→row map (skip the grand-total summary row at top)
     const lmap = {};
     for (let i = hi+1; i < raw.length; i++) {
       const r = raw[i];
       if (!r) continue;
       const lbl = String(r[0]||r[1]||'').trim().toLowerCase();
       if (!lbl) continue;
+      // skip the single grand-total rollup row (contains multiple categories in label)
+      if (lbl.includes('total gs') || lbl.includes('+ hrc') || lbl.includes('+ c2b')) continue;
       lmap[lbl] = {ex: Number(r[exCol])||0, nw: Number(r[nwCol])||0, tot: totCol>=0?Number(r[totCol])||0:0};
     }
+    // startsWith match first (precise), then falls back to includes
     const g = key => {
-      const hit = Object.entries(lmap).find(([k]) => k.includes(key.toLowerCase()));
+      const lk = key.toLowerCase();
+      const hit = Object.entries(lmap).find(([k]) => k.startsWith(lk))
+               || Object.entries(lmap).find(([k]) => k.includes(lk));
       return hit ? hit[1] : {ex:0, nw:0, tot:0};
     };
-    const gs = g('gs hub'); const hrc = g('hrc total'); const maint = g('total maint');
-    const infra = g('infra cost'); const slot = g('slot'); const vm = g('vm');
-    const init_ = g('new init'); const it = g('it cost');
-    const hrcCap = g('hrc capex'); const hrcIt = g('hrc it'); const hrcMt = g('hrc maint');
-    const iMaint = g('infra maint'); const vmM = g('vm maint');
-    const c2b = g('c2b');
-    const office = g('new office');
+    const gs = g('gs hub capex'); const hrc = g('hrc total'); const maint = g('total maintenance');
+    const infra = g('infra cost'); const slot = g('slot marking'); const vm = g('vm');
+    const init_ = g('new initiatives'); const it = g('it cost');
+    const hrcCap = g('hrc capex'); const hrcIt = g('hrc it'); const hrcMt = g('hrc maintenance');
+    const iMaint = g('infra maintenance'); const vmM = g('vm maintenance');
+    const c2b = g('c2b capex');
+    const office = g('new office capex');
     // Values come in Rupees from the Excel; divide by 10M to get Crores
     const CR = 10000000;
     const cr = v => v/CR;
@@ -1583,7 +1588,7 @@ function App() {
     window.C24Uploader.fetchText(WORKER_URL + BUDGET_PATH + '.csv', {cache:'no-store'})
       .then(text=>{
         const j = JSON.parse(text);
-        if (j.gs && j.gs.length) { setGsData(j.gs); setC2bData(j.c2b||HARDCODED_C2B); setDataSource('cloudflare'); toast('✓ Budget data loaded from Cloudflare','ok'); }
+        if (j.gs && j.gs.length) { setGsData(j.gs); setC2bData(j.c2b||HARDCODED_C2B); if (j.wf) setWaterfallData(j.wf); setDataSource('cloudflare'); toast('✓ Budget data loaded from Cloudflare','ok'); }
       })
       .catch(()=>{}); // fallback to hardcoded silently
   },[]);
@@ -1616,7 +1621,8 @@ function App() {
 
         // Save to Cloudflare if authenticated
         if (auth) {
-          const jsonText = JSON.stringify({gs:gsRows, c2b:c2bRows||HARDCODED_C2B, uploadedAt:new Date().toISOString()});
+          const wfParsedForSave = parseWaterfallFromExcel(buf);
+          const jsonText = JSON.stringify({gs:gsRows, c2b:c2bRows||HARDCODED_C2B, wf:wfParsedForSave||null, uploadedAt:new Date().toISOString()});
           window.C24Uploader.upload({csvText:jsonText, workerUrl:WORKER_URL, toolPath:BUDGET_PATH, auth})
             .then(()=>{ setDataSource('cloudflare'); toast('✓ Saved to Cloudflare — all users will see updated data','ok'); })
             .catch(er=>{ if(er.status===401){toast('Session expired','err');}else toast('Parsed OK but CF save failed: '+(er.message||er),'err'); });
