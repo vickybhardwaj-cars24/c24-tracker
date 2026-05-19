@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.3</title>
+<title>Cars24 Projects Tracker v4.4</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1358,7 +1358,8 @@ function gmailDraft(r, type){
         +revLine
         +'\nRequest HEM team to schedule the UAT inspection and Design team to confirm all snag items from SAT have been addressed.\n\nNote: UAT must be completed within 15 days of SAT as per CARS24 project compliance policy.\n\nRegards,\n'+owner+'\nCARS24 Projects Team';
     }
-    return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+    var url='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+    return {url:url,subj:subj};
   }
 function commCard(entry,type){
   const r=entry.r,diff=entry.diff,idx3=entry.idx3;
@@ -1372,14 +1373,15 @@ function commCard(entry,type){
   const border=isOverdue?'#fecaca':diff<=3?'#fde68a':'#bbf7d0';
   const revHist=getRevHistory(r);
   const revBadge=revHist.length?'<span style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:700">🔄 '+revHist.length+(revHist.length>1?' revisions':' revision')+'</span>':'';
-  const gmailUrl=gmailDraft(r,type);
+  const _gmail=gmailDraft(r,type);
+  const gmailUrl=_gmail.url, gmailSubj=_gmail.subj;
   const revDateVal=r['Revised Completion']||'';
   const revDateLine=type==='SAT'&&revDateVal
     ?'<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-weight:600">Revised on: <span style="font-weight:700">'+esc(revDateVal)+'</span></div>'
     :'';
   const _commType=(type==='SAT'?'hem_design_sat':'hem_design_uat');
   const _siteName=r['Site Name']||'';
-  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:'+bg+';border:1px solid '+border+';border-radius:8px;gap:10px;flex-wrap:wrap">'    +'<div style="flex:1;min-width:150px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:12px;font-weight:700">'+esc(_siteName)+revBadge+'</div>'    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(r['Owner']||'—')+' · '+esc(r['Vendor']||'—')+'</div>'    +revDateLine    +'</div>'    +'<div style="text-align:center;min-width:80px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:13px;font-weight:800;color:'+diffColor+'">'+dateLabel+'</div>'    +'<div style="font-size:10px;color:'+diffColor+'">'+diffLabel+'</div>'    +'</div>'    +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'    +'<a href="'+gmailUrl+'" target="_blank" data-elog-site="'+esc(_siteName)+'" data-elog-type="'+_commType+'" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Email HEM + Design</a>'    +emailLogBadge(_siteName,_commType)    +'</div>'    +'</div>';
+  return '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 12px;margin-bottom:6px;background:'+bg+';border:1px solid '+border+';border-radius:8px;gap:10px;flex-wrap:wrap">'    +'<div style="flex:1;min-width:150px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:12px;font-weight:700">'+esc(_siteName)+revBadge+'</div>'    +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+esc(r['Owner']||'—')+' · '+esc(r['Vendor']||'—')+'</div>'    +revDateLine    +'</div>'    +'<div style="text-align:center;min-width:80px;cursor:pointer" onclick="openModal('+idx3+')">'    +'<div style="font-size:13px;font-weight:800;color:'+diffColor+'">'+dateLabel+'</div>'    +'<div style="font-size:10px;color:'+diffColor+'">'+diffLabel+'</div>'    +'</div>'    +'<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">'    +'<a href="'+gmailUrl+'" target="_blank" data-elog-site="'+esc(_siteName)+'" data-elog-type="'+_commType+'" data-elog-subject="'+esc(gmailSubj)+'" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#1a73e8;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Email HEM + Design</a>'    +emailLogBadge(_siteName,_commType)    +'</div>'    +'</div>';
 }
 
 function renderSatUat(){
@@ -1552,7 +1554,7 @@ function renderSatUat(){
   const rcHtml=recent.length
     ?'<div style="margin-bottom:14px"><div class="su-sh">✅ Recent SAT / UAT (last 2 weeks) ('+recent.length+')</div>'+mkTable(recent,'')+'</div>':'';
   const pendHtml=pendArr.length
-    ?'<div style="margin-bottom:14px"><div class="su-sh">⏳ UAT Pending ('+pendArr.length+')</div>'+mkTable(pendArr,'')+'</div>':'';
+    ?'<div style="margin-bottom:14px"><div class="su-sh">⏳ UAT Pending ('+pendArr.length+')</div>'+_mkDWOTbl(pendArr,'var(--text)',false)+'</div>':'';
   const doneHtml=doneArr.length
     ?'<div style="margin-bottom:14px"><div class="su-sh">✔ All SAT→UAT Closed</div>'+mkTable(doneArr,'')+'</div>':'';
 
@@ -1566,7 +1568,8 @@ function renderSatUat(){
     var rh=getRevHistory(u.r);
     var rb=rh.length?'<span style="font-size:9px;background:#f5f3ff;color:#7c3aed;padding:1px 4px;border-radius:6px;margin-left:3px">x'+rh.length+'</span>':'';
     var tgt=u.uatTarget?u.uatTarget.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
-    var revUAT=u.r['Revised Completion']?(function(){var d=pd(u.r['Revised Completion']);return d?d.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';})():'--';
+    var _ruatD=getRevisedUATDate(u.r)||(u.r['Revised Completion']?pd(u.r['Revised Completion']):null);
+    var revUAT=_ruatD?_ruatD.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
     return '<tr style="border-bottom:1px solid var(--border)">'
       +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'--')+rb+'</td>'
       +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'--')+'</td>'
@@ -3061,6 +3064,15 @@ function processSnagXlsx(arrayBuffer,fileName,statusEl){
 // ═══════════════════════════════════════════════════════════════
 // TASK TRACKER
 // ═══════════════════════════════════════════════════════════════
+function hasProcurementPlan(r){
+  var rx=/procurement\s*plan\s*(received|shared|submitted|sent|provided|uploaded|attached)/i;
+  for(var ci=0;ci<DATE_COLS.length;ci++){
+    var upd=(r[DATE_COLS[ci]]||'').trim();
+    if(rx.test(upd)) return true;
+  }
+  return false;
+}
+
 function renderTaskTab(){
   var el=document.getElementById('taskv');
   if(!el) return;
@@ -3100,6 +3112,24 @@ function renderTaskTab(){
     +'</div>'
     +'<div id="ai-task-out" style="display:none;margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:10px;line-height:1.6"></div>'
     +'</div>';
+
+  // Procurement plan auto-tasks: sites with PO issued but plan not yet received
+  var procPending=allData.filter(function(r){
+    return (r['PO Date']||'').trim()&&(r['PO Date']||'').trim()!=='—'&&(r['PO Date']||'').trim().toLowerCase()!=='pending'&&!hasProcurementPlan(r);
+  });
+  if(procPending.length){
+    html+='<div style="margin-bottom:16px;border:1.5px solid #fbbf24;border-radius:8px;overflow:hidden">';
+    html+='<div style="padding:8px 12px;background:#fffbeb;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">📦 Procurement Plan Pending ('+procPending.length+') — PO issued, awaiting vendor plan</div>';
+    procPending.forEach(function(r){
+      html+='<div style="padding:8px 12px;border-top:1px solid #fde68a;background:var(--surface)">'
+        +'<div style="font-size:12px;font-weight:600">'+esc(r['Site Name']||'—')
+        +(r['Owner']?' <span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(r['Owner'])+'</span>':'')+'</div>'
+        +'<div style="font-size:12px;color:#92400e;margin-top:3px">• Get Procurement Plan from vendor (PO: '+esc(r['PO Date'])+')</div>'
+        +'</div>';
+    });
+    html+='</div>';
+  }
+
   dateCols.forEach(function(col){
     html+='<div style="margin-bottom:16px">';
     html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border)">'+esc(col)+'</div>';
@@ -3941,8 +3971,27 @@ function satDelayMail(r){
 // BD TRACKER MODULE
 // ═══════════════════════════════════════════════════════════════
 
+// Revised UAT Date: parses PM updates for explicit revised UAT target shared by PM
+// Patterns: "Revised UAT: DD Mon", "UAT revised to DD Mon", "New UAT: DD Mon", "UAT target: DD Mon"
+function getRevisedUATDate(r){
+  var rx=/(?:revised\s+uat(?:\s+date)?|uat\s+(?:revised(?:\s+to)?|target|date\s+revised))\s*[:\-to]*\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
+  var latest=null;
+  DATE_COLS.forEach(function(col){
+    var txt=(r[col]||'').trim(); if(!txt) return;
+    var m; rx.lastIndex=0;
+    while((m=rx.exec(txt))!==null){
+      var ds=m[1].replace(/\b(st|nd|rd|th)\b/gi,'').trim();
+      var d=pd(ds); if(!d) continue;
+      if(!latest||d>latest) latest=d;
+    }
+  });
+  return latest;
+}
+
 // Temp Live Date: explicit "Temp Live Date: DD Mon" in daily updates takes priority; fallback = PO Date + 15 days
+// Returns null for sites where UAT is already done (no longer relevant)
 function getTempLiveDate(r){
+  if((r['UAT DATE']||'').trim()&&(r['UAT DATE']||'').trim()!=='—') return null;
   var rx=/temp\s*live\s*date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
   var latest=null;
   DATE_COLS.forEach(function(col){
@@ -4001,7 +4050,8 @@ function bdTeamMail(r,team,tempLiveD,finalLiveD){
     +'As per SOP, '+team+' team requires 30 days for setup. Please initiate immediately to ensure readiness by '+ts.deadline+'.\n\n'
     +'Kindly confirm initiation and share your setup plan by return email.\n\n'
     +'Regards,\n'+owner+'\nCARS24 Projects Team';
-  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  var url='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  return {url:url,subj:subj};
 }
 
 // BD Slack message generator
@@ -4146,12 +4196,12 @@ function renderBDTab(){
     var inactiveBtnStyle=btnStyle+' var(--border);background:var(--surface);color:var(--muted)';
 
     var teamBtns=['IT','NSO','Admin','HEM'].map(function(team){
-      var url=bdTeamMail(r,team,tld,fld);
+      var _bm=bdTeamMail(r,team,tld,fld);
       var style=show30?activeBtnStyle:inactiveBtnStyle;
       var eType='bd_'+team.toLowerCase();
       var sn=r['Site Name']||'';
       return '<span style="display:inline-flex;align-items:center;gap:3px">'
-        +'<a href="'+url+'" target="_blank" data-elog-site="'+esc(sn)+'" data-elog-type="'+eType+'" style="'+style+'">📧 '+team+'</a>'
+        +'<a href="'+_bm.url+'" target="_blank" data-elog-site="'+esc(sn)+'" data-elog-type="'+eType+'" data-elog-subject="'+esc(_bm.subj)+'" style="'+style+'">📧 '+team+'</a>'
         +emailLogBadge(sn,eType)
         +'</span>';
     }).join(' ');
@@ -4566,13 +4616,14 @@ function saveEmailLog(){
   .catch(function(e){ toast('Email log network error: '+e.message, 'err'); });
 }
 
-function markEmailSent(siteName, emailType){
+function markEmailSent(siteName, emailType, subject){
   var entry = EMAIL_LOG[siteName] || {};
   var prev = entry[emailType] || {};
   entry[emailType] = {
     sentAt: new Date().toISOString(),
     count: (prev.count || 0) + 1,
-    lastSentDate: new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})
+    lastSentDate: new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
+    subject: subject || prev.subject || ''
   };
   EMAIL_LOG[siteName] = entry;
   saveEmailLog();
@@ -4589,7 +4640,7 @@ function attachEmailTracking(){
     if(el._elogBound) return;
     el._elogBound = true;
     el.addEventListener('click', function(){
-      markEmailSent(el.dataset.elogSite, el.dataset.elogType);
+      markEmailSent(el.dataset.elogSite, el.dataset.elogType, el.dataset.elogSubject||'');
       if(el.dataset.elogRefresh === 'warnings') setTimeout(renderWarnings, 300);
     });
   });
@@ -4628,9 +4679,12 @@ function emailLogBadge(siteName, emailType){
   var e = EMAIL_LOG[siteName];
   if (!e || !e[emailType]) return '';
   var d = e[emailType];
-  return '<span style="display:inline-flex;align-items:center;gap:3px;font-size:9px;background:#dcfce7;color:#16a34a;padding:1px 5px;border-radius:4px;margin-left:4px;font-weight:600">'
-    +'✓ Sent'+(d.count>1?' ×'+d.count:'')+' · '+d.lastSentDate
+  var subjTip=d.subject?(' title="Subject: '+esc(d.subject)+'"'):'';
+  var subjLine=d.subject?('<div style="font-size:8px;color:#15803d;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:1px">'+esc(d.subject)+'</div>'):'';
+  return '<span style="display:inline-flex;flex-direction:column;gap:0;font-size:9px;background:#dcfce7;color:#16a34a;padding:2px 5px;border-radius:4px;margin-left:4px;font-weight:600;max-width:220px"'+subjTip+'>'
+    +'<span style="display:inline-flex;align-items:center;gap:3px">✓ Sent'+(d.count>1?' ×'+d.count:'')+' · '+d.lastSentDate
     +'<button title="Clear sent history" data-elog-clear-site="'+esc(siteName)+'" data-elog-clear-type="'+esc(emailType)+'" style="margin-left:3px;background:none;border:none;cursor:pointer;color:#16a34a;font-size:10px;padding:0;line-height:1">×</button>'
+    +'</span>'+subjLine
     +'</span>';
 }
 
