@@ -3115,7 +3115,11 @@ function renderTaskTab(){
 
   // Procurement plan auto-tasks: sites with PO issued but plan not yet received
   var procPending=allData.filter(function(r){
-    return (r['PO Date']||'').trim()&&(r['PO Date']||'').trim()!=='—'&&(r['PO Date']||'').trim().toLowerCase()!=='pending'&&!hasProcurementPlan(r);
+    var poStr=(r['PO Date']||'').trim();
+    if(!poStr||poStr==='—'||poStr.toLowerCase()==='pending') return false;
+    var poD=pd(poStr); if(!poD) return false;
+    var cutoff=new Date(2026,4,1); // 1 May 2026
+    return poD>=cutoff&&!hasProcurementPlan(r);
   });
   if(procPending.length){
     html+='<div style="margin-bottom:16px;border:1.5px solid #fbbf24;border-radius:8px;overflow:hidden">';
