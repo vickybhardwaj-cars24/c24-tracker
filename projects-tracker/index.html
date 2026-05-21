@@ -4977,11 +4977,20 @@ function syncAttendanceFromPF() {
       if (el && el.style.display !== 'none') renderAttendanceTab();
 
       if (__auth) {
-        C24Uploader.upload({ csvText: text, workerUrl: WORKER_URL, toolPath: ATTENDANCE_TOOL_PATH, auth: __auth })
-          .then(function()  { toast('✓ ' + rows.length + ' attendance records synced and saved', 'ok'); })
+        // Re-export parsed rows back to canonical CSV so R2 gets clean data
+        var csvLines = [Object.keys(rows[0]).join(',')];
+        rows.forEach(function(r) {
+          csvLines.push(Object.values(r).map(function(v) {
+            return v.indexOf(',') !== -1 || v.indexOf('"') !== -1 || v.indexOf('\n') !== -1
+              ? '"' + v.replace(/"/g, '""') + '"' : v;
+          }).join(','));
+        });
+        var csvOut = csvLines.join('\n');
+        C24Uploader.upload({ csvText: csvOut, workerUrl: WORKER_URL, toolPath: ATTENDANCE_TOOL_PATH, auth: __auth })
+          .then(function()  { toast('✓ ' + rows.length + ' attendance records synced and saved to R2', 'ok'); })
           .catch(function(e){ toast('Synced in-session but R2 save failed: ' + (e.message||e), 'err'); });
       } else {
-        toast('✓ ' + rows.length + ' attendance records loaded', 'ok');
+        toast('✓ ' + rows.length + ' attendance records loaded (log in to save live)', 'ok');
       }
     })
     .catch(function(err) {
@@ -5066,8 +5075,14 @@ function renderAttendanceTab() {
 
   // Sort by Clock-In date descending
   filtered.sort(function(a, b) {
-    var da = attCol(a,['Clock-In Time (IST)']) || '';
-    var db = attCol(b,['Clock-In Time (IST)']) || '';
+    // Format is DD/MM/YYYY HH:MM:SS — convert to YYYY-MM-DD HH:MM:SS for correct lexical sort
+    function toSortable(s) {
+      if (!s) return '';
+      var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s(.+)$/);
+      return m ? m[3]+'-'+m[2]+'-'+m[1]+' '+m[4] : s;
+    }
+    var da = toSortable(attCol(a,['Clock-In Time (IST)']));
+    var db = toSortable(attCol(b,['Clock-In Time (IST)']));
     return dateSort === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
   });
 
