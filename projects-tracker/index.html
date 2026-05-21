@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.4</title>
+<title>Cars24 Projects Tracker v4.5</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -114,7 +114,7 @@ td{padding:7px 12px;vertical-align:middle}
 .r3{background:#fef9c3;color:#ca8a04}.r4{background:#dcfce7;color:#16a34a}
 .r5{background:#f0fdf4;color:#15803d}.r0{background:var(--surface);color:var(--muted)}
 #sv{display:none;padding:14px 20px}#sv.show{display:block}
-#suv,#taskv,#pmsv,#tickv,#slackv,#bdv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#bdv.show{display:block}
+#suv,#taskv,#pmsv,#tickv,#slackv,#bdv,#attv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#bdv.show,#attv.show{display:block}
 #calv{display:none;padding:14px 20px}#calv.show{display:block}
 #inv{display:none}#inv.show{display:block}
 #warnv{display:none;padding:14px 20px}#warnv.show{display:block}
@@ -306,7 +306,7 @@ td{padding:7px 12px;vertical-align:middle}
   .warn-card-top{flex-direction:column;gap:6px}
   .warn-days{font-size:18px}
   .warn-meta{gap:8px}
-  #suv,#taskv,#pmsv,#tickv,#slackv,#bdv{padding:10px 12px}
+  #suv,#taskv,#pmsv,#tickv,#slackv,#bdv,#attv{padding:10px 12px}
   #taskv{overflow-y:visible;flex:none}
   .mbody{padding:12px 14px}
   .date-badge,.warn-badge{font-size:11px;padding:4px 8px}
@@ -461,6 +461,10 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="btn btn-o" id="logout-btn" onclick="doLogout()" style="font-size:11px;display:none">↪ Logout <span id="login-user" style="margin-left:4px;color:var(--muted);font-weight:400"></span></button>
     <button class="btn btn-o" id="pf-sync-btn" onclick="syncTicketsFromPF()" style="font-size:11px">🔄 Sync Tickets</button>
     <span id="csv-ts-tickets" style="font-size:10px;color:var(--muted)"></span>
+    <button class="btn btn-o" id="pf-att-sync-btn" onclick="syncAttendanceFromPF()" style="font-size:11px">🔄 Sync Attendance</button>
+    <span id="csv-ts-attendance" style="font-size:10px;color:var(--muted)"></span>
+    <label class="btn btn-o" for="att-inp" id="att-local-lbl" style="font-size:11px;display:none">📋 Upload Attendance (.csv)</label>
+    <input type="file" id="att-inp" accept=".csv" style="display:none" onchange="handleAttendanceUpload(event)">
     <label class="btn btn-o" for="ticket-inp" id="ticket-local-lbl" style="font-size:11px;display:none">🎫 Upload Tickets (.csv)</label>
     <input type="file" id="ticket-inp" accept=".csv" style="display:none" onchange="handleTicketUpload(event)">
     <label class="btn btn-o" for="ticket-live-inp" id="ticket-live-lbl" style="cursor:pointer;font-size:11px;display:none">🎫 Upload Tickets CSV (Live)</label>
@@ -542,6 +546,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('slackv',this)">📣 Slack</button>
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
     <button class="vtab" onclick="setView('bdv',this)">🏗️ BD</button>
+    <button class="vtab" onclick="setView('attv',this)">📋 Attendance</button>
   </div>
   <span class="cchip" id="cchip"></span>
 
@@ -581,6 +586,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   </tr></thead><tbody id="pm-scorecard-body"></tbody></table>
 </div>
 <div id="tickv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
+<div id="attv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="bdv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
 
@@ -614,6 +620,7 @@ const CSV_DATA = [];
 
 let SNAG_DATA = {};
 let TICKET_DATA = [];
+let ATTENDANCE_DATA = [];
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -1190,8 +1197,9 @@ function setView(v,btn){
   if(v==='tickv') renderTicketTab();
   if(v==='slackv') renderSlackTab();
   if(v==='bdv') renderBDTab();
+  if(v==='attv') renderAttendanceTab();
   if(v==='suv') setTimeout(function(){renderSatUat();},0);
-  ['tv','suv','inv','taskv','pmsv','tickv','slackv','bdv'].forEach(id=>{
+  ['tv','suv','inv','taskv','pmsv','tickv','slackv','bdv','attv'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     if(id==='tv'){el.classList.toggle('hide',v!=='tv');}
@@ -4542,7 +4550,8 @@ function filterByZoneBU(z, b, status) {
 const WORKER_URL       = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
-const TICKET_TOOL_PATH = 'tickets';
+const TICKET_TOOL_PATH     = 'tickets';
+const ATTENDANCE_TOOL_PATH = 'attendance';
 const EMAIL_LOG_KEY = '__email_log';
 const HOTP_UPDATES_TOOL = 'hotp-updates';
 var HOTP_UPDATES = {};  // { siteName: { dateCol: text } }
@@ -4887,6 +4896,302 @@ function loadTicketsFromOrigin(){
     })
     .catch(function(err){ throw err; }); // re-throw so callers can chain
 }
+
+// ═══════════════════════════════════════════════════════════════
+// ATTENDANCE MODULE
+// ═══════════════════════════════════════════════════════════════
+
+function pfAttendanceUrl() {
+  var today = new Date().toISOString().slice(0, 10);
+  return WORKER_URL + 'pf-attendance?workflow_id=6&start_date=2026-01-01&end_date=' + today;
+}
+
+// Parse attendance CSV (RFC-4180, handles quoted cells with embedded commas/newlines)
+function parseAttendanceCSV(text) {
+  text = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  var rows = [], row = [], cell = '', inQ = false, i = 0;
+  while (i < text.length) {
+    var ch = text[i];
+    if (inQ) {
+      if (ch === '"' && text[i+1] === '"') { cell += '"'; i += 2; }
+      else if (ch === '"') { inQ = false; i++; }
+      else { cell += ch; i++; }
+    } else {
+      if (ch === '"') { inQ = true; i++; }
+      else if (ch === ',') { row.push(cell); cell = ''; i++; }
+      else if (ch === '\n') { row.push(cell); rows.push(row); row = []; cell = ''; i++; }
+      else { cell += ch; i++; }
+    }
+  }
+  if (cell || row.length) { row.push(cell); rows.push(row); }
+  if (!rows.length) return [];
+  var headers = rows[0].map(function(h){ return h.trim(); });
+  var out = [];
+  for (var r = 1; r < rows.length; r++) {
+    if (!rows[r].some(function(c){ return c.trim(); })) continue;
+    var obj = {};
+    headers.forEach(function(h, idx) { obj[h] = (rows[r][idx] || '').trim(); });
+    out.push(obj);
+  }
+  return out;
+}
+
+function attCol(row, names) {
+  for (var i = 0; i < names.length; i++) {
+    if (row[names[i]] !== undefined && row[names[i]] !== '') return row[names[i]];
+  }
+  return '';
+}
+
+function handleAttendanceUpload(event) {
+  var file = event.target.files && event.target.files[0];
+  if (!file) return;
+  var lbl = document.getElementById('att-local-lbl');
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      var rows = parseAttendanceCSV(e.target.result);
+      ATTENDANCE_DATA = rows;
+      toast('✓ Attendance loaded: ' + rows.length + ' records', 'ok');
+      if (lbl) lbl.textContent = '📋 Attendance (' + rows.length + ')';
+      stampCSV('attendance');
+      setView('attv', document.querySelector('[onclick*="attv"]'));
+    } catch(err) {
+      toast('Attendance parse error: ' + err.message, 'err');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function syncAttendanceFromPF() {
+  var btn = document.getElementById('pf-att-sync-btn');
+  if (btn) { btn.textContent = '⟳ Syncing…'; btn.disabled = true; }
+  var url = pfAttendanceUrl();
+
+  pfFetch(url)
+    .then(function(text) {
+      var rows = parseAttendanceCSV(text);
+      ATTENDANCE_DATA = rows;
+      stampCSV('attendance');
+      var el = document.getElementById('attv');
+      if (el && el.style.display !== 'none') renderAttendanceTab();
+
+      if (__auth) {
+        // Re-export parsed rows back to canonical CSV so R2 gets clean data
+        var csvLines = [Object.keys(rows[0]).join(',')];
+        rows.forEach(function(r) {
+          csvLines.push(Object.values(r).map(function(v) {
+            return v.indexOf(',') !== -1 || v.indexOf('"') !== -1 || v.indexOf('\n') !== -1
+              ? '"' + v.replace(/"/g, '""') + '"' : v;
+          }).join(','));
+        });
+        var csvOut = csvLines.join('\n');
+        C24Uploader.upload({ csvText: csvOut, workerUrl: WORKER_URL, toolPath: ATTENDANCE_TOOL_PATH, auth: __auth })
+          .then(function()  { toast('✓ ' + rows.length + ' attendance records synced and saved to R2', 'ok'); })
+          .catch(function(e){ toast('Synced in-session but R2 save failed: ' + (e.message||e), 'err'); });
+      } else {
+        toast('✓ ' + rows.length + ' attendance records loaded (log in to save live)', 'ok');
+      }
+    })
+    .catch(function(err) {
+      var msg = err && err.message ? err.message : String(err);
+      toast('Attendance sync failed: ' + msg, 'err');
+    })
+    .finally(function() {
+      if (btn) { btn.textContent = '🔄 Sync Attendance'; btn.disabled = false; }
+    });
+}
+
+function loadAttendanceFromPF() {
+  if (location.protocol === 'file:') { loadAttendanceFromOrigin(); return; }
+  pfFetch(pfAttendanceUrl())
+    .then(function(text) {
+      var rows = parseAttendanceCSV(text);
+      ATTENDANCE_DATA = rows;
+      stampCSV('attendance');
+      var el = document.getElementById('attv');
+      if (el && el.style.display !== 'none') renderAttendanceTab();
+    })
+    .catch(function() {
+      loadAttendanceFromOrigin().catch(function(){});
+    });
+}
+
+function loadAttendanceFromOrigin() {
+  if (location.protocol === 'file:') return Promise.resolve();
+  return C24Uploader.fetchText(WORKER_URL + ATTENDANCE_TOOL_PATH + '.csv', {cache: 'no-store'})
+    .then(function(text) {
+      var rows = parseAttendanceCSV(text);
+      if (rows && rows.length) {
+        ATTENDANCE_DATA = rows;
+        stampCSV('attendance');
+        var el = document.getElementById('attv');
+        if (el && el.style.display !== 'none') renderAttendanceTab();
+      }
+    })
+    .catch(function(err){ throw err; });
+}
+loadAttendanceFromPF();
+
+function renderAttendanceTab() {
+  var el = document.getElementById('attv'); if (!el) return;
+  if (!ATTENDANCE_DATA.length) {
+    el.innerHTML = '<div style="text-align:center;padding:60px 20px;color:var(--muted)">'
+      + '<div style="font-size:32px;margin-bottom:12px">📋</div>'
+      + '<div style="font-size:14px;font-weight:600;margin-bottom:6px">No attendance data loaded</div>'
+      + '<div style="font-size:12px">Click <b>🔄 Sync Attendance</b> in the toolbar, or upload a CSV manually below.</div>'
+      + '<label class="btn btn-p" for="att-inp" style="margin-top:14px;cursor:pointer;display:inline-block">Upload Attendance CSV</label>'
+      + '</div>';
+    return;
+  }
+
+  // Build filter state
+  var fSearch   = el._fSearch   || '';
+  var fEmployee = el._fEmployee || '';
+  var fStatus   = el._fStatus   || '';
+  var fRole     = el._fRole     || '';
+  var fSite     = el._fSite     || '';
+  var dateSort  = el._dateSort  || 'desc';
+
+  // Unique sets for filter dropdowns
+  var employeeSet = new Set(ATTENDANCE_DATA.map(function(r){ return attCol(r,['Employee Name']); }).filter(Boolean));
+  var statusSet   = new Set(ATTENDANCE_DATA.map(function(r){ return attCol(r,['Status']); }).filter(Boolean));
+  var roleSet     = new Set(ATTENDANCE_DATA.map(function(r){ return attCol(r,['Role']); }).filter(Boolean));
+  var siteSet     = new Set(ATTENDANCE_DATA.map(function(r){ return attCol(r,['Store']); }).filter(Boolean));
+
+  // Filter
+  var filtered = ATTENDANCE_DATA.filter(function(r) {
+    if (fEmployee && attCol(r,['Employee Name']) !== fEmployee) return false;
+    if (fStatus   && attCol(r,['Status']) !== fStatus) return false;
+    if (fRole     && attCol(r,['Role']) !== fRole) return false;
+    if (fSite     && attCol(r,['Store']) !== fSite) return false;
+    if (fSearch) {
+      var q = fSearch.toLowerCase();
+      var haystack = [attCol(r,['Employee Name']), attCol(r,['Store']), attCol(r,['Role']), attCol(r,['Status'])].join(' ').toLowerCase();
+      if (haystack.indexOf(q) === -1) return false;
+    }
+    return true;
+  });
+
+  // Sort by Clock-In date descending
+  // Pre-compute a numeric sort key (YYYYMMDDHHMMSS) for each record so comparisons are fast and stable
+  function attDateKey(s) {
+    if (!s) return 0;
+    var parts = s.split(' ');
+    var d = (parts[0] || '').split('/');   // [DD, MM, YYYY]
+    var t = (parts[1] || '').split(':');   // [HH, MM, SS]
+    if (d.length < 3) return 0;
+    return parseInt(d[2]+d[1]+d[0]+(t[0]||'00')+(t[1]||'00')+(t[2]||'00'), 10) || 0;
+  }
+  filtered.sort(function(a, b) {
+    var da = attDateKey(attCol(a,['Clock-In Time (IST)']));
+    var db = attDateKey(attCol(b,['Clock-In Time (IST)']));
+    return dateSort === 'asc' ? da - db : db - da;
+  });
+
+  // KPIs
+  var total    = filtered.length;
+  var present  = filtered.filter(function(r){ return attCol(r,['Status']).toLowerCase() === 'present'; }).length;
+  var absent   = filtered.filter(function(r){ return attCol(r,['Status']).toLowerCase() === 'absent'; }).length;
+  var noClkOut = filtered.filter(function(r){ return attCol(r,['Status']).toLowerCase() === 'present' && !attCol(r,['Clock-Out Time (IST)']); }).length;
+  var hoursArr = filtered.map(function(r){ return parseFloat(attCol(r,['Hours Worked'])||'0'); }).filter(function(h){ return h>0; });
+  var avgHours = hoursArr.length ? (hoursArr.reduce(function(a,b){return a+b;},0)/hoursArr.length).toFixed(1) : '—';
+
+  var kpiStyle = 'background:var(--surface-2);border-radius:10px;padding:14px 18px;flex:1;min-width:120px;text-align:center';
+  var html = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">'
+    + '<div style="'+kpiStyle+'"><div style="font-size:22px;font-weight:800;color:var(--primary)">'+total+'</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Total Records</div></div>'
+    + '<div style="'+kpiStyle+'"><div style="font-size:22px;font-weight:800;color:#2ecc71">'+present+'</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Present</div></div>'
+    + '<div style="'+kpiStyle+'"><div style="font-size:22px;font-weight:800;color:#e74c3c">'+absent+'</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Absent</div></div>'
+    + '<div style="'+kpiStyle+'"><div style="font-size:22px;font-weight:800;color:#f39c12">'+noClkOut+'</div><div style="font-size:11px;color:var(--muted);margin-top:2px">No Clock-Out</div></div>'
+    + '<div style="'+kpiStyle+'"><div style="font-size:22px;font-weight:800;color:var(--text)">'+avgHours+'h</div><div style="font-size:11px;color:var(--muted);margin-top:2px">Avg Hours</div></div>'
+    + '</div>';
+
+  // Filters row
+  var selStyle = 'font-size:11px;padding:5px 8px;border-radius:6px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);cursor:pointer';
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:12px">'
+    + '<input type="text" placeholder="🔍 Search name / site…" value="'+esc(fSearch)+'" oninput="attSearchFilter(this.value)" style="font-size:11px;padding:5px 10px;border-radius:6px;border:1px solid var(--border-2);background:var(--surface-2);color:var(--text);width:180px">'
+    + '<select onchange="attDropFilter(\'Employee\',this.value)" style="'+selStyle+'">'
+      + '<option value="">All Employees</option>'
+      + Array.from(employeeSet).sort().map(function(e){ return '<option value="'+esc(e)+'"'+(fEmployee===e?' selected':'')+'>'+esc(e)+'</option>'; }).join('')
+    + '</select>'
+    + '<select onchange="attDropFilter(\'Status\',this.value)" style="'+selStyle+'">'
+      + '<option value="">All Statuses</option>'
+      + Array.from(statusSet).sort().map(function(s){ return '<option value="'+esc(s)+'"'+(fStatus===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('')
+    + '</select>'
+    + '<select onchange="attDropFilter(\'Role\',this.value)" style="'+selStyle+'">'
+      + '<option value="">All Roles</option>'
+      + Array.from(roleSet).sort().map(function(r){ return '<option value="'+esc(r)+'"'+(fRole===r?' selected':'')+'>'+esc(r)+'</option>'; }).join('')
+    + '</select>'
+    + '<select onchange="attDropFilter(\'Site\',this.value)" style="'+selStyle+';max-width:200px">'
+      + '<option value="">All Sites</option>'
+      + Array.from(siteSet).sort().map(function(s){ return '<option value="'+esc(s)+'"'+(fSite===s?' selected':'')+'>'+esc(s)+'</option>'; }).join('')
+    + '</select>'
+    + '<span style="font-size:11px;color:var(--muted);margin-left:4px">'+filtered.length+' of '+ATTENDANCE_DATA.length+' records</span>'
+    + '</div>';
+
+  // Table
+  var thStyle = 'padding:8px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap;border-bottom:2px solid var(--border)';
+  var dateArrow = dateSort === 'asc' ? ' ↑' : ' ↓';
+  html += '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead style="position:sticky;top:0;z-index:1;background:var(--surface-2)">'
+    + '<tr>'
+    + '<th style="'+thStyle+'">Employee</th>'
+    + '<th style="'+thStyle+'">Role</th>'
+    + '<th style="'+thStyle+'">Status</th>'
+    + '<th style="'+thStyle+'">Site</th>'
+    + '<th style="'+thStyle+';cursor:pointer" onclick="attCycleDateSort()">Clock-In'+dateArrow+'</th>'
+    + '<th style="'+thStyle+'">Clock-Out</th>'
+    + '<th style="'+thStyle+'">Hours</th>'
+    + '<th style="'+thStyle+'">Clk-In Conf.</th>'
+    + '<th style="'+thStyle+'">Manual</th>'
+    + '<th style="'+thStyle+'">Photo</th>'
+    + '</tr></thead><tbody>';
+
+  filtered.forEach(function(r) {
+    var name     = attCol(r,['Employee Name']);
+    var role     = attCol(r,['Role']);
+    var status   = attCol(r,['Status']);
+    var store    = attCol(r,['Store']);
+    var clockIn  = attCol(r,['Clock-In Time (IST)']);
+    var clockOut = attCol(r,['Clock-Out Time (IST)']);
+    var hours    = attCol(r,['Hours Worked']);
+    var conf     = attCol(r,['Clock-In Confidence']);
+    var manual   = attCol(r,['Clock-In Manual']);
+    var imgUrl   = attCol(r,['Clock-In Image URL']);
+
+    var statusColor = status.toLowerCase() === 'present' ? '#2ecc71' : status.toLowerCase() === 'absent' ? '#e74c3c' : 'var(--muted)';
+    var confVal  = conf ? (parseFloat(conf)*100).toFixed(0)+'%' : '—';
+    var isManual = manual && manual.toLowerCase() === 'true';
+    var noOut    = status.toLowerCase() === 'present' && !clockOut;
+
+    html += '<tr style="border-bottom:1px solid var(--border);background:var(--white)">'
+      + '<td style="padding:7px 10px;font-weight:600">'+esc(name)+'</td>'
+      + '<td style="padding:7px 10px;color:var(--muted)">'+esc(role)+'</td>'
+      + '<td style="padding:7px 10px"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+statusColor+'22;color:'+statusColor+'">'+esc(status)+'</span></td>'
+      + '<td style="padding:7px 10px;font-size:11px;max-width:180px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="'+esc(store)+'">'+esc(store)+'</td>'
+      + '<td style="padding:7px 10px;white-space:nowrap;font-size:11px">'+esc(clockIn||'—')+'</td>'
+      + '<td style="padding:7px 10px;white-space:nowrap;font-size:11px'+(noOut?';color:#f39c12;font-weight:600':'')+'">'+esc(clockOut||'—')+'</td>'
+      + '<td style="padding:7px 10px;font-weight:600">'+(hours?esc(parseFloat(hours).toFixed(2))+'h':'—')+'</td>'
+      + '<td style="padding:7px 10px;font-size:11px">'+confVal+'</td>'
+      + '<td style="padding:7px 10px;font-size:11px">'+(isManual?'<span style="color:#f39c12;font-weight:700">Yes</span>':'No')+'</td>'
+      + '<td style="padding:7px 10px">'+(imgUrl?'<a href="'+esc(imgUrl)+'" target="_blank" style="font-size:10px;color:var(--primary)">View</a>':'—')+'</td>'
+      + '</tr>';
+  });
+
+  html += '</tbody></table></div>';
+  el.innerHTML = html;
+}
+
+function attSearchFilter(v){ var e=document.getElementById('attv'); if(!e) return; e._fSearch=v; renderAttendanceTab(); }
+function attDropFilter(key,v){
+  var e=document.getElementById('attv'); if(!e) return;
+  if(key==='Employee') e._fEmployee=v;
+  else if(key==='Status') e._fStatus=v;
+  else if(key==='Role') e._fRole=v;
+  else if(key==='Site') e._fSite=v;
+  renderAttendanceTab();
+}
+function attCycleDateSort(){ var e=document.getElementById('attv'); if(!e) return; e._dateSort=e._dateSort==='asc'?'desc':'asc'; renderAttendanceTab(); }
 
 // Standalone snag CSV parser — RFC-4180 quoting (handles "" escapes and embedded
 // newlines). Column contract matches handleSnagUpload's CSV branch.

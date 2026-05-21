@@ -369,6 +369,46 @@ async function handlePFTickets(request, env) {
   }
 }
 
+// GET /pf-attendance — proxy to processflows.ai attendance records CSV export.
+// Uses same cookie credentials as /pf-tickets.
+async function handlePFAttendance(request, env) {
+  const url = new URL(request.url);
+  const startDate  = url.searchParams.get('start_date')  || '2026-01-01';
+  const endDate    = url.searchParams.get('end_date')    || new Date().toISOString().slice(0, 10);
+  const workflowId = url.searchParams.get('workflow_id') || '6';
+
+  const pfUrl = `https://processflows.ai/api/attendance/records/?employee_id=&workflow_id=${encodeURIComponent(workflowId)}&store_id=&start_date=${encodeURIComponent(startDate)}&end_date=${encodeURIComponent(endDate)}&is_manual=&export=csv`;
+
+  const cookieParts = [];
+  if (env.PF_CSRFTOKEN) cookieParts.push(`csrftoken=${env.PF_CSRFTOKEN}`);
+  if (env.PF_SESSIONID) cookieParts.push(`sessionid=${env.PF_SESSIONID}`);
+
+  const fetchHeaders = {
+    'Accept':           'text/csv,*/*',
+    'Accept-Language':  'en-US,en;q=0.9',
+    'Referer':          'https://processflows.ai/attendance/',
+    'User-Agent':       'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/147.0.0.0 Safari/537.36',
+    'sec-fetch-dest':   'empty',
+    'sec-fetch-mode':   'cors',
+    'sec-fetch-site':   'same-origin',
+  };
+  if (cookieParts.length) fetchHeaders['Cookie'] = cookieParts.join('; ');
+
+  try {
+    const resp = await fetch(pfUrl, { headers: fetchHeaders });
+    const text = await resp.text();
+    if (!resp.ok) {
+      return json(resp.status, { success: false, error: `ProcessFlows API returned ${resp.status}`, detail: text.slice(0, 500) });
+    }
+    return new Response(text, {
+      status: 200,
+      headers: { 'Content-Type': 'text/csv; charset=utf-8', ...CORS_HEADERS },
+    });
+  } catch (e) {
+    return json(502, { success: false, error: 'Proxy fetch failed: ' + String(e && e.message || e) });
+  }
+}
+
 // the gzip migration. Will be removed in a follow-up commit.
 async function handlePostLegacy(request, env) {
   let payload;
@@ -414,7 +454,8 @@ export default {
     }
     if (request.method === 'GET') {
       const gPath = new URL(request.url).pathname;
-      if (gPath === '/pf-tickets') return handlePFTickets(request, env);
+      if (gPath === '/pf-tickets')    return handlePFTickets(request, env);
+      if (gPath === '/pf-attendance') return handlePFAttendance(request, env);
       return handleGet(request, env);
     }
     if (request.method === 'POST') {
