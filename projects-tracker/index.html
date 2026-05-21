@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.5</title>
+<title>Cars24 Projects Tracker v4.6</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -474,6 +474,8 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <span id="csv-ts-snag" style="font-size:10px;color:var(--muted)"></span>
     <label class="btn btn-o" for="snag-live-inp" id="snag-live-lbl" style="cursor:pointer;font-size:11px;display:none">📎 Upload Snag CSV (Live)</label>
     <input type="file" id="snag-live-inp" accept=".csv" style="display:none" onchange="handleLiveSnagCSV(event)">
+    <label class="btn btn-o" for="ll-bulk-inp" id="ll-bulk-lbl" style="cursor:pointer;font-size:11px">📋 LL Schedule</label>
+    <input type="file" id="ll-bulk-inp" accept=".csv" multiple style="display:none" onchange="handleLLBulkUpload(event)">
   </div>
 </header>
 
@@ -621,6 +623,7 @@ const CSV_DATA = [];
 let SNAG_DATA = {};
 let TICKET_DATA = [];
 let ATTENDANCE_DATA = [];
+var LL_DATA = {}; // { siteName: { po: 'CSPL...', tasks: [{sno,task,vendor,startDate,endDate,done}] } }
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -1915,6 +1918,64 @@ function openModal(idx){
     return `<div class="uentry"><div class="ubar"><span class="udlbl">${esc(d)}</span><button class="btn btn-o btn-sm" onclick="toggleU('${esc(d)}',${idx})">Edit</button></div><div class="utxt" id="utxt-${k}-${idx}">${esc(r[d])}</div><div class="uedit" id="ued-${k}-${idx}"><textarea id="uta-${k}-${idx}">${esc(r[d])}</textarea><div class="erow"><button class="btn btn-p btn-sm" onclick="saveU('${esc(d)}',${idx})">Save</button><button class="btn btn-o btn-sm" onclick="cancelU('${esc(d)}',${idx})">Cancel</button></div></div></div>`;
   }).join('')||'<div style="font-size:12px;color:var(--muted);padding:6px 0">No updates yet.</div>';
   const tc=getTodayCol();
+  // ── LL Scope Section ──
+  const _llSiteName=(r['Site Name']||'').trim();
+  const _llEntry=LL_DATA[_llSiteName];
+  const _llFileId='ll-inp-'+idx;
+  const _llUploadBtn='<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">📋 Upload Schedule CSV</label>'
+    +'<input type="file" id="'+_llFileId+'" accept=".csv" style="display:none" onchange="handleLLUpload(event,\''+_llSiteName.replace(/'/g,"\\'")+'\')">';
+  let llHtml='';
+  if(!_llEntry||!_llEntry.tasks||!_llEntry.tasks.length){
+    llHtml='<div style="border:1px dashed var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em">📋 LL Scope of Work</div>'
+      +_llUploadBtn
+      +'</div>'
+      +'<div style="font-size:12px;color:var(--muted)">No schedule uploaded yet. <span style="font-size:10px">Format: S.No., Task, Vendor Name, Start Date, End Date</span></div>'
+      +'</div>';
+  } else {
+    const _llTasks=_llEntry.tasks;
+    const _llDone=_llTasks.filter(function(t){return t.done;}).length;
+    const _llPct=_llTasks.length?Math.round(_llDone/_llTasks.length*100):0;
+    const _llBarColor=_llPct===100?'#16a34a':_llPct>=60?'#2563eb':'#f59e0b';
+    const _llRows=_llTasks.map(function(t,ti){
+      const _sn=_llSiteName.replace(/'/g,"\\'");
+      return '<tr id="ll-row-'+ti+'" style="border-bottom:1px solid var(--border);opacity:'+(t.done?'0.5':'1')+'">'
+        +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" id="ll-cb-'+ti+'" '+(t.done?'checked':'')+' onchange="toggleLLTask(\''+_sn+'\','+ti+')" style="width:14px;height:14px;cursor:pointer"></td>'
+        +'<td style="padding:5px 6px;font-size:11px;color:var(--muted);text-align:center">'+esc(t.sno)+'</td>'
+        +'<td style="padding:5px 8px;font-size:12px;font-weight:'+(t.done?'400':'600')+';text-decoration:'+(t.done?'line-through':'none')+'">'+esc(t.task)+'</td>'
+        +'<td style="padding:5px 6px;font-size:11px;color:var(--muted)">'+esc(t.vendor)+'</td>'
+        +'<td style="padding:5px 6px"><input type="text" value="'+esc(t.startDate)+'" style="border:1px solid var(--border2);border-radius:4px;padding:3px 5px;font-size:11px;width:90px;font-family:Inter,sans-serif" onblur="saveLLDate(\''+_sn+'\','+ti+',\'startDate\',this.value)"></td>'
+        +'<td style="padding:5px 6px"><input type="text" value="'+esc(t.endDate)+'" style="border:1px solid var(--border2);border-radius:4px;padding:3px 5px;font-size:11px;width:90px;font-family:Inter,sans-serif" onblur="saveLLDate(\''+_sn+'\','+ti+',\'endDate\',this.value)"></td>'
+        +'</tr>';
+    }).join('');
+    llHtml='<div style="background:#f8faff;border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+      +'<div>'
+      +'<div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">📋 LL Scope of Work</div>'
+      +(_llEntry.po?'<div style="font-size:10px;color:var(--muted)">PO: <span style="font-weight:600;color:var(--text)">'+esc(_llEntry.po)+'</span></div>':'')
+      +'</div>'
+      +_llUploadBtn
+      +'</div>'
+      +'<div style="margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+      +'<span style="font-size:11px;color:var(--muted)">Progress</span>'
+      +'<span id="ll-pct-label" style="font-size:12px;font-weight:700;color:'+_llBarColor+'">'+_llPct+'%</span>'
+      +'</div>'
+      +'<div style="height:8px;background:var(--surface);border-radius:4px;overflow:hidden"><div id="ll-bar-fill" style="height:100%;width:'+_llPct+'%;background:'+_llBarColor+';border-radius:4px;transition:width .3s"></div></div>'
+      +'<div id="ll-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+_llDone+' of '+_llTasks.length+' tasks completed</div>'
+      +'</div>'
+      +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
+      +'<thead><tr style="background:var(--surface)">'
+      +'<th style="padding:5px 6px;width:30px;font-size:10px;font-weight:600;color:var(--muted)">✓</th>'
+      +'<th style="padding:5px 6px;width:36px;font-size:10px;font-weight:600;color:var(--muted)">#</th>'
+      +'<th style="padding:5px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Task</th>'
+      +'<th style="padding:5px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Vendor</th>'
+      +'<th style="padding:5px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Start Date</th>'
+      +'<th style="padding:5px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">End Date</th>'
+      +'</tr></thead><tbody>'+_llRows+'</tbody></table></div>'
+      +'</div>';
+  }
   document.getElementById('mbody').innerHTML=`
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
@@ -1927,6 +1988,7 @@ function openModal(idx){
       </div>
       <div id="site-ai-out-${idx}" style="display:none;font-size:12px;line-height:1.6;padding-top:6px;border-top:1px solid #c7d7f0"></div>
     </div>
+    ${llHtml}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
@@ -3413,6 +3475,165 @@ function copyWarnEmail(){
 // ═══════════════════════════════════════════════════════════
 // TICKET MODULE
 // ═══════════════════════════════════════════════════════════
+// LL SCOPE FUNCTIONS
+// ═══════════════════════════════════════════════════════════
+function parseLLScheduleCSV(txt, filename){
+  var poMatch=(filename||'').match(/Schedule_PO([A-Z0-9]+)\.csv/i);
+  var po=poMatch?poMatch[1]:'';
+  var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if(lines.length<2) return {po:po,tasks:[]};
+  var headers=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'');});
+  var tasks=[];
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i].trim();
+    if(!line) continue;
+    var cols=line.split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+    var obj={};
+    headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
+    var task=obj['Task']||obj['task']||'';
+    if(!task) continue;
+    tasks.push({sno:obj['S.No.']||obj['Sno']||String(i),task:task,vendor:obj['Vendor Name']||obj['Vendor']||'',startDate:obj['Start Date']||obj['start_date']||'',endDate:obj['End Date']||obj['end_date']||'',done:false});
+  }
+  return {po:po,tasks:tasks};
+}
+
+function updateLLCompletion(siteName){
+  var d=LL_DATA[siteName];
+  if(!d||!d.tasks||!d.tasks.length) return;
+  var done=d.tasks.filter(function(t){return t.done;}).length;
+  var pctVal=Math.round(done/d.tasks.length*100);
+  var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+  if(idx>=0){ allData[idx]['Percentage Completion']=String(pctVal); renderKPIs(); applyFilters(); }
+}
+
+function toggleLLTask(siteName,taskIdx){
+  if(!LL_DATA[siteName]) return;
+  LL_DATA[siteName].tasks[taskIdx].done=!LL_DATA[siteName].tasks[taskIdx].done;
+  updateLLCompletion(siteName);
+  saveLLData();
+  var tasks=LL_DATA[siteName].tasks;
+  var doneCnt=tasks.filter(function(t){return t.done;}).length;
+  var pct2=tasks.length?Math.round(doneCnt/tasks.length*100):0;
+  var barColor=pct2===100?'#16a34a':pct2>=60?'#2563eb':'#f59e0b';
+  var bar=document.getElementById('ll-bar-fill');
+  if(bar){bar.style.width=pct2+'%';bar.style.background=barColor;}
+  var pl=document.getElementById('ll-pct-label');
+  if(pl){pl.textContent=pct2+'%';pl.style.color=barColor;}
+  var cnt=document.getElementById('ll-done-count');
+  if(cnt) cnt.textContent=doneCnt+' of '+tasks.length+' tasks completed';
+  var row=document.getElementById('ll-row-'+taskIdx);
+  if(row) row.style.opacity=LL_DATA[siteName].tasks[taskIdx].done?'0.5':'1';
+  var cb=document.getElementById('ll-cb-'+taskIdx);
+  if(cb) cb.checked=LL_DATA[siteName].tasks[taskIdx].done;
+}
+
+function saveLLDate(siteName,taskIdx,field,value){
+  if(!LL_DATA[siteName]) return;
+  LL_DATA[siteName].tasks[taskIdx][field]=value;
+  saveLLData();
+  toast('Date saved','ok');
+}
+
+function handleLLUpload(event,siteName){
+  var file=event.target.files[0]; if(!file) return;
+  if(!__auth){toast('Please log in first to upload schedule','err');event.target.value='';return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var parsed=parseLLScheduleCSV(e.target.result,file.name);
+    if(!parsed.tasks.length){toast('No tasks found in CSV','err');return;}
+    var existing=LL_DATA[siteName];
+    if(existing&&existing.tasks){
+      parsed.tasks.forEach(function(t){
+        var old=existing.tasks.find(function(x){return x.task===t.task;});
+        if(old) t.done=old.done;
+      });
+    }
+    LL_DATA[siteName]={po:parsed.po,tasks:parsed.tasks};
+    saveLLData();
+    updateLLCompletion(siteName);
+    var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+    toast('✓ Schedule uploaded — '+parsed.tasks.length+' tasks, PO: '+(parsed.po||'N/A'),'ok');
+    if(idx>=0) openModal(idx);
+  };
+  reader.readAsText(file);
+  event.target.value='';
+}
+
+function handleLLBulkUpload(event){
+  var files=Array.from(event.target.files);
+  if(!files.length) return;
+  if(!__auth){toast('Please log in first','err');event.target.value='';return;}
+  var siteNames=allData.map(function(r){return (r['Site Name']||'').trim();}).filter(Boolean);
+  var rows3=files.map(function(f,fi){
+    var poMatch=f.name.match(/Schedule_PO([A-Z0-9]+)\.csv/i);
+    var po=poMatch?poMatch[1]:'';
+    var opts='<option value="">-- Select Site --</option>'+siteNames.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
+    return '<tr><td style="padding:6px 8px;font-size:12px">'+esc(f.name)+'</td>'
+      +'<td style="padding:6px 4px;font-size:11px;color:var(--muted)">'+esc(po||'—')+'</td>'
+      +'<td style="padding:6px 4px"><select id="ll-site-sel-'+fi+'" class="sel" style="font-size:11px;padding:4px 6px">'+opts+'</select></td>'
+      +'</tr>';
+  }).join('');
+  var modalHtml='<div id="ll-bulk-modal" style="position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9990;display:flex;align-items:center;justify-content:center" onclick="if(event.target===this)closeLLBulkModal()">'
+    +'<div style="background:var(--white);border-radius:12px;width:620px;max-width:95vw;max-height:85vh;overflow-y:auto;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.2)">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
+    +'<div style="font-size:14px;font-weight:700">📋 Map Schedule Files to Sites</div>'
+    +'<button onclick="closeLLBulkModal()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);line-height:1">×</button>'
+    +'</div>'
+    +'<p style="font-size:11px;color:var(--muted);margin-bottom:12px">Assign each uploaded schedule file to a site. PO number is auto-extracted from the filename.</p>'
+    +'<table style="width:100%;border-collapse:collapse;margin-bottom:14px">'
+    +'<thead><tr style="background:var(--surface)">'
+    +'<th style="padding:6px 8px;font-size:10px;font-weight:600;color:var(--muted);text-align:left">File</th>'
+    +'<th style="padding:6px 4px;font-size:10px;font-weight:600;color:var(--muted);text-align:left">PO #</th>'
+    +'<th style="padding:6px 4px;font-size:10px;font-weight:600;color:var(--muted);text-align:left">Map to Site</th>'
+    +'</tr></thead><tbody>'+rows3+'</tbody></table>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end">'
+    +'<button class="btn btn-o" onclick="closeLLBulkModal()">Cancel</button>'
+    +'<button class="btn btn-p" onclick="confirmLLBulkUpload()">Upload All</button>'
+    +'</div></div></div>';
+  window.__llBulkFiles=files;
+  document.body.insertAdjacentHTML('beforeend',modalHtml);
+  event.target.value='';
+}
+
+function closeLLBulkModal(){
+  var m=document.getElementById('ll-bulk-modal'); if(m) m.remove();
+}
+
+function confirmLLBulkUpload(){
+  var files=window.__llBulkFiles||[];
+  var count=0;
+  var promises=files.map(function(f,fi){
+    var sel=document.getElementById('ll-site-sel-'+fi);
+    var siteName=sel?sel.value:'';
+    if(!siteName) return Promise.resolve();
+    return new Promise(function(resolve){
+      var reader=new FileReader();
+      reader.onload=function(e){
+        var parsed=parseLLScheduleCSV(e.target.result,f.name);
+        if(!parsed.tasks.length){resolve();return;}
+        var existing=LL_DATA[siteName];
+        if(existing&&existing.tasks){
+          parsed.tasks.forEach(function(t){
+            var old=existing.tasks.find(function(x){return x.task===t.task;});
+            if(old) t.done=old.done;
+          });
+        }
+        LL_DATA[siteName]={po:parsed.po,tasks:parsed.tasks};
+        updateLLCompletion(siteName);
+        count++;
+        resolve();
+      };
+      reader.readAsText(f);
+    });
+  });
+  Promise.all(promises).then(function(){
+    saveLLData();
+    closeLLBulkModal();
+    toast('✓ Schedules saved for '+count+' site(s)','ok');
+  });
+}
+
+// ═══════════════════════════════════════════════════════════
 function handleTicketUpload(event){
   var file=event.target.files[0]; if(!file) return;
   var lbl=document.querySelector('label[for="ticket-inp"]');
@@ -4554,6 +4775,7 @@ const TICKET_TOOL_PATH     = 'tickets';
 const ATTENDANCE_TOOL_PATH = 'attendance';
 const EMAIL_LOG_KEY = '__email_log';
 const HOTP_UPDATES_TOOL = 'hotp-updates';
+const LL_SCOPE_TOOL = 'll-scope';
 var HOTP_UPDATES = {};  // { siteName: { dateCol: text } }
 var _hotpUpdatesDirty = false;
 
@@ -4591,6 +4813,27 @@ function applyHOTPUpdates(){
       if(!DATE_COLS.includes(col)) DATE_COLS.push(col);
     });
   });
+}
+
+function loadLLData(){
+  if(location.protocol==='file:') return Promise.resolve();
+  return fetch(WORKER_URL+LL_SCOPE_TOOL+'-mappings.json',{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():{};})
+    .then(function(data){
+      LL_DATA=(data&&typeof data==='object'&&!Array.isArray(data))?data:{};
+    })
+    .catch(function(e){ console.warn('loadLLData failed:',e); });
+}
+
+function saveLLData(){
+  if(location.protocol==='file:') return;
+  fetch(WORKER_URL.replace(/\/+$/,'')+'/mappings',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Tool-Path':LL_SCOPE_TOOL},
+    body:JSON.stringify(LL_DATA)
+  }).then(function(r){return r.json();})
+    .then(function(j){if(!j.success) toast('LL save failed: '+(j.error||''),'err');})
+    .catch(function(e){ toast('Network error saving LL scope','err'); });
 }
 
 // In-memory email sent log: { siteName: { sat_delay: {sentAt, count}, ... } }
@@ -4704,7 +4947,8 @@ function emailLogBadge(siteName, emailType){
   Promise.all([
     C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
     loadEmailLog(),
-    loadHOTPUpdates()
+    loadHOTPUpdates(),
+    loadLLData()
   ]).then(function(results){
       var text = results[0];
       var parsed = parseCSV(text);
