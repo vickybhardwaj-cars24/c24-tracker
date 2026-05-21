@@ -5074,16 +5074,19 @@ function renderAttendanceTab() {
   });
 
   // Sort by Clock-In date descending
+  // Pre-compute a numeric sort key (YYYYMMDDHHMMSS) for each record so comparisons are fast and stable
+  function attDateKey(s) {
+    if (!s) return 0;
+    var parts = s.split(' ');
+    var d = (parts[0] || '').split('/');   // [DD, MM, YYYY]
+    var t = (parts[1] || '').split(':');   // [HH, MM, SS]
+    if (d.length < 3) return 0;
+    return parseInt(d[2]+d[1]+d[0]+(t[0]||'00')+(t[1]||'00')+(t[2]||'00'), 10) || 0;
+  }
   filtered.sort(function(a, b) {
-    // Format is DD/MM/YYYY HH:MM:SS — convert to YYYY-MM-DD HH:MM:SS for correct lexical sort
-    function toSortable(s) {
-      if (!s) return '';
-      var m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})\s(.+)$/);
-      return m ? m[3]+'-'+m[2]+'-'+m[1]+' '+m[4] : s;
-    }
-    var da = toSortable(attCol(a,['Clock-In Time (IST)']));
-    var db = toSortable(attCol(b,['Clock-In Time (IST)']));
-    return dateSort === 'asc' ? da.localeCompare(db) : db.localeCompare(da);
+    var da = attDateKey(attCol(a,['Clock-In Time (IST)']));
+    var db = attDateKey(attCol(b,['Clock-In Time (IST)']));
+    return dateSort === 'asc' ? da - db : db - da;
   });
 
   // KPIs
