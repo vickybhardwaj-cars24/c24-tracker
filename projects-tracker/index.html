@@ -640,9 +640,12 @@ const notifiedSet = new Set(); // track notified sites in session
 // ═══════════════════════════════════════════════════════════════
 // GEMINI AI
 // ═══════════════════════════════════════════════════════════════
-const GEMINI_KEY = 'AIzaSyD0tzfwA_deKuLrek8qOgn-OsQpdXM336g';
+// ⚠️ Paste your NEW Gemini API key here after rotating it in Google Cloud Console.
+// Restrict the key to your Vercel domain (HTTP referrer restriction) to prevent misuse.
+const GEMINI_KEY = '';
 
 async function askGemini(prompt) {
+  if (!GEMINI_KEY) throw new Error('Gemini API key not configured. Add your key to GEMINI_KEY in index.html.');
   const res = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
     { method:'POST', headers:{'Content-Type':'application/json'},
