@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.10</title>
+<title>Cars24 Projects Tracker v4.11</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -237,7 +237,7 @@ td{padding:7px 12px;vertical-align:middle}
 /* Modal */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);backdrop-filter:blur(2px);z-index:500;align-items:center;justify-content:center;padding:20px}
 .overlay.open{display:flex}
-.modal{background:var(--white);border-radius:13px;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.modal{background:var(--white);border-radius:13px;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 50px rgba(0,0,0,.18)}
 .mhdr{padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:sticky;top:0;background:var(--white);z-index:5;border-radius:13px 13px 0 0;min-width:0}
 .mttl{font-size:16px;font-weight:700}
 .mcls{background:var(--surface);border:none;width:26px;height:26px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px;flex-shrink:0;transition:all .15s}
@@ -1972,19 +1972,26 @@ function openModal(idx){
       var poDone=tasks.filter(function(t){return t.done;}).length;
       var poPct=tasks.length?Math.round(poDone/tasks.length*100):0;
       var poBarColor=poPct===100?'#16a34a':poPct>=60?'#2563eb':'#f59e0b';
+      var _dinStyle='box-sizing:border-box;border:1px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:10px;width:88px;font-family:Inter,sans-serif;background:var(--white)';
       var poRows=tasks.map(function(t,ti){
-        var _dateStyle='box-sizing:border-box;border:1px solid var(--border2);border-radius:4px;padding:3px 4px;font-size:10px;width:100%;font-family:Inter,sans-serif';
-        return '<tr id="ll-row-'+pi+'-'+ti+'" style="border-bottom:1px solid var(--border);opacity:'+(t.done?'0.5':'1')+'">'
-          +'<td style="padding:5px 6px;text-align:center;vertical-align:middle"><input type="checkbox" id="ll-cb-'+pi+'-'+ti+'" '+(t.done?'checked':'')+' onchange="toggleLLTask(\''+_llSN+'\','+pi+','+ti+')" style="width:14px;height:14px;cursor:pointer"></td>'
-          +'<td style="padding:5px 4px;font-size:11px;color:var(--muted);text-align:center;vertical-align:middle">'+esc(t.sno)+'</td>'
-          +'<td style="padding:5px 8px;font-size:12px;font-weight:'+(t.done?'400':'600')+';text-decoration:'+(t.done?'line-through':'none')+';word-break:break-word;vertical-align:middle">'+esc(t.task)+'</td>'
-          +'<td style="padding:5px 4px;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle" title="'+esc(t.vendor)+'">'+esc(t.vendor)+'</td>'
-          +'<td style="padding:4px 4px;vertical-align:middle"><input type="text" value="'+esc(t.startDate)+'" style="'+_dateStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'startDate\',this.value)"></td>'
-          +'<td style="padding:4px 4px;vertical-align:middle"><input type="text" value="'+esc(t.endDate)+'" style="'+_dateStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'endDate\',this.value)"></td>'
-          +'</tr>';
+        var isDone=t.done;
+        return '<div id="ll-row-'+pi+'-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);opacity:'+(isDone?'0.5':'1')+'">'
+          +'<input type="checkbox" id="ll-cb-'+pi+'-'+ti+'" '+(isDone?'checked':'')+' onchange="toggleLLTask(\''+_llSN+'\','+pi+','+ti+')" style="width:15px;height:15px;cursor:pointer;flex-shrink:0;margin-top:2px">'
+          +'<span style="font-size:10px;color:var(--muted);flex-shrink:0;min-width:16px;padding-top:2px">'+esc(t.sno)+'</span>'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
+          +'<span style="font-size:10px;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px">'+esc(t.vendor)+'</span>'
+          +'<span style="font-size:10px;color:var(--muted)">Start:</span>'
+          +'<input type="text" value="'+esc(t.startDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'startDate\',this.value)">'
+          +'<span style="font-size:10px;color:var(--muted)">End:</span>'
+          +'<input type="text" value="'+esc(t.endDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'endDate\',this.value)">'
+          +'</div>'
+          +'</div>'
+          +'</div>';
       }).join('');
       return '<div style="margin-bottom:10px;border:1px solid var(--border2);border-radius:7px;overflow:hidden">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface)">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface);flex-wrap:wrap;gap:6px">'
         +'<div>'
         +'<span style="font-size:11px;font-weight:700;color:var(--text)">PO: '+(block.po?esc(block.po):'<span style="color:var(--muted);font-weight:400">No PO in filename</span>')+'</span>'
         +'<span style="font-size:10px;color:var(--muted);margin-left:8px">'+tasks.length+' tasks</span>'
@@ -1994,19 +2001,10 @@ function openModal(idx){
         +'<div style="width:60px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden"><div id="ll-po-bar-'+pi+'" style="height:100%;width:'+poPct+'%;background:'+poBarColor+';border-radius:3px;transition:width .3s"></div></div>'
         +'<span id="ll-po-pct-'+pi+'" style="font-size:11px;font-weight:700;color:'+poBarColor+'">'+poPct+'%</span>'
         +'</div>'
-        +'<button onclick="deleteLLPO(\''+_llSN+'\','+pi+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;line-height:1" title="Remove this PO">✕</button>'
+        +'<button onclick="deleteLLPO(\''+_llSN+'\','+pi+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="Remove this PO">✕</button>'
         +'</div>'
         +'</div>'
-        +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:420px;border-collapse:collapse;table-layout:fixed">'
-        +'<colgroup><col style="width:28px"><col style="width:28px"><col style="width:auto"><col style="width:90px"><col style="width:82px"><col style="width:82px"></colgroup>'
-        +'<thead><tr style="background:#fafafa">'
-        +'<th style="padding:4px 6px;font-size:10px;font-weight:600;color:var(--muted)">✓</th>'
-        +'<th style="padding:4px 4px;font-size:10px;font-weight:600;color:var(--muted)">#</th>'
-        +'<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Task</th>'
-        +'<th style="padding:4px 4px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Vendor</th>'
-        +'<th style="padding:4px 4px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Start</th>'
-        +'<th style="padding:4px 4px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">End</th>'
-        +'</tr></thead><tbody>'+poRows+'</tbody></table></div>'
+        +poRows
         +'</div>';
     }).join('');
 
@@ -2036,16 +2034,22 @@ function openModal(idx){
       return;
     }
 
+    var _lsDateStyle='box-sizing:border-box;border:1px solid #fde68a;border-radius:4px;padding:3px 6px;font-size:10px;width:88px;font-family:Inter,sans-serif;background:#fffdf5';
     var _lsRows=_lsArr.map(function(t,ti){
-      var _dsStyle='box-sizing:border-box;border:1px solid var(--border2);border-radius:4px;padding:3px 4px;font-size:10px;width:100%;font-family:Inter,sans-serif';
-      return '<tr id="lls-row-'+ti+'" style="border-bottom:1px solid var(--border);opacity:'+(t.done?'0.45':'1')+'">'
-        +'<td style="padding:5px 6px;text-align:center;vertical-align:middle"><input type="checkbox" id="lls-cb-'+ti+'" '+(t.done?'checked':'')+' onchange="toggleLLScopeTask(\''+_lsSN+'\','+ti+')" style="width:14px;height:14px;cursor:pointer"></td>'
-        +'<td style="padding:5px 4px;font-size:11px;color:var(--muted);text-align:center;vertical-align:middle">'+esc(t.sno)+'</td>'
-        +'<td style="padding:5px 8px;font-size:12px;font-weight:'+(t.done?'400':'600')+';text-decoration:'+(t.done?'line-through':'none')+';word-break:break-word;vertical-align:middle">'+esc(t.task)+'</td>'
-        +'<td style="padding:4px 4px;vertical-align:middle"><input type="text" value="'+esc(t.expectedDate)+'" placeholder="DD/MM/YYYY" style="'+_dsStyle+'" onblur="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'expectedDate\',this.value)"></td>'
-        +'<td style="padding:5px 4px;font-size:10px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle" title="'+esc(t.remarks||'')+'">'+esc(t.remarks||'—')+'</td>'
-        +'<td style="padding:5px 4px;text-align:center;vertical-align:middle"><button onclick="deleteLLScopeTask(\''+_lsSN+'\','+ti+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;line-height:1" title="Remove">✕</button></td>'
-        +'</tr>';
+      var isDone=t.done;
+      return '<div id="lls-row-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid #fef3c7;opacity:'+(isDone?'0.45':'1')+'">'
+        +'<input type="checkbox" id="lls-cb-'+ti+'" '+(isDone?'checked':'')+' onchange="toggleLLScopeTask(\''+_lsSN+'\','+ti+')" style="width:15px;height:15px;cursor:pointer;flex-shrink:0;margin-top:2px">'
+        +'<span style="font-size:10px;color:var(--muted);flex-shrink:0;min-width:16px;padding-top:2px">'+esc(t.sno)+'</span>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
+        +'<span style="font-size:10px;color:var(--muted)">By:</span>'
+        +'<input type="text" value="'+esc(t.expectedDate)+'" placeholder="DD/MM/YYYY" style="'+_lsDateStyle+'" onblur="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'expectedDate\',this.value)">'
+        +(t.remarks?'<span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(t.remarks)+'</span>':'')
+        +'</div>'
+        +'</div>'
+        +'<button onclick="deleteLLScopeTask(\''+_lsSN+'\','+ti+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;padding:0 2px" title="Remove">✕</button>'
+        +'</div>';
     }).join('');
 
     llScopeHtml='<div data-lls-section style="background:#fffdf5;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:12px">'
@@ -2063,16 +2067,7 @@ function openModal(idx){
       +'<div style="height:8px;background:#fef3c7;border-radius:4px;overflow:hidden"><div id="lls-bar-fill" style="height:100%;width:'+_lsPct+'%;background:'+_lsBarColor+';border-radius:4px;transition:width .3s"></div></div>'
       +'<div id="lls-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+_lsDone+' of '+_lsArr.length+' items done</div>'
       +'</div>'
-      +'<div style="overflow-x:auto;-webkit-overflow-scrolling:touch"><table style="width:100%;min-width:380px;border-collapse:collapse;table-layout:fixed">'
-      +'<colgroup><col style="width:28px"><col style="width:28px"><col style="width:auto"><col style="width:86px"><col style="width:80px"><col style="width:24px"></colgroup>'
-      +'<thead><tr style="background:#fef9e7">'
-      +'<th style="padding:4px 6px;font-size:10px;font-weight:600;color:var(--muted)">✓</th>'
-      +'<th style="padding:4px 4px;font-size:10px;font-weight:600;color:var(--muted)">#</th>'
-      +'<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Task</th>'
-      +'<th style="padding:4px 4px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Expected</th>'
-      +'<th style="padding:4px 4px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Remarks</th>'
-      +'<th style="padding:4px 4px"></th>'
-      +'</tr></thead><tbody>'+_lsRows+'</tbody></table></div>'
+      +'<div style="border:1px solid #fde68a;border-radius:6px;overflow:hidden">'+_lsRows+'</div>'
       +'</div>';
   })();
 
