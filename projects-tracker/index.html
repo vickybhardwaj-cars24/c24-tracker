@@ -450,8 +450,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
         <div id="col-toggles"></div>
       </div>
     </div>
-    <button class="btn btn-o" onclick="openTargetsPage()" style="font-size:11px">📅 Targets</button>
-    <button class="btn btn-o" onclick="exportCSV()">↓ Export CSV</button>
     <label class="btn btn-p" for="csv-inp" id="local-upload-lbl" style="cursor:pointer">↑ Upload CSV</label>
     <input type="file" id="csv-inp" accept=".csv" style="display:none" onchange="handleCSV(event)">
     <span id="csv-ts-hotp" style="font-size:10px;color:var(--muted)"></span>
@@ -568,7 +566,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="inv-tab" onclick="showInvTab('delay',this)">⏳ Delay Analysis</button>
     <button class="inv-tab" onclick="showInvTab('warn',this)">⚠ UAT Warnings</button>
   </div>
-  <div class="inv-content" id="inv-ov"><div id="ai-digest-wrap" style="margin-bottom:4px"></div><div class="ig-grid" id="igg"></div></div>
+  <div class="inv-content" id="inv-ov"><div class="ig-grid" id="igg"></div></div>
   <div class="inv-content" id="inv-kpis" style="display:none"></div>
   <div class="inv-content" id="inv-vr" style="display:none"></div>
   <div class="inv-content" id="inv-reg" style="display:none"></div>
@@ -592,15 +590,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 <div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="bdv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
 
-<div id="targets-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);flex-direction:column">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0">
-    <div style="font-size:16px;font-weight:700">📅 Target Dates & Calendar</div>
-    <button class="btn btn-o" onclick="closeTargetsPage()" style="font-size:13px">✕ Close</button>
-  </div>
-  <div style="flex:1;overflow-y:auto;padding:16px 20px">
-    <div id="cal-overlay-inner"></div>
-  </div>
-</div>
 <div class="overlay" id="overlay" onclick="onOvClick(event)">
   <div class="modal">
     <div class="mhdr">
@@ -637,184 +626,7 @@ const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC
 const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
 
-// ═══════════════════════════════════════════════════════════════
-// GEMINI AI
-// ═══════════════════════════════════════════════════════════════
-const GEMINI_KEY = 'AIzaSyD0tzfwA_deKuLrek8qOgn-OsQpdXM336g';
 
-async function askGemini(prompt) {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-    { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
-  );
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
-}
-
-let _aiDigestRunning = false;
-async function runAIDigest() {
-  if (_aiDigestRunning) return;
-  const btn = document.getElementById('ai-digest-btn');
-  const out = document.getElementById('ai-digest-out');
-  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
-  _aiDigestRunning = true;
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  out.style.display = 'none';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const rows = allData.map(r => {
-    const stale = daysSinceUpdate(r);
-    const update = (getLatestUpdate(r) || '').substring(0, 150);
-    const satD = pd(r['SAT Date']), uatD = pd(r['UAT DATE']);
-    const uatOverdue = satD && !uatD && Math.round((today - satD) / 86400000) > 10;
-    return `- ${r['Site Name'] || '?'} | Status: ${r['Status'] || '?'} | ${r['Percentage Completion'] || '?'}% | Owner: ${r['Owner'] || '?'}${stale >= 5 ? ` | STALE ${stale}d` : ''}${uatOverdue ? ' | UAT OVERDUE' : ''} | Latest: ${update}`;
-  }).join('\n');
-  const prompt = `You are a project analyst for CARS24, a used-car company in India. Below is live data for ${allData.length} construction/fit-out sites across India. Each line: Site | Status | Completion | Owner | flags | latest update.\n\n${rows}\n\nRespond with a concise weekly digest in exactly this format (use plain text, no markdown symbols):\n\nPORTFOLIO HEALTH: [one line overall assessment]\n\nTOP 3 AT-RISK SITES:\n1. [site] – [reason]\n2. [site] – [reason]\n3. [site] – [reason]\n\nKEY BLOCKERS ACROSS PORTFOLIO:\n- [blocker type]: [sites affected]\n\nSITES READY FOR NEXT MILESTONE:\n- [site] – [what milestone]\n\nRECOMMENDED ACTIONS FOR THIS WEEK:\n1. [action]\n2. [action]\n3. [action]`;
-  try {
-    const text = await askGemini(prompt);
-    out.innerHTML = text.split('\n').map(line => {
-      line = line.trim(); if (!line) return '';
-      if (line.endsWith(':') || line === line.toUpperCase()) return `<div style="font-weight:700;color:#1e3a5f;margin-top:10px;margin-bottom:2px;font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc(line)}</div>`;
-      return `<div style="font-size:12px;padding:2px 0 2px 8px;border-left:2px solid #c7d7f0;margin-bottom:3px">${esc(line)}</div>`;
-    }).join('');
-    out.style.display = 'block';
-  } catch(e) {
-    out.innerHTML = `<div style="color:#fca5a5;font-size:12px">⚠ ${esc(e.message)}</div>`;
-    out.style.display = 'block';
-  }
-  _aiDigestRunning = false;
-  btn.disabled = false; btn.textContent = '✨ Regenerate AI Digest';
-}
-
-async function runSiteAI(idx) {
-  const r = allData[idx]; if (!r) return;
-  const btn = document.getElementById(`site-ai-btn-${idx}`);
-  const out = document.getElementById(`site-ai-out-${idx}`);
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  out.style.display = 'none';
-  const updates = [...DATE_COLS].reverse().filter(d => (r[d] || '').length > 2).slice(0, 5).map(d => `  [${d}] ${r[d]}`).join('\n');
-  const revH = getRevHistory(r).map((h, i) => `  ${i+1}. First logged ${h.col} → Revised to ${h.dateStr}`).join('\n');
-  const stale = daysSinceUpdate(r);
-  const prompt = `You are a project analyst for CARS24. Analyse this single construction/fit-out site and give a concise PM-level assessment.\n\nSITE: ${r['Site Name'] || '?'}\nOwner: ${r['Owner'] || '?'} | Vendor: ${r['Vendor'] || '?'} | Status: ${r['Status'] || '?'} | Completion: ${r['Percentage Completion'] || '?'}%\nPO Date: ${r['PO Date'] || '—'} | Kickoff: ${r['Kickoff Date'] || '—'} | Work Start: ${r['Work Start Date'] || '—'}\nSAT Date: ${r['SAT Date'] || '—'} | UAT Date: ${r['UAT DATE'] || '—'}\nPlanned: ${r['Planned Completion'] || '—'} | Revised: ${r['Revised Completion'] || '—'}\n${stale >= 5 ? `WARNING: No update for ${stale} days.\n` : ''}${revH ? `Revision History:\n${revH}\n` : ''}Recent Updates (newest first):\n${updates || '  No updates logged.'}\n\nRespond in exactly this format (plain text, no markdown symbols):\n\nHEALTH: [one line — On Track / At Risk / Critical + brief reason]\n\nKEY RISK: [the single biggest risk or blocker right now]\n\nNEXT ACTION: [specific action the PM should take this week]`;
-  try {
-    const text = await askGemini(prompt);
-    out.innerHTML = text.split('\n').map(line => {
-      line = line.trim(); if (!line) return '';
-      if (/^(HEALTH|KEY RISK|NEXT ACTION):/.test(line)) {
-        const [label, ...rest] = line.split(':');
-        const val = rest.join(':').trim();
-        const color = label === 'HEALTH' ? '#1e3a5f' : label === 'KEY RISK' ? '#dc2626' : '#16a34a';
-        return `<div style="margin-bottom:8px"><span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em">${esc(label)}: </span><span style="font-size:12px">${esc(val)}</span></div>`;
-      }
-      return `<div style="font-size:12px;padding:1px 0">${esc(line)}</div>`;
-    }).join('');
-    out.style.display = 'block';
-  } catch(e) {
-    out.innerHTML = `<div style="color:#dc2626;font-size:12px">⚠ ${esc(e.message)}</div>`;
-    out.style.display = 'block';
-  }
-  btn.disabled = false; btn.textContent = '✨ Regenerate';
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AI — TASKS ACTION PLAN
-// ═══════════════════════════════════════════════════════════════
-let _aiTaskRunning = false;
-async function runTaskAI() {
-  if (_aiTaskRunning) return;
-  const btn = document.getElementById('ai-task-btn');
-  const out = document.getElementById('ai-task-out');
-  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
-  _aiTaskRunning = true;
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  out.style.display = 'none';
-  const today = new Date(); today.setHours(0,0,0,0);
-  // Collect all tasks with aging
-  const tasks = [];
-  allData.forEach(r => {
-    const siteName = r['Site Name'] || '?';
-    const owner = r['Owner'] || '?';
-    const status = r['Status'] || '?';
-    // Find first DATE_COL containing "Task:" to calculate age
-    let firstTaskCol = null;
-    for (let i = 0; i < DATE_COLS.length; i++) {
-      if (/task\s*:/i.test(r[DATE_COLS[i]] || '')) { firstTaskCol = DATE_COLS[i]; break; }
-    }
-    // Get latest task text
-    let latestTaskText = '';
-    for (let i = DATE_COLS.length - 1; i >= 0; i--) {
-      const txt = r[DATE_COLS[i]] || '';
-      const m = txt.match(/task\s*:\s*([\s\S]*)/i);
-      if (m) { latestTaskText = m[1].trim(); break; }
-    }
-    if (!latestTaskText) return;
-    // Calculate age from first logged task col
-    let ageDays = '?';
-    if (firstTaskCol) {
-      const colDate = pd(firstTaskCol);
-      if (colDate) ageDays = Math.round((today - colDate) / 86400000);
-    }
-    latestTaskText.split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean).forEach(item => {
-      tasks.push(`- ${siteName} | Owner: ${owner} | Status: ${status} | Age: ${ageDays}d | Task: ${item}`);
-    });
-  });
-  if (!tasks.length) {
-    out.innerHTML = '<div style="font-size:12px;color:#fff;opacity:.7">No tasks found. Add "Task: ..." entries in daily updates.</div>';
-    out.style.display = 'block';
-    _aiTaskRunning = false; btn.disabled = false; btn.textContent = '✨ AI Action Plan'; return;
-  }
-  const prompt = `You are a project manager at CARS24 overseeing construction/fit-out sites across India. Below are open action items extracted from daily updates, with how many days each has been pending.\n\n${tasks.join('\n')}\n\nRespond in exactly this format (plain text, no markdown symbols):\n\nCRITICAL - ACT TODAY:\n1. [Site] – [task] – [age]d pending – PM: [owner]\n\nTHIS WEEK:\n2. [Site] – [task] – [age]d pending – PM: [owner]\n\nFOLLOW UP NEXT WEEK:\n3. [Site] – [task]\n\nOVERALL ASSESSMENT: [1 line on backlog health and biggest bottleneck]`;
-  try {
-    const text = await askGemini(prompt);
-    out.innerHTML = text.split('\n').map(line => {
-      line = line.trim(); if (!line) return '';
-      if (/^(CRITICAL|THIS WEEK|FOLLOW UP|OVERALL)/.test(line)) {
-        const color = /CRITICAL/.test(line) ? '#fca5a5' : /THIS WEEK/.test(line) ? '#fde68a' : /OVERALL/.test(line) ? '#86efac' : '#cbd5e1';
-        return `<div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:${color};margin-top:10px;margin-bottom:3px">${esc(line)}</div>`;
-      }
-      return `<div style="font-size:12px;padding:2px 0 2px 8px;border-left:2px solid rgba(255,255,255,.25);margin-bottom:3px">${esc(line)}</div>`;
-    }).join('');
-    out.style.display = 'block';
-  } catch(e) {
-    out.innerHTML = `<div style="color:#fca5a5;font-size:12px">⚠ ${esc(e.message)}</div>`;
-    out.style.display = 'block';
-  }
-  _aiTaskRunning = false; btn.disabled = false; btn.textContent = '✨ Regenerate Action Plan';
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AI — SLACK DRAFT
-// ═══════════════════════════════════════════════════════════════
-let _aiSlackRunning = false;
-async function runSlackAI() {
-  if (_aiSlackRunning) return;
-  const btn = document.getElementById('ai-slack-btn');
-  const out = document.getElementById('ai-slack-out');
-  const wrap = document.getElementById('ai-slack-wrap');
-  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
-  _aiSlackRunning = true;
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  if (wrap) wrap.style.display = 'block';
-  out.textContent = '';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const rows = allData.map(r => {
-    const blockers = extractBlockers(getTodayUpdate(r));
-    const stale = daysSinceUpdate(r);
-    const satD = pd(r['SAT Date']), uatD = pd(r['UAT DATE']);
-    const uatOverdue = satD && !uatD ? Math.round((today - satD) / 86400000) : 0;
-    const handle = slackHandle(r['Owner'] || '');
-    return `- ${r['Site Name']||'?'} | PM: ${r['Owner']||'?'} (${handle}) | Status: ${r['Status']||'?'} | ${r['Percentage Completion']||'?'}%${blockers.length ? ' | Blockers: '+blockers.join(', ') : ''}${stale >= 5 ? ' | STALE '+stale+'d' : ''}${uatOverdue > 10 ? ' | UAT OVERDUE '+uatOverdue+'d' : ''} | Update: ${(getTodayUpdate(r)||'').substring(0,120)}`;
-  }).join('\n');
-  const dateStr = new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
-  const prompt = `You are a project coordinator at CARS24. Generate a ready-to-paste Slack message for a weekly cross-functional update meeting. Use Slack formatting (*bold*, _italic_, bullet points with •). Keep it professional, concise, and action-oriented.\n\nSite data:\n${rows}\n\nFormat the message exactly like this:\n\n🚦 *Weekly Cross-Functional Update — ${dateStr}*\n\n🔴 *Urgent — Action Needed Today:*\n• *[Site]* [Blocker team] — [issue + days pending] — [Slack handle]\n\n🟡 *This Week:*\n• *[Site]* [Blocker team] — [issue] — [Slack handle]\n\n✅ *On Track / No Blockers:*\n• [Site list]\n\n📊 *Portfolio Summary:* [1 line — total sites, % on track, key risk]\n\n_AI-generated summary | ${dateStr}_`;
-  try {
-    out.textContent = await askGemini(prompt);
-  } catch(e) {
-    out.textContent = `⚠ ${e.message}`;
-  }
-  _aiSlackRunning = false; btn.disabled = false; btn.textContent = '✨ Regenerate';
-}
 
 // ═══════════════════════════════════════════════════════════════
 // UTILITIES
@@ -1816,8 +1628,6 @@ function showInvTab(tab,btn){
 }
 
 function renderInsights(){
-  const aiCard=document.getElementById('ai-digest-wrap');
-  if(aiCard && !aiCard.hasChildNodes()) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions</div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
   const g=document.getElementById('igg');
   const sMap={},oMap={},vMap={};
   allData.forEach(r=>{
@@ -2076,13 +1886,6 @@ function openModal(idx){
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
     ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}
-    <div class="msec" style="background:linear-gradient(135deg,#f0f7ff 0%,#e8f0fe 100%);border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">🧠 AI Summary</div>
-        <button id="site-ai-btn-${idx}" onclick="runSiteAI(${idx})" style="background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ Analyse this site</button>
-      </div>
-      <div id="site-ai-out-${idx}" style="display:none;font-size:12px;line-height:1.6;padding-top:6px;border-top:1px solid #c7d7f0"></div>
-    </div>
     ${llScopeHtml}
     ${llHtml}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
@@ -2229,23 +2032,6 @@ function handleCSV(event){
   event.target.value='';
 }
 
-function exportCSV(){
-  try{
-    const allCols=[...META_COLS,...DATE_COLS];
-    const rows=[allCols.join(',')];
-    allData.forEach(r=>rows.push(allCols.map(c=>{
-      const v=(r[c]||''). replace(/"/g,'\"\"\"');
-      return (v.includes(',')||v.includes('\n')||v.includes('"')?`"${v}"`:v);
-    }).join(',')));
-    const blob=new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8;'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;a.download='Cars24_Tracker_'+new Date().toISOString().split('T')[0]+'.csv';a.style.display='none';
-    document.body.appendChild(a);a.click();
-    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-    toast('Exported '+allData.length+' sites','ok');
-  }catch(e){toast('Export failed','err');}
-}
 
 // ═══════════════════════════════════════════════════════════════
 // INIT
@@ -2542,15 +2328,6 @@ function savePmKpis(){
 
 
 
-function openTargetsPage(){
-  // Show calv as full-page overlay
-  const overlay=document.getElementById('targets-overlay');
-  if(overlay){overlay.style.display='flex';renderCalendarTo('cal-overlay-inner');}
-}
-function closeTargetsPage(){
-  const overlay=document.getElementById('targets-overlay');
-  if(overlay) overlay.style.display='none';
-}
 
 
 function filterByOwner(oi){
@@ -3281,16 +3058,6 @@ function renderTaskTab(){
     +'<div style="font-size:14px;font-weight:700">📋 Action Items</div>'
     +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
-  // AI Action Plan card (render once)
-  html+='<div id="ai-task-card" style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:14px 16px;margin-bottom:16px;color:#fff">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
-    +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">🧠 AI Action Plan</div>'
-    +'<div style="font-size:10px;opacity:.8">Prioritises tasks by aging — Critical / This Week / Follow Up</div></div>'
-    +'<button id="ai-task-btn" onclick="runTaskAI()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ AI Action Plan</button>'
-    +'</div>'
-    +'<div id="ai-task-out" style="display:none;margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:10px;line-height:1.6"></div>'
-    +'</div>';
-
   // Procurement plan auto-tasks: sites with PO issued but plan not yet received
   var procPending=allData.filter(function(r){
     return (r['PO Date']||'').trim()&&(r['PO Date']||'').trim()!=='—'&&(r['PO Date']||'').trim().toLowerCase()!=='pending'&&!hasProcurementPlan(r);
@@ -4309,18 +4076,6 @@ function renderSlackTab(subTab){
   var nav='<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSlackTab(\'crossfunc\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='crossfunc'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Cross-Functional</button>'
     +'<button onclick="renderSlackTab(\'pmupdate\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='pmupdate'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">PM Update</button>'
-    +'</div>'
-    +'<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:14px 16px;margin-bottom:16px;color:#fff">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0">'
-    +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">✨ AI Slack Draft</div>'
-    +'<div style="font-size:10px;opacity:.8">AI generates a polished cross-functional Slack post — ready to copy & paste</div></div>'
-    +'<div style="display:flex;gap:6px">'
-    +'<button id="ai-slack-btn" onclick="runSlackAI()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ Generate</button>'
-    +'<button onclick="copyToClipboard(\'ai-slack-out\')" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer">📋 Copy</button>'
-    +'</div></div>'
-    +'<div id="ai-slack-wrap" style="display:none;margin-top:12px">'
-    +'<pre id="ai-slack-out" style="background:#0d1117;color:#c9d1d9;padding:12px;border-radius:8px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6;margin:0"></pre>'
-    +'</div>'
     +'</div>';
   if(subTab==='crossfunc'){
     var bt={'IT':[],'Design':[],'Commercial':[],'HEM':[],'BD':[],'Other':[]};
