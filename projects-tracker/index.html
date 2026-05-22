@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.8</title>
+<title>Cars24 Projects Tracker v4.11</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -237,12 +237,12 @@ td{padding:7px 12px;vertical-align:middle}
 /* Modal */
 .overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);backdrop-filter:blur(2px);z-index:500;align-items:center;justify-content:center;padding:20px}
 .overlay.open{display:flex}
-.modal{background:var(--white);border-radius:13px;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 50px rgba(0,0,0,.18)}
-.mhdr{padding:16px 20px 12px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:10px;position:sticky;top:0;background:var(--white);z-index:5;border-radius:13px 13px 0 0}
+.modal{background:var(--white);border-radius:13px;width:100%;max-width:680px;max-height:88vh;overflow-y:auto;overflow-x:hidden;box-shadow:0 20px 50px rgba(0,0,0,.18)}
+.mhdr{padding:14px 16px 10px;border-bottom:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-between;gap:8px;position:sticky;top:0;background:var(--white);z-index:5;border-radius:13px 13px 0 0;min-width:0}
 .mttl{font-size:16px;font-weight:700}
 .mcls{background:var(--surface);border:none;width:26px;height:26px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:15px;flex-shrink:0;transition:all .15s}
 .mcls:hover{background:var(--border);color:var(--text)}
-.mbody{padding:16px 20px}
+.mbody{padding:14px 16px;min-width:0}
 .msec{margin-bottom:18px}
 .mst{font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin-bottom:9px;padding-bottom:6px;border-bottom:1px solid var(--border)}
 .mgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -623,7 +623,8 @@ const CSV_DATA = [];
 let SNAG_DATA = {};
 let TICKET_DATA = [];
 let ATTENDANCE_DATA = [];
-var LL_DATA = {}; // { siteName: [ {po, tasks:[{sno,task,vendor,startDate,endDate,done}]} ] }  — array, one entry per PO
+var SCHED_DATA = {}; // Cars24 scope: { siteName: [ {po, tasks:[{sno,task,vendor,startDate,endDate,done}]} ] }
+var LL_SCOPE_DATA = {}; // Landlord scope: { siteName: [ {task, expectedDate, done} ] }
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -1271,7 +1272,7 @@ function renderTable(){
       '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">'+esc(r.Owner||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(r.Vendor||'—')+'</td>',
-      '<td>'+(function(){var _snp=(r['Site Name']||'').trim();var _llp=LL_DATA[_snp]||[];var _totalp=0,_donep=0;_llp.forEach(function(b){_totalp+=(b.tasks||[]).length;_donep+=(b.tasks||[]).filter(function(t){return t.done;}).length;});var schedChip=_llp.length?'<button onclick="event.stopPropagation();openModalToSchedule('+idx+')" title="Open project tasks" style="display:flex;align-items:center;gap:3px;margin-top:3px;background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;cursor:pointer;line-height:1.2">📋 '+_donep+'/'+_totalp+' tasks</button>':'';return (!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+schedChip;})()+'</td>',
+      '<td>'+(function(){var _snp=(r['Site Name']||'').trim();var _llp=SCHED_DATA[_snp]||[];var _totalp=0,_donep=0;_llp.forEach(function(b){_totalp+=(b.tasks||[]).length;_donep+=(b.tasks||[]).filter(function(t){return t.done;}).length;});var schedChip=_llp.length?'<button onclick="event.stopPropagation();openModalToSchedule('+idx+')" title="Open project tasks" style="display:flex;align-items:center;gap:3px;margin-top:3px;background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;cursor:pointer;line-height:1.2">📋 '+_donep+'/'+_totalp+' tasks</button>':'';return (!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+schedChip;})()+'</td>',
       '<td><span class="badge '+sCls(r.Status)+'">'+esc(r.Status||'—')+'</span></td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+(r['PO Date']||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+(r['Kickoff Date']||'—')+'</td>',
@@ -1900,7 +1901,7 @@ function openModal(idx){
   var _pm=document.getElementById('mprpo');
   if(_pm){var _cc=r['Cost Center']||'';_pm.href='/pr-po-tracker/?costCenter='+encodeURIComponent(_cc);_pm.style.display=_cc?'':'none';}
   var _msb=document.getElementById('mschedule-btn');
-  if(_msb){var _llArr2=LL_DATA[(r['Site Name']||'').trim()]||[];_msb.style.display=_llArr2.length?'':'none';}
+  if(_msb){var _llArr2=SCHED_DATA[(r['Site Name']||'').trim()]||[];_msb.style.display=_llArr2.length?'':'none';}
   const today=new Date();today.setHours(0,0,0,0);
   const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']);
   const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
@@ -1922,7 +1923,7 @@ function openModal(idx){
   const tc=getTodayCol();
   // ── Project Schedule & Progress Section (multi-PO) ──
   const _llSiteName=(r['Site Name']||'').trim();
-  const _llArr=LL_DATA[_llSiteName]||[];
+  const _llArr=SCHED_DATA[_llSiteName]||[];
   const _llFileId='ll-inp-'+idx;
   const _llSN=_llSiteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   const _llUploadBtn='<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">+ Add Schedule CSV</label>'
@@ -1971,18 +1972,26 @@ function openModal(idx){
       var poDone=tasks.filter(function(t){return t.done;}).length;
       var poPct=tasks.length?Math.round(poDone/tasks.length*100):0;
       var poBarColor=poPct===100?'#16a34a':poPct>=60?'#2563eb':'#f59e0b';
+      var _dinStyle='box-sizing:border-box;border:1px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:10px;width:88px;font-family:Inter,sans-serif;background:var(--white)';
       var poRows=tasks.map(function(t,ti){
-        return '<tr id="ll-row-'+pi+'-'+ti+'" style="border-bottom:1px solid var(--border);opacity:'+(t.done?'0.5':'1')+'">'
-          +'<td style="padding:5px 6px;text-align:center"><input type="checkbox" id="ll-cb-'+pi+'-'+ti+'" '+(t.done?'checked':'')+' onchange="toggleLLTask(\''+_llSN+'\','+pi+','+ti+')" style="width:14px;height:14px;cursor:pointer"></td>'
-          +'<td style="padding:5px 6px;font-size:11px;color:var(--muted);text-align:center">'+esc(t.sno)+'</td>'
-          +'<td style="padding:5px 8px;font-size:12px;font-weight:'+(t.done?'400':'600')+';text-decoration:'+(t.done?'line-through':'none')+'">'+esc(t.task)+'</td>'
-          +'<td style="padding:5px 6px;font-size:11px;color:var(--muted)">'+esc(t.vendor)+'</td>'
-          +'<td style="padding:5px 6px"><input type="text" value="'+esc(t.startDate)+'" style="border:1px solid var(--border2);border-radius:4px;padding:3px 5px;font-size:11px;width:90px;font-family:Inter,sans-serif" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'startDate\',this.value)"></td>'
-          +'<td style="padding:5px 6px"><input type="text" value="'+esc(t.endDate)+'" style="border:1px solid var(--border2);border-radius:4px;padding:3px 5px;font-size:11px;width:90px;font-family:Inter,sans-serif" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'endDate\',this.value)"></td>'
-          +'</tr>';
+        var isDone=t.done;
+        return '<div id="ll-row-'+pi+'-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);opacity:'+(isDone?'0.5':'1')+'">'
+          +'<input type="checkbox" id="ll-cb-'+pi+'-'+ti+'" '+(isDone?'checked':'')+' onchange="toggleLLTask(\''+_llSN+'\','+pi+','+ti+')" style="width:15px;height:15px;cursor:pointer;flex-shrink:0;margin-top:2px">'
+          +'<span style="font-size:10px;color:var(--muted);flex-shrink:0;min-width:16px;padding-top:2px">'+esc(t.sno)+'</span>'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
+          +'<span style="font-size:10px;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px">'+esc(t.vendor)+'</span>'
+          +'<span style="font-size:10px;color:var(--muted)">Start:</span>'
+          +'<input type="text" value="'+esc(t.startDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'startDate\',this.value)">'
+          +'<span style="font-size:10px;color:var(--muted)">End:</span>'
+          +'<input type="text" value="'+esc(t.endDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'endDate\',this.value)">'
+          +'</div>'
+          +'</div>'
+          +'</div>';
       }).join('');
       return '<div style="margin-bottom:10px;border:1px solid var(--border2);border-radius:7px;overflow:hidden">'
-        +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface)">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface);flex-wrap:wrap;gap:6px">'
         +'<div>'
         +'<span style="font-size:11px;font-weight:700;color:var(--text)">PO: '+(block.po?esc(block.po):'<span style="color:var(--muted);font-weight:400">No PO in filename</span>')+'</span>'
         +'<span style="font-size:10px;color:var(--muted);margin-left:8px">'+tasks.length+' tasks</span>'
@@ -1992,23 +2001,76 @@ function openModal(idx){
         +'<div style="width:60px;height:6px;background:#e5e7eb;border-radius:3px;overflow:hidden"><div id="ll-po-bar-'+pi+'" style="height:100%;width:'+poPct+'%;background:'+poBarColor+';border-radius:3px;transition:width .3s"></div></div>'
         +'<span id="ll-po-pct-'+pi+'" style="font-size:11px;font-weight:700;color:'+poBarColor+'">'+poPct+'%</span>'
         +'</div>'
-        +'<button onclick="deleteLLPO(\''+_llSN+'\','+pi+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px;line-height:1" title="Remove this PO">✕</button>'
+        +'<button onclick="deleteLLPO(\''+_llSN+'\','+pi+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:14px;padding:0 2px;line-height:1" title="Remove this PO">✕</button>'
         +'</div>'
         +'</div>'
-        +'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse">'
-        +'<thead><tr style="background:#fafafa">'
-        +'<th style="padding:4px 6px;width:28px;font-size:10px;font-weight:600;color:var(--muted)">✓</th>'
-        +'<th style="padding:4px 6px;width:30px;font-size:10px;font-weight:600;color:var(--muted)">#</th>'
-        +'<th style="padding:4px 8px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Task</th>'
-        +'<th style="padding:4px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Vendor</th>'
-        +'<th style="padding:4px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">Start</th>'
-        +'<th style="padding:4px 6px;text-align:left;font-size:10px;font-weight:600;color:var(--muted)">End</th>'
-        +'</tr></thead><tbody>'+poRows+'</tbody></table></div>'
+        +poRows
         +'</div>';
     }).join('');
 
     llHtml='<div data-ll-section style="background:#f8faff;border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr+overallBar+poBlocks+'</div>';
   })();
+
+  // ── LL (Landlord) Scope Section ──
+  var llScopeHtml='';
+  (function(){
+    var _lsArr=LL_SCOPE_DATA[_llSiteName]||[];
+    var _lsFileId='lls-inp-'+idx;
+    var _lsSN=_llSiteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var _lsUploadBtn='<label class="btn btn-o btn-sm" for="'+_lsFileId+'" style="cursor:pointer;font-size:11px">+ Upload LL Scope CSV</label>'
+      +'<input type="file" id="'+_lsFileId+'" accept=".csv" style="display:none" onchange="handleLLScopeUpload(event,\''+_lsSN+'\')">';
+    var _lsDone=_lsArr.filter(function(t){return t.done;}).length;
+    var _lsPct=_lsArr.length?Math.round(_lsDone/_lsArr.length*100):0;
+    var _lsBarColor=_lsPct===100?'#16a34a':_lsPct>=60?'#d97706':'#dc2626';
+
+    if(!_lsArr.length){
+      llScopeHtml='<div data-lls-section style="border:1px dashed #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:12px;background:#fffdf0">'
+        +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+        +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">🏗️ LL Scope of Work</div>'
+        +_lsUploadBtn+'</div>'
+        +'<div style="font-size:12px;color:var(--muted)">No landlord scope uploaded yet.</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Expected Completion, Remarks</code></div>'
+        +'</div>';
+      return;
+    }
+
+    var _lsDateStyle='box-sizing:border-box;border:1px solid #fde68a;border-radius:4px;padding:3px 6px;font-size:10px;width:88px;font-family:Inter,sans-serif;background:#fffdf5';
+    var _lsRows=_lsArr.map(function(t,ti){
+      var isDone=t.done;
+      return '<div id="lls-row-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid #fef3c7;opacity:'+(isDone?'0.45':'1')+'">'
+        +'<input type="checkbox" id="lls-cb-'+ti+'" '+(isDone?'checked':'')+' onchange="toggleLLScopeTask(\''+_lsSN+'\','+ti+')" style="width:15px;height:15px;cursor:pointer;flex-shrink:0;margin-top:2px">'
+        +'<span style="font-size:10px;color:var(--muted);flex-shrink:0;min-width:16px;padding-top:2px">'+esc(t.sno)+'</span>'
+        +'<div style="flex:1;min-width:0">'
+        +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
+        +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
+        +'<span style="font-size:10px;color:var(--muted)">By:</span>'
+        +'<input type="text" value="'+esc(t.expectedDate)+'" placeholder="DD/MM/YYYY" style="'+_lsDateStyle+'" onblur="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'expectedDate\',this.value)">'
+        +(t.remarks?'<span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(t.remarks)+'</span>':'')
+        +'</div>'
+        +'</div>'
+        +'<button onclick="deleteLLScopeTask(\''+_lsSN+'\','+ti+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;line-height:1;flex-shrink:0;padding:0 2px" title="Remove">✕</button>'
+        +'</div>';
+    }).join('');
+
+    llScopeHtml='<div data-lls-section style="background:#fffdf5;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;flex-wrap:wrap;gap:8px">'
+      +'<div>'
+      +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">🏗️ LL Scope of Work</div>'
+      +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+_lsArr.length+' items · Landlord\'s responsibility</div>'
+      +'</div>'
+      +_lsUploadBtn+'</div>'
+      +'<div style="margin-bottom:10px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">'
+      +'<span style="font-size:11px;color:var(--muted)">LL Completion</span>'
+      +'<span id="lls-pct-label" style="font-size:12px;font-weight:700;color:'+_lsBarColor+'">'+_lsPct+'%</span>'
+      +'</div>'
+      +'<div style="height:8px;background:#fef3c7;border-radius:4px;overflow:hidden"><div id="lls-bar-fill" style="height:100%;width:'+_lsPct+'%;background:'+_lsBarColor+';border-radius:4px;transition:width .3s"></div></div>'
+      +'<div id="lls-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+_lsDone+' of '+_lsArr.length+' items done</div>'
+      +'</div>'
+      +'<div style="border:1px solid #fde68a;border-radius:6px;overflow:hidden">'+_lsRows+'</div>'
+      +'</div>';
+  })();
+
   document.getElementById('mbody').innerHTML=`
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
@@ -2021,6 +2083,7 @@ function openModal(idx){
       </div>
       <div id="site-ai-out-${idx}" style="display:none;font-size:12px;line-height:1.6;padding-top:6px;border-top:1px solid #c7d7f0"></div>
     </div>
+    ${llScopeHtml}
     ${llHtml}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
@@ -3521,7 +3584,7 @@ function copyWarnEmail(){
 // TICKET MODULE
 // ═══════════════════════════════════════════════════════════
 // PROJECT SCHEDULE & PROGRESS FUNCTIONS
-// LL_DATA[siteName] = array of { po, tasks:[{sno,task,vendor,startDate,endDate,done}] }
+// SCHED_DATA[siteName] = array of { po, tasks:[{sno,task,vendor,startDate,endDate,done}] }
 // ═══════════════════════════════════════════════════════════
 function parseLLScheduleCSV(txt, filename){
   var poMatch=(filename||'').match(/Schedule_PO([A-Z0-9]+)\.csv/i);
@@ -3545,7 +3608,7 @@ function parseLLScheduleCSV(txt, filename){
 
 // Compute overall % completion across ALL POs for a site and write to allData
 function updateLLCompletion(siteName){
-  var arr=LL_DATA[siteName];
+  var arr=SCHED_DATA[siteName];
   if(!arr||!arr.length) return;
   var totalTasks=0,doneTasks=0;
   arr.forEach(function(block){
@@ -3561,11 +3624,11 @@ function updateLLCompletion(siteName){
 
 // Toggle a single task done/undone — poIdx = index in site's PO array, taskIdx = task within that PO
 function toggleLLTask(siteName,poIdx,taskIdx){
-  var arr=LL_DATA[siteName];
+  var arr=SCHED_DATA[siteName];
   if(!arr||!arr[poIdx]) return;
   arr[poIdx].tasks[taskIdx].done=!arr[poIdx].tasks[taskIdx].done;
   updateLLCompletion(siteName);
-  saveLLData();
+  saveSchedData();
   // Recompute totals across ALL POs for the overall bar
   var totalTasks=0,doneTasks=0;
   arr.forEach(function(block){totalTasks+=block.tasks.length;doneTasks+=block.tasks.filter(function(t){return t.done;}).length;});
@@ -3593,20 +3656,20 @@ function toggleLLTask(siteName,poIdx,taskIdx){
 }
 
 function saveLLDate(siteName,poIdx,taskIdx,field,value){
-  var arr=LL_DATA[siteName];
+  var arr=SCHED_DATA[siteName];
   if(!arr||!arr[poIdx]) return;
   arr[poIdx].tasks[taskIdx][field]=value;
-  saveLLData();
+  saveSchedData();
   toast('Date saved','ok');
 }
 
 function deleteLLPO(siteName,poIdx){
   if(!confirm('Remove this PO schedule from the site?')) return;
-  var arr=LL_DATA[siteName];
+  var arr=SCHED_DATA[siteName];
   if(!arr) return;
   arr.splice(poIdx,1);
-  if(!arr.length) delete LL_DATA[siteName];
-  saveLLData();
+  if(!arr.length) delete SCHED_DATA[siteName];
+  saveSchedData();
   updateLLCompletion(siteName);
   var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
   if(idx>=0) openModal(idx);
@@ -3621,8 +3684,8 @@ function handleLLUpload(event,siteName){
   reader.onload=function(e){
     var parsed=parseLLScheduleCSV(e.target.result,file.name);
     if(!parsed.tasks.length){toast('No tasks found in CSV','err');return;}
-    if(!LL_DATA[siteName]) LL_DATA[siteName]=[];
-    var arr=LL_DATA[siteName];
+    if(!SCHED_DATA[siteName]) SCHED_DATA[siteName]=[];
+    var arr=SCHED_DATA[siteName];
     // If same PO already exists, replace it (preserve done status)
     var existingIdx=arr.findIndex(function(b){return b.po&&b.po===parsed.po;});
     if(existingIdx>=0){
@@ -3635,7 +3698,7 @@ function handleLLUpload(event,siteName){
     } else {
       arr.push({po:parsed.po,tasks:parsed.tasks});
     }
-    saveLLData();
+    saveSchedData();
     updateLLCompletion(siteName);
     var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
     toast('✓ Schedule saved — '+parsed.tasks.length+' tasks, PO: '+(parsed.po||'N/A'),'ok');
@@ -3698,8 +3761,8 @@ function confirmLLBulkUpload(){
       reader.onload=function(e){
         var parsed=parseLLScheduleCSV(e.target.result,f.name);
         if(!parsed.tasks.length){resolve();return;}
-        if(!LL_DATA[siteName]) LL_DATA[siteName]=[];
-        var arr=LL_DATA[siteName];
+        if(!SCHED_DATA[siteName]) SCHED_DATA[siteName]=[];
+        var arr=SCHED_DATA[siteName];
         var existingIdx=arr.findIndex(function(b){return b.po&&b.po===parsed.po;});
         if(existingIdx>=0){
           var oldTasks=arr[existingIdx].tasks;
@@ -3716,10 +3779,95 @@ function confirmLLBulkUpload(){
     });
   });
   Promise.all(promises).then(function(){
-    saveLLData();
+    saveSchedData();
     closeLLBulkModal();
     toast('✓ Schedules saved for '+count+' site(s)','ok');
   });
+}
+
+// ═══════════════════════════════════════════════════════════
+// LANDLORD (LL) SCOPE FUNCTIONS — no POs, separate from Cars24 project schedule
+// ═══════════════════════════════════════════════════════════
+function parseLLScopeCSV(txt){
+  var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
+  if(lines.length<2) return [];
+  var headers=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'');});
+  var tasks=[];
+  for(var i=1;i<lines.length;i++){
+    var line=lines[i].trim(); if(!line) continue;
+    var cols=line.split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+    var obj={}; headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
+    var task=obj['Task']||obj['task']||'';
+    if(!task) continue;
+    tasks.push({
+      sno: obj['S.No.']||obj['Sno']||String(i),
+      task: task,
+      expectedDate: obj['Expected Completion']||obj['Expected Date']||obj['End Date']||'',
+      remarks: obj['Remarks']||obj['remarks']||'',
+      done: false
+    });
+  }
+  return tasks;
+}
+
+function toggleLLScopeTask(siteName,taskIdx){
+  var arr=LL_SCOPE_DATA[siteName];
+  if(!arr||!arr[taskIdx]) return;
+  arr[taskIdx].done=!arr[taskIdx].done;
+  saveLLScopeData();
+  var cb=document.getElementById('lls-cb-'+taskIdx);
+  if(cb) cb.checked=arr[taskIdx].done;
+  var row=document.getElementById('lls-row-'+taskIdx);
+  if(row) row.style.opacity=arr[taskIdx].done?'0.45':'1';
+  var doneCnt=arr.filter(function(t){return t.done;}).length;
+  var pl=document.getElementById('lls-pct-label');
+  var bar=document.getElementById('lls-bar-fill');
+  var cnt=document.getElementById('lls-done-count');
+  var pct2=arr.length?Math.round(doneCnt/arr.length*100):0;
+  var barColor=pct2===100?'#16a34a':pct2>=60?'#d97706':'#dc2626';
+  if(pl){pl.textContent=pct2+'%';pl.style.color=barColor;}
+  if(bar){bar.style.width=pct2+'%';bar.style.background=barColor;}
+  if(cnt) cnt.textContent=doneCnt+' of '+arr.length+' items done';
+}
+
+function saveLLScopeDate(siteName,taskIdx,field,value){
+  if(!LL_SCOPE_DATA[siteName]) return;
+  LL_SCOPE_DATA[siteName][taskIdx][field]=value;
+  saveLLScopeData();
+  toast('Saved','ok');
+}
+
+function deleteLLScopeTask(siteName,taskIdx){
+  if(!LL_SCOPE_DATA[siteName]) return;
+  if(!confirm('Remove this LL task?')) return;
+  LL_SCOPE_DATA[siteName].splice(taskIdx,1);
+  saveLLScopeData();
+  var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+  if(idx>=0) openModal(idx);
+  toast('Task removed','ok');
+}
+
+function handleLLScopeUpload(event,siteName){
+  var file=event.target.files[0]; if(!file) return;
+  if(!__auth){toast('Please log in first','err');event.target.value='';return;}
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var parsed=parseLLScopeCSV(e.target.result);
+    if(!parsed.length){toast('No tasks found in CSV','err');return;}
+    // Preserve done status for matching tasks on re-upload
+    var existing=LL_SCOPE_DATA[siteName]||[];
+    parsed.forEach(function(t){
+      var old=existing.find(function(x){return x.task===t.task;});
+      if(old) t.done=old.done;
+    });
+    LL_SCOPE_DATA[siteName]=parsed;
+    saveLLScopeData();
+    var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+    toast('✓ LL Scope loaded — '+parsed.length+' items','ok');
+    if(idx>=0) openModal(idx);
+  };
+  reader.readAsText(file);
+  event.target.value='';
 }
 
 // ═══════════════════════════════════════════════════════════
@@ -4864,7 +5012,8 @@ const TICKET_TOOL_PATH     = 'tickets';
 const ATTENDANCE_TOOL_PATH = 'attendance';
 const EMAIL_LOG_KEY = '__email_log';
 const HOTP_UPDATES_TOOL = 'hotp-updates';
-const LL_SCOPE_TOOL = 'll-scope';
+const SCHED_TOOL = 'project-schedule';   // Cars24 scope of work (with POs)
+const LL_SCOPE_TOOL = 'll-scope';        // Landlord scope of work (no POs)
 var HOTP_UPDATES = {};  // { siteName: { dateCol: text } }
 var _hotpUpdatesDirty = false;
 
@@ -4904,24 +5053,45 @@ function applyHOTPUpdates(){
   });
 }
 
-function loadLLData(){
+function loadSchedData(){
+  if(location.protocol==='file:') return Promise.resolve();
+  return fetch(WORKER_URL+SCHED_TOOL+'-mappings.json',{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():{};})
+    .then(function(data){
+      SCHED_DATA=(data&&typeof data==='object'&&!Array.isArray(data))?data:{};
+    })
+    .catch(function(e){ console.warn('loadSchedData failed:',e); });
+}
+
+function saveSchedData(){
+  if(location.protocol==='file:') return;
+  fetch(WORKER_URL.replace(/\/+$/,'')+'/mappings',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Tool-Path':SCHED_TOOL},
+    body:JSON.stringify(SCHED_DATA)
+  }).then(function(r){return r.json();})
+    .then(function(j){if(!j.success) toast('Schedule save failed: '+(j.error||''),'err');})
+    .catch(function(e){ toast('Network error saving project schedule','err'); });
+}
+
+function loadLLScopeData(){
   if(location.protocol==='file:') return Promise.resolve();
   return fetch(WORKER_URL+LL_SCOPE_TOOL+'-mappings.json',{cache:'no-store'})
     .then(function(r){ return r.ok?r.json():{};})
     .then(function(data){
-      LL_DATA=(data&&typeof data==='object'&&!Array.isArray(data))?data:{};
+      LL_SCOPE_DATA=(data&&typeof data==='object'&&!Array.isArray(data))?data:{};
     })
-    .catch(function(e){ console.warn('loadLLData failed:',e); });
+    .catch(function(e){ console.warn('loadLLScopeData failed:',e); });
 }
 
-function saveLLData(){
+function saveLLScopeData(){
   if(location.protocol==='file:') return;
   fetch(WORKER_URL.replace(/\/+$/,'')+'/mappings',{
     method:'POST',
     headers:{'Content-Type':'application/json','X-Tool-Path':LL_SCOPE_TOOL},
-    body:JSON.stringify(LL_DATA)
+    body:JSON.stringify(LL_SCOPE_DATA)
   }).then(function(r){return r.json();})
-    .then(function(j){if(!j.success) toast('LL save failed: '+(j.error||''),'err');})
+    .then(function(j){if(!j.success) toast('LL scope save failed: '+(j.error||''),'err');})
     .catch(function(e){ toast('Network error saving LL scope','err'); });
 }
 
@@ -5037,7 +5207,8 @@ function emailLogBadge(siteName, emailType){
     C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
     loadEmailLog(),
     loadHOTPUpdates(),
-    loadLLData()
+    loadSchedData(),
+    loadLLScopeData()
   ]).then(function(results){
       var text = results[0];
       var parsed = parseCSV(text);
