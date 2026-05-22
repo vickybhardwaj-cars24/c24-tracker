@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.7</title>
+<title>Cars24 Projects Tracker v4.8</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -604,7 +604,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 <div class="overlay" id="overlay" onclick="onOvClick(event)">
   <div class="modal">
     <div class="mhdr">
-      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="mttl" id="mttl"></div><a id="mdrive" href="#" target="_blank" class="drive-btn" style="display:none">📁 Drive</a><a id="mprpo" href="#" target="_blank" class="drive-btn" style="display:none;background:#4736FE;color:#fff;border-color:#4736FE">📋 PR/PO</a></div><div style="margin-top:4px" id="mstat"></div>
+      <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><div class="mttl" id="mttl"></div><a id="mdrive" href="#" target="_blank" class="drive-btn" style="display:none">📁 Drive</a><a id="mprpo" href="#" target="_blank" class="drive-btn" style="display:none;background:#4736FE;color:#fff;border-color:#4736FE">📋 PR/PO</a><button id="mschedule-btn" onclick="scrollToSchedule()" style="display:none;padding:5px 10px;font-size:11px;font-weight:600;border:1px solid #0ea5e9;border-radius:6px;background:#f0f9ff;color:#0369a1;cursor:pointer">📋 Tasks</button></div><div style="margin-top:4px" id="mstat"></div>
       <button class="mcls" onclick="closeModal()">✕</button>
     </div>
     <div class="mbody" id="mbody"></div>
@@ -1271,7 +1271,7 @@ function renderTable(){
       '<td style="min-width:170px;max-width:170px"><div style="font-weight:600;font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(r['Site Name']||'—')+(isOv?'<span class="ov-tag">⚠ '+ovDays+'d</span>':'')+(function(){var today=new Date();today.setHours(0,0,0,0);var st2=(r['Status']||'').toLowerCase();if(st2.includes('uat done')||st2.includes('completed')||st2.includes('sat done')) return '';if(pd(r['UAT DATE'])) return '';var revD2=pd(r['Revised Completion']),planD2=pd(r['Planned Completion']);var comm2=revD2||planD2; if(!comm2||comm2>=today) return '';var od2=Math.round((today-comm2)/86400000);var lbl2=revD2?('Rev +'+od2+'d'):('No rev +'+od2+'d');return '<span style="font-size:9px;background:#fff7ed;color:#ea580c;padding:1px 5px;border-radius:6px;margin-left:3px;border:1px solid #fed7aa;font-weight:700">'+lbl2+'</span>';})()+(isUatWarn?'<span class="uat-warn-tag">🔔 '+uatGap+'d</span>':'')+staleMark+'</div>'+blockerChips(getTodayUpdate(r))+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:80px">'+esc(r.Owner||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(r.Vendor||'—')+'</td>',
-      '<td>'+(!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+'</td>',
+      '<td>'+(function(){var _snp=(r['Site Name']||'').trim();var _llp=LL_DATA[_snp]||[];var _totalp=0,_donep=0;_llp.forEach(function(b){_totalp+=(b.tasks||[]).length;_donep+=(b.tasks||[]).filter(function(t){return t.done;}).length;});var schedChip=_llp.length?'<button onclick="event.stopPropagation();openModalToSchedule('+idx+')" title="Open project tasks" style="display:flex;align-items:center;gap:3px;margin-top:3px;background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;cursor:pointer;line-height:1.2">📋 '+_donep+'/'+_totalp+' tasks</button>':'';return (!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+schedChip;})()+'</td>',
       '<td><span class="badge '+sCls(r.Status)+'">'+esc(r.Status||'—')+'</span></td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+(r['PO Date']||'—')+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+(r['Kickoff Date']||'—')+'</td>',
@@ -1899,6 +1899,8 @@ function openModal(idx){
   if(_dm){_dm.href=getDriveLink(r['Site Name']);_dm.style.display='';}
   var _pm=document.getElementById('mprpo');
   if(_pm){var _cc=r['Cost Center']||'';_pm.href='/pr-po-tracker/?costCenter='+encodeURIComponent(_cc);_pm.style.display=_cc?'':'none';}
+  var _msb=document.getElementById('mschedule-btn');
+  if(_msb){var _llArr2=LL_DATA[(r['Site Name']||'').trim()]||[];_msb.style.display=_llArr2.length?'':'none';}
   const today=new Date();today.setHours(0,0,0,0);
   const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']);
   const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
@@ -1906,7 +1908,7 @@ function openModal(idx){
   document.getElementById('mstat').innerHTML=`<span class="badge ${sCls(r.Status)}">${esc(r.Status||'—')}</span>${warnHtml}`;
   const pctV=pct(r);
   const metaF=[
-    ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion',pctV!==null?pctV+'%':''],
+    ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
     ['PO Date',r['PO Date']||'—'],['Kickoff Date',r['Kickoff Date']||'—'],['Work Start',r['Work Start Date']||'—'],
     ['T-Live',(()=>{const tl=getTempLiveDate(r);return tl?fmtD(tl):'—';})()],
     ['SAT Date',r['SAT Date']||'—'],['UAT Date',r['UAT DATE']||'—'],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
@@ -1943,7 +1945,7 @@ function openModal(idx){
       +'</div>';
 
     if(!_llArr.length){
-      llHtml='<div style="border:1px dashed var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr
+      llHtml='<div data-ll-section style="border:1px dashed var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr
         +'<div style="font-size:12px;color:var(--muted)">No schedule uploaded yet.</div>'
         +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Vendor Name, Start Date, End Date</code></div>'
         +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Filename: <code>Schedule_PO&lt;PO_NUMBER&gt;.csv</code> — PO number is auto-extracted.</div>'
@@ -1960,7 +1962,7 @@ function openModal(idx){
       +'<div style="height:10px;background:#dbeafe;border-radius:5px;overflow:hidden">'
       +'<div id="ll-bar-fill" style="height:100%;width:'+overallPct+'%;background:'+overallBarColor+';border-radius:5px;transition:width .3s"></div>'
       +'</div>'
-      +'<div id="ll-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+doneTasks+' of '+totalTasks+' tasks completed across all POs</div>'
+      +'<div id="ll-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+doneTasks+' of '+totalTasks+' tasks completed across all POs — <span style="color:#0369a1;font-weight:600">auto-updates HOTP % Completion</span></div>'
       +'</div>';
 
     // Per-PO blocks
@@ -2005,7 +2007,7 @@ function openModal(idx){
         +'</div>';
     }).join('');
 
-    llHtml='<div style="background:#f8faff;border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr+overallBar+poBlocks+'</div>';
+    llHtml='<div data-ll-section style="background:#f8faff;border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr+overallBar+poBlocks+'</div>';
   })();
   document.getElementById('mbody').innerHTML=`
     <div class="msec"><div class="mst">Site Details</div>
@@ -2031,7 +2033,7 @@ function openModal(idx){
 function saveMeta(f,idx,el){
   const v=el.textContent.trim();
   allData[idx][f]=v;
-  if(f==='% Completion'||f==='Percentage Completion'){
+  if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
     allData[idx]['Percentage Completion']=v.replace('%','').trim();
   }
   if(f==='Revised') allData[idx]['Revised Completion']=v;
@@ -2070,6 +2072,18 @@ function addU(idx){
 }
 function closeModal(){var ov=document.getElementById('overlay');ov.style.display='';ov.classList.remove('open');}
 function onOvClick(e){if(e.target===document.getElementById('overlay')) closeModal();}
+function scrollToSchedule(){
+  var mb=document.getElementById('mbody');
+  if(!mb) return;
+  var el=mb.querySelector('[data-ll-section]');
+  if(el){el.scrollIntoView({behavior:'smooth',block:'start'});}
+  else{mb.scrollTop=mb.scrollTop+300;}
+}
+function openModalToSchedule(idx){
+  openModal(idx);
+  // Scroll to schedule section after the modal renders
+  setTimeout(function(){scrollToSchedule();},80);
+}
 
 // ═══════════════════════════════════════════════════════════════
 // CSV UPLOAD & EXPORT
