@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.39</title>
+<title>Cars24 Projects Tracker v4.40</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2868,7 +2868,7 @@ function openModal(idx){
     ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
     ['PO Date',r['PO Date']||'—'],['Kickoff Date',r['Kickoff Date']||'—'],['Work Start',r['Work Start Date']||'—'],
     ['T-Live',(()=>{const tl=getTempLiveDate(r);return tl?fmtD(tl):'—';})()],
-    ['Cost Center',r['Cost Center']||''],['SAT Date',r['SAT Date']||'—'],['UAT Date',r['UAT DATE']||'—'],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
+    ['Cost Center',r['Cost Center']||''],['SAT Date',r['SAT Date']||'—'],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
   ];
   const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';
   const sortedCols=[...DATE_COLS].reverse().filter(d=>(r[d]||'').length>2);
@@ -3029,7 +3029,7 @@ function openModal(idx){
 
   document.getElementById('mbody').innerHTML=`
     <div class="msec"><div class="mst">Site Details</div>
-      <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
+      <div class="mgrid">${metaF.map(([l,v])=>l==='Revised'?renderMetaField(l,v,idx,r):`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
     <div id="rev-hist-sec-${idx}" style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;display:none"></div>
     ${llScopeHtml}
