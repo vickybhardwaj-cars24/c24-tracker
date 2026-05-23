@@ -250,6 +250,92 @@ create policy "email_log_insert" on public.email_log for insert to authenticated
 --   Allowed types: image/jpeg, image/png, image/webp
 
 -- ─────────────────────────────────────────────────────────────────────────────
+-- CONSTRUCTION PM FEATURES
+-- ─────────────────────────────────────────────────────────────────────────────
+
+-- RFI (Request For Information) Log
+create table if not exists public.rfis (
+  id uuid default uuid_generate_v4() primary key,
+  site_id uuid references public.sites(id) on delete cascade,
+  site_name text not null,
+  rfi_number text,                  -- e.g. RFI-001
+  subject text not null,
+  raised_by text,
+  raised_to text,                   -- Architect / Design / HEM / Vendor
+  status text default 'Open' check (status in ('Open', 'Answered', 'Closed', 'On Hold')),
+  priority text default 'Medium' check (priority in ('Critical', 'High', 'Medium', 'Low')),
+  description text,
+  response text,
+  raised_date date default current_date,
+  response_due date,
+  response_received date,
+  created_by uuid references public.profiles(id),
+  created_at timestamptz default now()
+);
+
+-- Material Approval Tracker
+create table if not exists public.material_approvals (
+  id uuid default uuid_generate_v4() primary key,
+  site_id uuid references public.sites(id) on delete cascade,
+  site_name text not null,
+  material_name text not null,      -- Flooring / False Ceiling / Electrical / HVAC / Signage
+  category text,
+  specification text,
+  submitted_by text,                -- Vendor name
+  submitted_date date,
+  status text default 'Pending' check (status in ('Pending', 'Under Review', 'Approved', 'Rejected', 'Resubmit')),
+  reviewed_by text,
+  review_date date,
+  remarks text,
+  sample_photo_url text,
+  created_at timestamptz default now()
+);
+
+-- Milestone Gate Checklist (per site, industry-standard construction gates)
+create table if not exists public.milestone_gates (
+  id uuid default uuid_generate_v4() primary key,
+  site_id uuid references public.sites(id) on delete cascade,
+  site_name text not null,
+  gate_name text not null,          -- e.g. 'Civil Handover', 'MEP Rough-in', 'False Ceiling', 'SAT Ready'
+  gate_order integer default 0,
+  is_done boolean default false,
+  done_date date,
+  done_by text,
+  remarks text,
+  created_at timestamptz default now()
+);
+
+-- Default milestone gates (run once per site — call via app)
+-- Standard CARS24 construction milestone sequence:
+-- 1. Site Handover from Civil
+-- 2. Electrical Rough-in Complete
+-- 3. HVAC / MEP Rough-in Complete
+-- 4. False Ceiling Grid Up
+-- 5. Flooring Laid
+-- 6. Joinery / Furniture Installation
+-- 7. Branding / Signage Complete
+-- 8. IT Infrastructure Ready
+-- 9. SAT Punch List Cleared
+-- 10. UAT Ready
+
+-- RLS for construction tables
+alter table public.rfis enable row level security;
+alter table public.material_approvals enable row level security;
+alter table public.milestone_gates enable row level security;
+
+create policy "rfis_select" on public.rfis for select to authenticated using (true);
+create policy "rfis_insert" on public.rfis for insert to authenticated with check (true);
+create policy "rfis_update" on public.rfis for update to authenticated using (true);
+
+create policy "materials_select" on public.material_approvals for select to authenticated using (true);
+create policy "materials_insert" on public.material_approvals for insert to authenticated with check (true);
+create policy "materials_update" on public.material_approvals for update to authenticated using (true);
+
+create policy "gates_select" on public.milestone_gates for select to authenticated using (true);
+create policy "gates_insert" on public.milestone_gates for insert to authenticated with check (true);
+create policy "gates_update" on public.milestone_gates for update to authenticated using (true);
+
+-- ─────────────────────────────────────────────────────────────────────────────
 -- SEED: Initial admin user
 -- (After running schema, go to Supabase → Authentication → Invite User)
 -- Then run: update public.profiles set role = 'admin' where email = 'vicky.bhardwaj@cars24.com';

@@ -458,15 +458,51 @@ export default {
       if (gPath === '/pf-attendance') return handlePFAttendance(request, env);
       return handleGet(request, env);
     }
+    if (request.method === 'GET') {
+      const gPath2 = new URL(request.url).pathname;
+      if (gPath2.startsWith('/photos/')) return handlePhotoGet(request, env);
+    }
     if (request.method === 'POST') {
       const path = new URL(request.url).pathname;
-      if (path === '/upload')   return handleUpload(request, env);
-      if (path === '/verify')   return handleVerify(request, env);
-      if (path === '/mappings') return handleMappings(request, env);
-      if (path === '/')         return handlePostLegacy(request, env);
+      if (path === '/upload')        return handleUpload(request, env);
+      if (path === '/verify')        return handleVerify(request, env);
+      if (path === '/mappings')      return handleMappings(request, env);
+      if (path === '/photo-upload')  return handlePhotoUpload(request, env);
+      if (path === '/')              return handlePostLegacy(request, env);
 
       return json(404, { success: false, error: 'Unknown POST endpoint' });
     }
     return json(405, { success: false, error: 'Method not allowed' });
   },
 };
+
+// ── Photo upload: POST /photo-upload ─────────────────────────────
+// Headers: Authorization: Basic ..., X-Site-Name, X-Photo-Date, X-File-Name
+// Body: raw JPEG blob (already compressed client-side)
+async function handlePhotoUpload(request, env) {
+  const creds = parseBasicAuth(request);
+  if (!creds || !checkAuth(env, creds.user, creds.pass)) {
+    return json(401, { success: false, error: 'Unauthorized' });
+  }
+  const siteName  = (request.headers.get('X-Site-Name')  || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  const photoDate = (request.headers.get('X-Photo-Date') || new Date().toISOString().split('T')[0]);
+  const fileName  = (request.headers.get('X-File-Name')  || Date.now() + '.jpg').replace(/[^a-zA-Z0-9._-]/g, '_');
+  const key = `photos/${siteName}/${photoDate}/${fileName}`;
+  const body = await request.arrayBuffer();
+  if (!body || body.byteLength === 0) return json(400, { success: false, error: 'Empty body' });
+  if (body.byteLength > 5 * 1024 * 1024) return json(413, { success: false, error: 'File too large (max 5MB after compression)' });
+  await env.BUCKET.put(key, body, { httpMetadata: { contentType: 'image/jpeg' } });
+  return json(200, { success: true, key, size_kb: Math.round(body.byteLength / 1024) });
+}
+
+// ── Photo get: GET /photos/<key> ────────────────────────────────
+async function handlePhotoGet(request, env) {
+  const url   = new URL(request.url);
+  const key   = decodeURIComponent(url.pathname.replace(/^\/photos\//, ''));
+  if (!key) return json(400, { success: false, error: 'Missing key' });
+  const obj = await env.BUCKET.get(key);
+  if (!obj) return json(404, { success: false, error: 'Not found' });
+  return new Response(obj.body, {
+    headers: { 'Content-Type': 'image/jpeg', 'Cache-Control': 'public, max-age=86400', ...CORS_HEADERS }
+  });
+}

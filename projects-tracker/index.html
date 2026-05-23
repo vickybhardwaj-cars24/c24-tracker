@@ -121,7 +121,7 @@ td{padding:7px 12px;vertical-align:middle}
 .r3{background:#fef9c3;color:#ca8a04}.r4{background:#dcfce7;color:#16a34a}
 .r5{background:#f0fdf4;color:#15803d}.r0{background:var(--surface);color:var(--muted)}
 #sv{display:none;padding:14px 20px}#sv.show{display:block}
-#suv,#taskv,#pmsv,#tickv,#slackv,#bdv,#attv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#bdv.show,#attv.show{display:block}
+#suv,#taskv,#pmsv,#tickv,#slackv,#bdv,#attv,#adminv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#bdv.show,#attv.show,#adminv.show{display:block}
 #calv{display:none;padding:14px 20px}#calv.show{display:block}
 #inv{display:none}#inv.show{display:block}
 #warnv{display:none;padding:14px 20px}#warnv.show{display:block}
@@ -591,6 +591,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
     <button class="vtab" onclick="setView('bdv',this)">🏗️ BD</button>
     <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
+    <button class="vtab" id="tab-adminv" data-admin-only="true" onclick="setView('adminv',this)">⚙ Admin</button>
   </div>
   <span class="cchip" id="cchip"></span>
 
@@ -631,6 +632,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 </div>
 <div id="tickv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="attv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
+<div id="adminv" style="padding:16px 20px;overflow-y:auto;flex:1;display:none"></div>
 <div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="bdv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
 
@@ -950,34 +952,48 @@ async function compressImage(file, maxWidthPx, qualityPct) {
 }
 
 async function uploadSitePhoto(file, siteName, siteId, caption) {
-  if (!__sbClient || !__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
+  if (!__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
+  var authState = C24Uploader ? C24Uploader.getAuth() : null;
+  if (!authState || !authState.username) { toast('Login with username/password first to enable photo uploads', 'err'); return null; }
   try {
     var compressed = await compressImage(file, 1200, 0.72);
     var dateStr = new Date().toISOString().split('T')[0];
     var safeSite = (siteName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
-    var fileName = safeSite + '_' + dateStr + '_' + Date.now() + '.jpg';
-    var storagePath = 'sites/' + (siteId || safeSite) + '/' + dateStr + '/' + fileName;
+    var fileName = safeSite + '_' + Date.now() + '.jpg';
+    var r2Key = 'photos/' + safeSite + '/' + dateStr + '/' + fileName;
 
-    var uploadResult = await __sbClient.storage.from('site-photos').upload(storagePath, compressed.blob, {
-      contentType: 'image/jpeg', upsert: false
+    // Upload to Cloudflare R2 via Worker
+    var workerBase = WORKER_URL.replace(/\/+$/, '');
+    var uploadResp = await fetch(workerBase + '/photo-upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(authState.username + ':' + authState.password),
+        'X-Site-Name': safeSite,
+        'X-Photo-Date': dateStr,
+        'X-File-Name': fileName,
+        'Content-Type': 'image/jpeg'
+      },
+      body: compressed.blob
     });
-    if (uploadResult.error) throw uploadResult.error;
+    if (!uploadResp.ok) { var err = await uploadResp.json(); throw new Error(err.error || 'Upload failed'); }
 
-    var dbResult = await __sbClient.from('site_photos').insert({
-      site_id: siteId || null,
-      site_name: siteName,
-      photo_date: dateStr,
-      storage_path: storagePath,
-      original_name: file.name,
-      file_size_kb: compressed.sizeKb,
-      width: compressed.width,
-      height: compressed.height,
-      caption: caption || '',
-      uploaded_by: __sbUser.id,
-      uploaded_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-    });
-    if (dbResult.error) throw dbResult.error;
-    return storagePath;
+    // Record metadata in Supabase
+    if (__sbClient) {
+      await __sbClient.from('site_photos').insert({
+        site_id: siteId || null,
+        site_name: siteName,
+        photo_date: dateStr,
+        storage_path: r2Key,
+        original_name: file.name,
+        file_size_kb: compressed.sizeKb,
+        width: compressed.width,
+        height: compressed.height,
+        caption: caption || '',
+        uploaded_by: __sbUser.id,
+        uploaded_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+      });
+    }
+    return r2Key;
   } catch(e) {
     toast('Photo upload failed: ' + (e.message || e), 'err');
     return null;
@@ -994,9 +1010,10 @@ async function getSitePhotos(siteName) {
 }
 
 async function getPhotoUrl(storagePath) {
-  if (!__sbClient || !storagePath) return null;
-  var r = await __sbClient.storage.from('site-photos').createSignedUrl(storagePath, 3600);
-  return r.data ? r.data.signedUrl : null;
+  if (!storagePath) return null;
+  // Photos served directly from Cloudflare Worker R2
+  var workerBase = WORKER_URL.replace(/\/+$/, '');
+  return workerBase + '/photos/' + encodeURIComponent(storagePath);
 }
 
 // ── Photo section for modal ──────────────────────────────────────
@@ -1496,8 +1513,9 @@ function setView(v,btn){
   if(v==='slackv') renderSlackTab();
   if(v==='bdv') renderBDTab();
   if(v==='attv') renderAttendanceTab();
+  if(v==='adminv') renderAdminTab();
   if(v==='suv') setTimeout(function(){renderSatUat();},0);
-  ['tv','suv','inv','taskv','pmsv','tickv','slackv','bdv','attv'].forEach(id=>{
+  ['tv','suv','inv','taskv','pmsv','tickv','slackv','bdv','attv','adminv'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     if(id==='tv'){el.classList.toggle('hide',v!=='tv');}
@@ -2377,6 +2395,16 @@ function openModal(idx){
     </div>
     <div class="msec" style="margin-top:4px">
       <div id="photo-sec-${idx}" style="padding:2px 0"></div>
+    </div>
+    <div class="msec" style="margin-top:4px" id="const-pm-sec-${idx}">
+      <div style="border-bottom:2px solid var(--border);margin-bottom:12px;display:flex;gap:0">
+        <button onclick="showConstTab('gates','${idx}')" id="ctab-gates-${idx}" style="padding:7px 13px;font-size:11px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent);background:none;margin-bottom:-2px">🏗 Milestones</button>
+        <button onclick="showConstTab('rfi','${idx}')" id="ctab-rfi-${idx}" style="padding:7px 13px;font-size:11px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);background:none;margin-bottom:-2px">📋 RFI Log</button>
+        <button onclick="showConstTab('materials','${idx}')" id="ctab-materials-${idx}" style="padding:7px 13px;font-size:11px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);background:none;margin-bottom:-2px">🧱 Materials</button>
+      </div>
+      <div id="const-gates-${idx}"></div>
+      <div id="const-rfi-${idx}" style="display:none"></div>
+      <div id="const-materials-${idx}" style="display:none"></div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
   // Load photos async after modal opens
@@ -2385,6 +2413,10 @@ function openModal(idx){
     var siteName2 = r['Site Name'] || '';
     renderPhotoSection(siteName2, null, photoContainer);
   }
+  // Load construction PM sections
+  var siteNameConst = r['Site Name'] || '';
+  renderMilestoneGates(siteNameConst, idx);
+  showConstTab('gates', String(idx));
   // Override drive link with smart matching
   var mdrive = document.getElementById('mdrive');
   if (mdrive) {
@@ -2439,10 +2471,13 @@ function addU(idx){
   if(!d||!t2){toast('Fill date and update','err');return;}
   if(!DATE_COLS.includes(d)) DATE_COLS.push(d);
   allData[idx][d]=t2;
-  // Persist manual edit
   const sn=(allData[idx]['Site Name']||'').trim();
   if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=t2; saveHOTPUpdates(); }
-  toast('Added','ok');
+  // Also save to Supabase with attribution
+  if (__sbUser && sn) {
+    saveUpdateToSupabase(null, sn, '['+d+'] '+t2);
+  }
+  toast('Update saved' + (__sbUser ? ' & tracked ✓' : ''), 'ok');
   openModal(idx);
   applyFilters();
 }
@@ -4567,6 +4602,206 @@ function copyToClipboard(elId){
   navigator.clipboard.writeText(el.textContent).then(function(){toast('Copied for Slack','ok');});
 }
 
+// ═══════════════════════════════════════════════════════════════
+// CONSTRUCTION PM FEATURES — Milestones, RFI, Materials
+// ═══════════════════════════════════════════════════════════════
+
+var DEFAULT_GATES = [
+  'Site Handover from Civil',
+  'Electrical Rough-in Complete',
+  'HVAC / MEP Rough-in Complete',
+  'False Ceiling Grid Up',
+  'Flooring Laid',
+  'Joinery / Furniture Installation',
+  'Branding / Signage Complete',
+  'IT Infrastructure Ready',
+  'SAT Punch List Cleared',
+  'UAT Ready'
+];
+
+function showConstTab(tab, idx) {
+  ['gates','rfi','materials'].forEach(function(t) {
+    var el = document.getElementById('const-'+t+'-'+idx);
+    var btn = document.getElementById('ctab-'+t+'-'+idx);
+    if (el) el.style.display = t === tab ? '' : 'none';
+    if (btn) {
+      btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === tab ? 'var(--accent)' : 'var(--muted)';
+    }
+  });
+  if (tab === 'rfi') renderRFILog(idx);
+  if (tab === 'materials') renderMaterialApprovals(idx);
+}
+
+async function renderMilestoneGates(siteName, idx) {
+  var el = document.getElementById('const-gates-'+idx); if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Loading…</div>';
+  var gates = [];
+  if (__sbClient) {
+    var r = await __sbClient.from('milestone_gates').select('*').eq('site_name', siteName).order('gate_order');
+    if (r.data && r.data.length) {
+      gates = r.data;
+    } else {
+      // Seed default gates for this site
+      var inserts = DEFAULT_GATES.map(function(g, i) { return { site_name: siteName, gate_name: g, gate_order: i+1 }; });
+      var ins = await __sbClient.from('milestone_gates').insert(inserts).select();
+      gates = (ins.data || []);
+    }
+  }
+  if (!gates.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">No milestone data. Sign in to track milestones.</div>'; return; }
+  var done = gates.filter(function(g) { return g.is_done; }).length;
+  var pct = Math.round(done / gates.length * 100);
+  var barClr = pct === 100 ? '#16a34a' : pct >= 60 ? '#2563eb' : '#d97706';
+  el.innerHTML = '<div style="margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600">Construction Progress</span><span style="font-size:12px;font-weight:700;color:'+barClr+'">'+done+'/'+gates.length+' ('+pct+'%)</span></div>'
+    + '<div style="height:6px;background:var(--surface);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barClr+';border-radius:3px;transition:width .3s"></div></div>'
+    + '</div>'
+    + gates.map(function(g) {
+      var safeId = g.id;
+      return '<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--border)">'
+        + '<input type="checkbox"' + (g.is_done ? ' checked' : '') + ' onchange="toggleGate(\''+safeId+'\',this.checked,\''+idx+'\')" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">'
+        + '<span style="font-size:12px;flex:1;'+(g.is_done?'text-decoration:line-through;color:var(--muted)':'')+'">'+ esc(g.gate_name) +'</span>'
+        + (g.done_date ? '<span style="font-size:10px;color:var(--muted);white-space:nowrap">'+g.done_date+'</span>' : '')
+        + '</div>';
+    }).join('');
+}
+
+async function toggleGate(gateId, isDone, idx) {
+  if (!__sbClient || !__sbUser) { toast('Sign in to update milestones', 'err'); return; }
+  var today = new Date().toISOString().split('T')[0];
+  await __sbClient.from('milestone_gates').update({
+    is_done: isDone,
+    done_date: isDone ? today : null,
+    done_by: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  }).eq('id', gateId);
+  // Refresh the gates view
+  var siteNameConst = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  if (siteNameConst) renderMilestoneGates(siteNameConst, idx);
+  toast(isDone ? '✓ Milestone marked done' : 'Milestone unmarked', 'ok');
+}
+
+async function renderRFILog(idx) {
+  var el = document.getElementById('const-rfi-'+idx); if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Loading…</div>';
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var rfis = [];
+  if (__sbClient && siteName) {
+    var r = await __sbClient.from('rfis').select('*').eq('site_name', siteName).order('created_at', { ascending: false });
+    rfis = r.data || [];
+  }
+  var statusColor = { Open:'#dc2626', Answered:'#d97706', Closed:'#16a34a', 'On Hold':'#6b7280' };
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<span style="font-size:12px;font-weight:700">RFI Log <span style="font-size:10px;font-weight:400;color:var(--muted)">(Request For Information)</span></span>'
+    + (__sbUser ? '<button onclick="openAddRFI(\''+idx+'\')" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">+ Add RFI</button>' : '')
+    + '</div>'
+    + '<div id="add-rfi-form-'+idx+'" style="display:none;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:10px">'
+    + '<input id="rfi-subj-'+idx+'" type="text" placeholder="Subject / Question" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;margin-bottom:6px;font-family:Inter,sans-serif;outline:none">'
+    + '<div style="display:flex;gap:6px;margin-bottom:6px">'
+    + '<input id="rfi-to-'+idx+'" type="text" placeholder="Raised to (e.g. Design team)" style="flex:1;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none">'
+    + '<select id="rfi-pri-'+idx+'" style="padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none;background:var(--bg)">'
+    + '<option>Critical</option><option selected>High</option><option>Medium</option><option>Low</option>'
+    + '</select></div>'
+    + '<textarea id="rfi-desc-'+idx+'" placeholder="Description / details…" rows="2" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none;resize:vertical;margin-bottom:6px"></textarea>'
+    + '<div style="display:flex;gap:6px"><button onclick="submitRFI(\''+idx+'\')" style="padding:5px 12px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">Submit RFI</button>'
+    + '<button onclick="document.getElementById(\'add-rfi-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;font-size:11px;cursor:pointer">Cancel</button></div>'
+    + '</div>'
+    + (!rfis.length ? '<div style="color:var(--muted);font-size:12px;padding:8px 0">No RFIs logged yet.</div>'
+      : rfis.map(function(rfi) {
+        var sc = statusColor[rfi.status] || '#6b7280';
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
+          + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+          + '<span style="font-size:11px;font-weight:700">'+esc(rfi.rfi_number || 'RFI')+'</span>'
+          + '<span style="flex:1;font-size:12px;font-weight:600">'+esc(rfi.subject||'—')+'</span>'
+          + '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+sc+'22;color:'+sc+'">'+esc(rfi.status)+'</span>'
+          + '</div>'
+          + '<div style="font-size:10px;color:var(--muted)">To: '+esc(rfi.raised_to||'—')+' · '+esc(rfi.raised_date||'—')+'</div>'
+          + (rfi.description ? '<div style="font-size:11px;color:var(--text);margin-top:2px">'+esc(rfi.description.substring(0,100))+'</div>' : '')
+          + '</div>';
+      }).join(''));
+}
+
+function openAddRFI(idx) {
+  var el = document.getElementById('add-rfi-form-'+idx);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitRFI(idx) {
+  if (!__sbClient || !__sbUser) { toast('Sign in first', 'err'); return; }
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var subj = (document.getElementById('rfi-subj-'+idx).value || '').trim();
+  var to   = (document.getElementById('rfi-to-'+idx).value || '').trim();
+  var pri  = document.getElementById('rfi-pri-'+idx).value;
+  var desc = (document.getElementById('rfi-desc-'+idx).value || '').trim();
+  if (!subj) { toast('Enter RFI subject', 'err'); return; }
+  // Auto-number RFI
+  var count = await __sbClient.from('rfis').select('id', { count: 'exact', head: true }).eq('site_name', siteName);
+  var num = 'RFI-' + String((count.count || 0) + 1).padStart(3, '0');
+  var r = await __sbClient.from('rfis').insert({
+    site_name: siteName, rfi_number: num, subject: subj, raised_to: to,
+    priority: pri, description: desc,
+    raised_by: (__sbProfile && __sbProfile.full_name) || __sbUser.email,
+    raised_date: new Date().toISOString().split('T')[0],
+    created_by: __sbUser.id
+  });
+  if (r.error) { toast('Failed: '+r.error.message, 'err'); return; }
+  toast('✓ RFI '+num+' logged', 'ok');
+  document.getElementById('add-rfi-form-'+idx).style.display = 'none';
+  renderRFILog(idx);
+}
+
+async function renderMaterialApprovals(idx) {
+  var el = document.getElementById('const-materials-'+idx); if (!el) return;
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var items = [];
+  if (__sbClient && siteName) {
+    var r = await __sbClient.from('material_approvals').select('*').eq('site_name', siteName).order('created_at', { ascending: false });
+    items = r.data || [];
+  }
+  var statusColor = { Pending:'#d97706', 'Under Review':'#2563eb', Approved:'#16a34a', Rejected:'#dc2626', Resubmit:'#7c3aed' };
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<span style="font-size:12px;font-weight:700">Material Approvals</span>'
+    + (__sbUser ? '<button onclick="openAddMaterial(\''+idx+'\')" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">+ Add</button>' : '')
+    + '</div>'
+    + '<div id="add-mat-form-'+idx+'" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:10px">'
+    + '<input id="mat-name-'+idx+'" type="text" placeholder="Material (e.g. Flooring tiles, False ceiling)" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;margin-bottom:6px;font-family:Inter,sans-serif;outline:none">'
+    + '<input id="mat-vendor-'+idx+'" type="text" placeholder="Vendor / Supplier" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;margin-bottom:6px;font-family:Inter,sans-serif;outline:none">'
+    + '<textarea id="mat-spec-'+idx+'" placeholder="Specification / notes" rows="2" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none;resize:vertical;margin-bottom:6px"></textarea>'
+    + '<div style="display:flex;gap:6px"><button onclick="submitMaterial(\''+idx+'\')" style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">Submit</button>'
+    + '<button onclick="document.getElementById(\'add-mat-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;font-size:11px;cursor:pointer">Cancel</button></div>'
+    + '</div>'
+    + (!items.length ? '<div style="color:var(--muted);font-size:12px;padding:8px 0">No material approvals tracked yet.</div>'
+      : items.map(function(m) {
+        var sc = statusColor[m.status] || '#6b7280';
+        return '<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">'
+          + '<div style="flex:1"><div style="font-size:12px;font-weight:600">'+esc(m.material_name)+'</div>'
+          + '<div style="font-size:10px;color:var(--muted)">'+esc(m.submitted_by||'—')+(m.submitted_date?' · '+m.submitted_date:'')+'</div></div>'
+          + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+sc+'22;color:'+sc+'">'+esc(m.status)+'</span>'
+          + '</div>';
+      }).join(''));
+}
+
+function openAddMaterial(idx) {
+  var el = document.getElementById('add-mat-form-'+idx);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitMaterial(idx) {
+  if (!__sbClient || !__sbUser) { toast('Sign in first', 'err'); return; }
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var name   = (document.getElementById('mat-name-'+idx).value || '').trim();
+  var vendor = (document.getElementById('mat-vendor-'+idx).value || '').trim();
+  var spec   = (document.getElementById('mat-spec-'+idx).value || '').trim();
+  if (!name) { toast('Enter material name', 'err'); return; }
+  var r = await __sbClient.from('material_approvals').insert({
+    site_name: siteName, material_name: name, submitted_by: vendor,
+    specification: spec, submitted_date: new Date().toISOString().split('T')[0]
+  });
+  if (r.error) { toast('Failed: '+r.error.message, 'err'); return; }
+  toast('✓ Material logged for approval', 'ok');
+  document.getElementById('add-mat-form-'+idx).style.display = 'none';
+  renderMaterialApprovals(idx);
+}
+
 // ═══ VENDOR DELAY MAIL ═══════════════════════════════════════════
 function vendorDelayMail(r){
   var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
@@ -5850,6 +6085,131 @@ function loadAttendanceFromOrigin() {
     .catch(function(err){ throw err; });
 }
 loadAttendanceFromPF();
+
+// ═══════════════════════════════════════════════════════════════
+// ADMIN TAB — Team Management + Audit Log
+// ═══════════════════════════════════════════════════════════════
+function renderAdminTab() {
+  var el = document.getElementById('adminv'); if (!el) return;
+  if (__sbRole !== 'admin') { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Admin access only.</div>'; return; }
+  el.innerHTML = '<div style="max-width:900px;margin:0 auto">'
+    + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">⚙ Admin Panel</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:20px">Manage team logins, view edit history, control access</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
+    // Invite card
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px">'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Invite Team Member</div>'
+    + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Full Name</label>'
+    + '<input id="inv-name" type="text" placeholder="e.g. Kamal Saini" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:8px;outline:none">'
+    + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Work Email</label>'
+    + '<input id="inv-email" type="email" placeholder="pm@cars24.com" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:8px;outline:none">'
+    + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Role</label>'
+    + '<select id="inv-role" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:12px;outline:none;background:var(--bg)">'
+    + '<option value="pm">PM — Can update their sites</option>'
+    + '<option value="viewer">Viewer — Read only</option>'
+    + '<option value="admin">Admin — Full access</option>'
+    + '</select>'
+    + '<button onclick="doInviteTeamMember()" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif" id="inv-btn">📧 Send Invite</button>'
+    + '<div id="inv-msg" style="display:none;font-size:11px;margin-top:8px;padding:7px 9px;border-radius:6px"></div>'
+    + '</div>'
+    // Team list card
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px">'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:12px">👤 Team Members</div>'
+    + '<div id="team-list"><div style="color:var(--muted);font-size:12px">Loading…</div></div>'
+    + '</div>'
+    + '</div>'
+    // Audit log
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px">'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:12px">📋 Recent Edit History</div>'
+    + '<div id="audit-list"><div style="color:var(--muted);font-size:12px">Loading…</div></div>'
+    + '</div>'
+    + '</div>';
+  loadTeamList();
+  loadAuditLog();
+}
+
+async function doInviteTeamMember() {
+  var name  = (document.getElementById('inv-name').value || '').trim();
+  var email = (document.getElementById('inv-email').value || '').trim();
+  var role  = document.getElementById('inv-role').value;
+  var msg   = document.getElementById('inv-msg');
+  var btn   = document.getElementById('inv-btn');
+  if (!name || !email) { showInvMsg('Enter name and email.', 'err'); return; }
+  if (!email.includes('@')) { showInvMsg('Enter a valid email.', 'err'); return; }
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    // Supabase invite via admin REST
+    var r = await fetch(SUPABASE_URL + '/auth/v1/invite', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON_KEY, 'Authorization': 'Bearer ' + (await __sbClient.auth.getSession()).data.session.access_token },
+      body: JSON.stringify({ email: email, data: { full_name: name, role: role } })
+    });
+    var data = await r.json();
+    if (!r.ok) throw new Error(data.msg || data.message || 'Invite failed');
+    // Pre-set role in profiles (upsert when they sign up via trigger)
+    // Store pending role in a temp table or just note it for manual update
+    showInvMsg('✓ Invite sent to ' + email + '! They will get an email to set their password.', 'ok');
+    document.getElementById('inv-name').value = '';
+    document.getElementById('inv-email').value = '';
+    // Reload team list
+    setTimeout(loadTeamList, 1000);
+  } catch(e) {
+    showInvMsg(e.message || 'Failed to send invite.', 'err');
+  }
+  btn.disabled = false; btn.textContent = '📧 Send Invite';
+}
+
+function showInvMsg(text, type) {
+  var el = document.getElementById('inv-msg');
+  if (!el) return;
+  el.textContent = text;
+  el.style.display = '';
+  el.style.background = type === 'ok' ? '#f0fdf4' : '#fef2f2';
+  el.style.color = type === 'ok' ? '#16a34a' : '#dc2626';
+  el.style.border = '1px solid ' + (type === 'ok' ? '#86efac' : '#fecaca');
+}
+
+async function loadTeamList() {
+  var el = document.getElementById('team-list'); if (!el || !__sbClient) return;
+  var r = await __sbClient.from('profiles').select('*').order('created_at');
+  if (r.error || !r.data || !r.data.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">No team members yet.</div>'; return; }
+  var roleBg = { admin: '#eff6ff', pm: '#f0fdf4', viewer: '#f9fafb' };
+  var roleColor = { admin: '#2563eb', pm: '#16a34a', viewer: '#6b7280' };
+  el.innerHTML = r.data.map(function(p) {
+    return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">'
+      + '<div>'
+      + '<div style="font-size:12px;font-weight:600">' + esc(p.full_name || p.email) + '</div>'
+      + '<div style="font-size:10px;color:var(--muted)">' + esc(p.email) + '</div>'
+      + '</div>'
+      + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:' + (roleBg[p.role]||'#f9fafb') + ';color:' + (roleColor[p.role]||'#6b7280') + '">' + (p.role || 'viewer') + '</span>'
+      + '</div>';
+  }).join('');
+}
+
+async function loadAuditLog() {
+  var el = document.getElementById('audit-list'); if (!el || !__sbClient) return;
+  var r = await __sbClient.from('audit_log').select('*').order('changed_at', { ascending: false }).limit(50);
+  if (r.error || !r.data || !r.data.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">No edits recorded yet.</div>'; return; }
+  el.innerHTML = '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+    + '<thead><tr style="background:var(--surface);border-bottom:1px solid var(--border)">'
+    + '<th style="padding:6px 10px;text-align:left;font-weight:600;color:var(--muted)">When</th>'
+    + '<th style="padding:6px 10px;text-align:left;font-weight:600;color:var(--muted)">Who</th>'
+    + '<th style="padding:6px 10px;text-align:left;font-weight:600;color:var(--muted)">Site</th>'
+    + '<th style="padding:6px 10px;text-align:left;font-weight:600;color:var(--muted)">Field</th>'
+    + '<th style="padding:6px 10px;text-align:left;font-weight:600;color:var(--muted)">New Value</th>'
+    + '</tr></thead><tbody>'
+    + r.data.map(function(a) {
+      var when = a.changed_at ? new Date(a.changed_at).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+      return '<tr style="border-bottom:1px solid var(--border)">'
+        + '<td style="padding:5px 10px;color:var(--muted);white-space:nowrap">' + when + '</td>'
+        + '<td style="padding:5px 10px;font-weight:600">' + esc(a.changed_by_name || '—') + '</td>'
+        + '<td style="padding:5px 10px">' + esc(a.site_name || '—') + '</td>'
+        + '<td style="padding:5px 10px;color:var(--muted)">' + esc(a.field_name || '—') + '</td>'
+        + '<td style="padding:5px 10px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + esc((a.new_value || '').substring(0, 80)) + '</td>'
+        + '</tr>';
+    }).join('')
+    + '</tbody></table></div>';
+}
 
 function renderAttendanceTab() {
   var el = document.getElementById('attv'); if (!el) return;
