@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.43</title>
+<title>Cars24 Projects Tracker v4.44</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -872,7 +872,10 @@ function onSbLoginSuccess() {
         applyHOTPUpdates();
         var c = document.getElementById('cchip');
         if (c) c.textContent = allData.length + ' sites';
-        loadSupabaseSiteFields().then(function(){ return loadSupabaseUpdates(); }).then(function(){ buildFilters(); renderKPIs(); renderAll(); });
+        loadSupabaseSiteFields()
+          .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
+          .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
+          .then(function(){ buildFilters(); renderKPIs(); renderAll(); });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
       }
@@ -3265,8 +3268,8 @@ function saveU(d,idx){
   allData[idx][d]=v;
   // Persist manual edit
   const sn=(allData[idx]['Site Name']||'').trim();
-  if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=v; saveHOTPUpdates(); }
-  // Also persist to Supabase site_updates
+  if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=v; }
+  // Persist to Supabase site_updates (source of truth; Cloudflare skipped)
   if (__sbUser && sn) saveUpdateToSupabase(null, sn, '['+d+'] '+v);
   const t=document.getElementById(`utxt-${k}-${idx}`);
   if(t){t.textContent=v;t.style.display='block';}
@@ -3282,11 +3285,9 @@ function addU(idx){
   if(!DATE_COLS.includes(d)) DATE_COLS.push(d);
   allData[idx][d]=t2;
   const sn=(allData[idx]['Site Name']||'').trim();
-  if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=t2; saveHOTPUpdates(); }
-  // Also save to Supabase with attribution
-  if (__sbUser && sn) {
-    saveUpdateToSupabase(null, sn, '['+d+'] '+t2);
-  }
+  if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=t2; }
+  // Persist to Supabase site_updates (source of truth; Cloudflare skipped)
+  if (__sbUser && sn) saveUpdateToSupabase(null, sn, '['+d+'] '+t2);
   toast('Update saved' + (__sbUser ? ' & tracked ✓' : ''), 'ok');
   openModal(idx);
   applyFilters();
