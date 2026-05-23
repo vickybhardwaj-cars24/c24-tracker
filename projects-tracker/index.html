@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.11</title>
+<title>Cars24 Projects Tracker v4.12</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2456,6 +2456,7 @@ function renderSnagTab(){
           '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:#2563eb;text-transform:uppercase">% Closed</th>'+
           '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Avg Days</th>'+
           '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Top Pending Vendor</th>'+
+          '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Notice</th>'+
         '</tr></thead>'+
         '<tbody>'+
           sites.map(function(s){
@@ -2488,6 +2489,7 @@ function renderSnagTab(){
               '<td style="padding:7px 10px;text-align:center"><span style="font-weight:700;color:'+pc+'">'+s.pctClosed+'%</span></td>'+
               '<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+(s.avgDays!=null?s.avgDays+'d':'—')+'</td>'+
               '<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+(s.topOwner?esc(s.topOwner[0])+' ('+s.topOwner[1]+')':'—')+'</td>'+
+              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a>':'—')+'</td>'+
             '</tr>';
           }).join('')+
         '</tbody>'+
@@ -2515,7 +2517,10 @@ function showSnagDetail(site){
     '<div class="igc" style="padding:14px">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
     '<div class="reg-section-title" style="margin-bottom:0">🔧 '+esc(site)+' — Full Snag List</div>'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+    '<a href="'+snagVendorMailUrl(site)+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#dc2626;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Snag Notice to Vendor</a>'+
     '<button class="btn btn-o" onclick="document.getElementById(\'snag-detail-panel\').style.display=\'none\'" style="font-size:11px">✕ Close</button>'+
+    '</div>'+
     '</div>'+
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'+
     '<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">'+
@@ -4064,6 +4069,43 @@ function vendorDelayMail(r){
   var revLine=fmtRevHistory(r)?'\nRevision History:\n'+fmtRevHistory(r)+'\n':'\nNo revision history.\n';
   var subj='UAT Delay Notice - '+site+' - '+od+'d Overdue';
   var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+15d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects';
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+
+// ═══ SNAG VENDOR MAIL ════════════════════════════════════════════
+function snagVendorMailUrl(site){
+  var rows=SNAG_DATA[site]||[];
+  var open=rows.filter(function(r){
+    var s=(r.status||'').toLowerCase();
+    return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';
+  });
+  // Find matching allData row for site context
+  var pr=allData.find(function(r){return (r['Site Name']||'').trim()===site.trim();})||{};
+  var owner=pr['Owner']||'PM';
+  var vendor=pr['Vendor']||'Vendor';
+  var satDate=pr['SAT Date']||'—';
+  var uatD=pd(pr['SAT Date']);
+  var uatTgt=uatD?new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var today=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  var subj='Post-SAT Snag Closure Notice — '+site+' — '+open.length+' Open Items';
+  var snagLines=open.map(function(r,i){
+    var area=r.area||'General';
+    var desc=r.desc||r.title||'—';
+    var status=r.status||'Pending';
+    return '  '+(i+1)+'. ['+area+'] '+desc+' (Status: '+status+')';
+  }).join('\n');
+  var body='Dear '+vendor+' Team,\n\n'
+    +'SAT inspection for '+site+' has been completed on '+satDate+'. As per our site inspection, the following '
+    +open.length+' snag item'+(open.length!==1?'s remain':'s remain')+'s pending closure before UAT sign-off.\n\n'
+    +'OPEN SNAG LIST — '+site+':\n'+snagLines+'\n\n'
+    +'UAT Target Date: '+uatTgt+'\n\n'
+    +'You are requested to:\n'
+    +'  1. Resolve all open snags on priority before the UAT date.\n'
+    +'  2. Update status for each snag item in the tracker.\n'
+    +'  3. Intimate the site PM ('+owner+') once all snags are addressed for re-inspection scheduling.\n\n'
+    +'Non-closure of snags by UAT date will be noted as a performance issue under your contract and may result in penalty deductions.\n\n'
+    +'This is a system-generated notice. For queries, contact '+owner+', CARS24 Projects.\n\n'
+    +'Regards,\n'+owner+'\nCARS24 Projects Team\nDate: '+today;
   return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
 
