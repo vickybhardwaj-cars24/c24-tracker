@@ -483,13 +483,10 @@ export default {
     }
     if (request.method === 'GET') {
       const gPath = new URL(request.url).pathname;
-      if (gPath === '/pf-tickets')    return handlePFTickets(request, env);
-      if (gPath === '/pf-attendance') return handlePFAttendance(request, env);
+      if (gPath === '/pf-tickets')         return handlePFTickets(request, env);
+      if (gPath === '/pf-attendance')      return handlePFAttendance(request, env);
+      if (gPath.startsWith('/photos/'))    return handlePhotoGet(request, env);
       return handleGet(request, env);
-    }
-    if (request.method === 'GET') {
-      const gPath2 = new URL(request.url).pathname;
-      if (gPath2.startsWith('/photos/')) return handlePhotoGet(request, env);
     }
     if (request.method === 'POST') {
       const path = new URL(request.url).pathname;
