@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.20</title>
+<title>Cars24 Projects Tracker v4.21</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -799,6 +799,28 @@ function onSbLoginSuccess() {
   // Auto-wire Cloudflare Worker uploads using Supabase JWT token
   _wireWorkerWithSbToken();
   toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
+  // If table is still blank (Worker auth was missing on first load), reload data now
+  if (!__originLoaded) {
+    setTimeout(function() {
+      Promise.all([
+        C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
+        loadHOTPUpdates(),
+        loadSchedData()
+      ]).then(function(results) {
+        var text = results[0];
+        var parsed = parseCSV(text);
+        if (parsed && parsed.length) {
+          __originLoaded = true;
+          allData = parsed.filter(function(r){ return (r['Site Name']||'').trim(); });
+          filteredData = [...allData];
+          applyHOTPUpdates();
+          var c = document.getElementById('cchip');
+          if (c) c.textContent = allData.length + ' sites';
+          loadSupabaseUpdates().then(function(){ buildFilters(); renderKPIs(); renderAll(); });
+        }
+      }).catch(function(e){ console.warn('Post-login reload failed:', e); });
+    }, 500);
+  }
 }
 
 function _wireWorkerWithSbToken() {
