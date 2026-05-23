@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.13</title>
+<title>Cars24 Projects Tracker v4.14</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -507,8 +507,8 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   <div style="background:var(--white);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:360px;max-width:100%;font-family:'Inter',sans-serif;overflow:hidden">
     <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px 22px 16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:3px">🔐 CARS24 Tracker Login</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <img src="../src/logo_white.webp" alt="CARS24" style="height:22px;width:auto;display:block">
           <div style="font-size:11px;color:rgba(255,255,255,.75)" id="login-subtitle">Sign in with your work email</div>
         </div>
         <button onclick="closeLoginModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
@@ -773,11 +773,11 @@ function onSbLoginSuccess() {
   document.getElementById('logout-btn').style.display = '';
   document.getElementById('login-user').textContent = '(' + name + ')';
   document.getElementById('local-upload-lbl').style.display = 'none';
-  document.getElementById('live-upload-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('live-upload-lbl').style.display  = '';
   document.getElementById('snag-local-lbl').style.display   = 'none';
-  document.getElementById('snag-live-lbl').style.display    = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('snag-live-lbl').style.display    = '';
   document.getElementById('ticket-local-lbl').style.display = 'none';
-  document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('ticket-live-lbl').style.display  = '';
   applyRoleBasedView();
   toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
 }
