@@ -121,7 +121,7 @@ td{padding:7px 12px;vertical-align:middle}
 .r3{background:#fef9c3;color:#ca8a04}.r4{background:#dcfce7;color:#16a34a}
 .r5{background:#f0fdf4;color:#15803d}.r0{background:var(--surface);color:var(--muted)}
 #sv{display:none;padding:14px 20px}#sv.show{display:block}
-#suv,#taskv,#pmsv,#tickv,#slackv,#bdv,#attv,#adminv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#bdv.show,#attv.show,#adminv.show{display:block}
+#suv,#taskv,#pmsv,#tickv,#slackv,#attv,#adminv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#attv.show,#adminv.show{display:block}
 #calv{display:none;padding:14px 20px}#calv.show{display:block}
 #inv{display:none}#inv.show{display:block}
 #warnv{display:none;padding:14px 20px}#warnv.show{display:block}
@@ -316,7 +316,7 @@ td{padding:7px 12px;vertical-align:middle}
   .warn-card-top{flex-direction:column;gap:6px}
   .warn-days{font-size:18px}
   .warn-meta{gap:8px}
-  #suv,#taskv,#pmsv,#tickv,#slackv,#bdv,#attv{padding:10px 12px}
+  #suv,#taskv,#pmsv,#tickv,#slackv,#attv{padding:10px 12px}
   #taskv{overflow-y:visible;flex:none}
   .mbody{padding:12px 14px}
   .date-badge,.warn-badge{font-size:11px;padding:4px 8px}
@@ -632,7 +632,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('pmsv',this)">👤 PM Scorecard</button>
     <button class="vtab" onclick="setView('slackv',this)">📣 Slack</button>
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
-    <button class="vtab" onclick="setView('bdv',this)">🏗️ BD</button>
     <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
     <button class="vtab" id="tab-adminv" data-admin-only="true" onclick="setView('adminv',this)">⚙ Admin</button>
   </div>
@@ -677,7 +676,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 <div id="attv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="adminv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
-<div id="bdv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
+</div>
 
 <div class="overlay" id="overlay" onclick="onOvClick(event)">
   <div class="modal">
@@ -1746,18 +1745,18 @@ function setView(v,btn){
   if(v==='pmsv') renderPMScorecard();
   if(v==='tickv') renderTicketTab();
   if(v==='slackv') renderSlackTab();
-  if(v==='bdv') renderBDTab();
+
   if(v==='attv') renderAttendanceTab();
   if(v==='adminv') renderAdminTab();
   if(v==='suv') setTimeout(function(){renderSatUat();},0);
-  ['tv','suv','inv','taskv','pmsv','tickv','slackv','bdv','attv','adminv'].forEach(id=>{
+  ['tv','suv','inv','taskv','pmsv','tickv','slackv','attv','adminv'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     if(id==='tv'){el.classList.toggle('hide',v!=='tv');}
     else{el.classList.toggle('show',v===id);}
   });
   // sync bottom nav
-  var bnavMap={tv:0,suv:1,inv:2,taskv:3,tickv:4,bdv:5};
+  var bnavMap={tv:0,suv:1,inv:2,taskv:3,tickv:4};
   var bbtns=document.querySelectorAll('#bnav button');
   bbtns.forEach(function(b){b.classList.remove('bnav-active');});
   if(bnavMap[v]!==undefined && bbtns[bnavMap[v]]) bbtns[bnavMap[v]].classList.add('bnav-active');
@@ -5488,321 +5487,6 @@ function satDelayMail(r){
 
 
 // ═══════════════════════════════════════════════════════════════
-// BD TRACKER MODULE
-// ═══════════════════════════════════════════════════════════════
-
-// Revised UAT Date: parses PM updates for explicit revised UAT target shared by PM
-// Patterns: "Revised UAT: DD Mon", "UAT revised to DD Mon", "New UAT: DD Mon", "UAT target: DD Mon"
-function getRevisedUATDate(r){
-  var rx=/(?:revised\s+uat(?:\s+date)?|uat\s+(?:revised(?:\s+to)?|target|date\s+revised))\s*[:\-to]*\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
-  var latest=null;
-  DATE_COLS.forEach(function(col){
-    var txt=(r[col]||'').trim(); if(!txt) return;
-    var m; rx.lastIndex=0;
-    while((m=rx.exec(txt))!==null){
-      var ds=m[1].replace(/\b(st|nd|rd|th)\b/gi,'').trim();
-      var d=pd(ds); if(!d) continue;
-      if(!latest||d>latest) latest=d;
-    }
-  });
-  return latest;
-}
-
-// Temp Live Date: explicit "Temp Live Date: DD Mon" in daily updates takes priority; fallback = PO Date + 15 days
-// Returns null for sites where UAT is already done (no longer relevant)
-function getTempLiveDate(r){
-  if((r['UAT DATE']||'').trim()&&(r['UAT DATE']||'').trim()!=='—') return null;
-  var rx=/temp\s*live\s*date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
-  var latest=null;
-  DATE_COLS.forEach(function(col){
-    var txt=(r[col]||'').trim(); if(!txt) return;
-    var m; rx.lastIndex=0;
-    while((m=rx.exec(txt))!==null){
-      var ds=m[1].replace(/\b(st|nd|rd|th)\b/gi,'').trim();
-      var d=pd(ds); if(!d) continue;
-      if(!latest||d>latest) latest=d;
-    }
-  });
-  if(latest) return latest;
-  var poDateStr=r['PO Date'];
-  if(!poDateStr||poDateStr==='—'||poDateStr.toLowerCase().includes('pending')) return null;
-  var poDate=pd(poDateStr);
-  if(!poDate) return null;
-  var tempLiveDate=new Date(poDate);
-  tempLiveDate.setDate(poDate.getDate()+15);
-  return tempLiveDate;
-}
-
-// BD site filter: Status = BD, Design, BOQ
-function isBDSite(r){
-  var st=(r['Status']||'').toLowerCase().trim();
-  return st==='bd'||st==='design'||st==='boq'||st==='b.d'||st==='to be started';
-}
-
-// Build team trigger Gmail draft
-function bdTeamMail(r,team,tempLiveD,finalLiveD){
-  var site=r['Site Name']||'Site';
-  var owner=r['Owner']||'PM';
-  var poDate=r['PO Date']||'--';
-  var vendor=r['Vendor']||'--';
-  var tls=tempLiveD?tempLiveD.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
-  var fls=finalLiveD?finalLiveD.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
-  var today=new Date(); today.setHours(0,0,0,0);
-  var daysToTL=tempLiveD?Math.round((tempLiveD-today)/86400000):null;
-  var teamSetup={
-    'IT':   {role:'IT infrastructure setup (network, systems, hardware, POS terminals)',deadline:'5 days before Temp Live'},
-    'NSO':  {role:'New Site Operations setup (SOPs, staffing, onboarding)',deadline:'5 days before Temp Live'},
-    'Admin':{role:'Admin setup (utilities, access cards, housekeeping, pantry)',deadline:'5 days before Temp Live'},
-    'HEM':  {role:'Equipment & facilities setup (inspection readiness, CCTV, boom barriers)',deadline:'5 days before Temp Live'}
-  };
-  var ts=teamSetup[team]||{role:'Setup',deadline:'5 days before Temp Live'};
-  var subj='Action Required: '+team+' Setup Initiation — '+site+' — Temp Live '+tls;
-  var body='Dear '+team+' Team,\n\n'
-    +'This is a formal request to initiate '+ts.role+' for the following new site.\n\n'
-    +'Site Details:\n'
-    +'  Site Name: '+site+'\n'
-    +'  Project Owner: '+owner+'\n'
-    +'  Vendor: '+vendor+'\n'
-    +'  PO Date: '+poDate+'\n\n'
-    +'Key Dates:\n'
-    +'  Temp Live Date: '+tls+(daysToTL!==null?' ('+daysToTL+' days away)':'')+'\n'
-    +'  Final Live Date: '+fls+'\n\n'
-    +'As per SOP, '+team+' team requires 30 days for setup. Please initiate immediately to ensure readiness by '+ts.deadline+'.\n\n'
-    +'Kindly confirm initiation and share your setup plan by return email.\n\n'
-    +'Regards,\n'+owner+'\nCARS24 Projects Team';
-  var url='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
-  return {url:url,subj:subj};
-}
-
-// BD Slack message generator
-function generateBDSlack(){
-  var bdSites=allData.filter(isBDSite);
-  if(!bdSites.length){toast('No BD/Design/BOQ sites found','err');return;}
-  var today=new Date(); today.setHours(0,0,0,0);
-  var dateStr=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var lines=['*🏗️ BD Pipeline Update — '+dateStr+'*','',
-    '_Sites in pre-WIP stages. Temp Live dates committed to business._',''];
-  bdSites.forEach(function(r){
-    var tld=getTempLiveDate(r);
-    var fld=pd(r['Planned Completion']);
-    var poD=pd(r['PO Date']);
-    var st=(r['Status']||'').toUpperCase();
-    var tlStr=tld?tld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'Not logged';
-    var flStr=fld?fld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
-    var daysToTL=tld?Math.round((tld-today)/86400000):null;
-    var risk=daysToTL!==null&&daysToTL<30?'🔴':daysToTL!==null&&daysToTL<60?'🟡':'🟢';
-    lines.push('*'+r['Site Name']+'* ['+st+'] '+risk);
-    lines.push('  Temp Live: '+tlStr+(daysToTL!==null?' ('+daysToTL+'d away)':' (date not logged)'));
-    lines.push('  Final Live: '+flStr);
-    lines.push('  Owner: '+slackHandle(r['Owner']||''));
-    // PO status
-    if(!poD) lines.push('  ⚠️ PO not yet released');
-    else {
-      var daysSincePO=Math.round((today-poD)/86400000);
-      lines.push('  PO: '+r['PO Date']+' ('+daysSincePO+'d ago)');
-    }
-    lines.push('');
-  });
-  lines.push('_Reply with updates or flag blockers_');
-  document.getElementById('slack-preview').textContent=lines.join('\n');
-  document.getElementById('slack-modal').style.display='flex';
-}
-
-// Render BD Tracker Tab
-function renderBDTab(){
-  var el=document.getElementById('bdv'); if(!el) return;
-  var today=new Date(); today.setHours(0,0,0,0);
-  var bdSites=allData.filter(isBDSite);
-
-  if(!bdSites.length){
-    el.innerHTML='<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:200px;gap:12px;color:var(--muted)">'
-      +'<div style="font-size:32px">🏗️</div>'
-      +'<div style="font-size:14px;font-weight:600">No BD / Design / BOQ sites in current data</div>'
-      +'<div style="font-size:12px">Sites with Status: BD, Design, or BOQ will appear here</div>'
-      +'</div>';
-    return;
-  }
-
-  // KPI tiles
-  var withTLD=bdSites.filter(function(r){return getTempLiveDate(r);}).length;
-  var atRisk=bdSites.filter(function(r){
-    var tld=getTempLiveDate(r); if(!tld) return false;
-    return Math.round((tld-today)/86400000)<30;
-  }).length;
-  var noPO=bdSites.filter(function(r){return !pd(r['PO Date']);}).length;
-  var trigger30=bdSites.filter(function(r){
-    var tld=getTempLiveDate(r); if(!tld) return false;
-    var d=Math.round((tld-today)/86400000);
-    return d>=0&&d<=30;
-  }).length;
-
-  var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">'
-    +'<div style="font-size:14px;font-weight:700">🏗️ BD Pipeline Tracker</div>'
-    +'<button class="btn btn-o btn-sm" onclick="generateBDSlack()">📣 BD Slack Update</button>'
-    +'</div>';
-
-  // KPI row
-  html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;margin-bottom:16px">';
-  [
-    {label:'BD Sites',val:bdSites.length,color:'#1a73e8',bg:'#e8f0fe'},
-    {label:'Temp Live Logged',val:withTLD,color:'#16a34a',bg:'#f0fdf4'},
-    {label:'30-Day Trigger',val:trigger30,color:'#d97706',bg:'#fffbeb'},
-    {label:'At Risk (<30d)',val:atRisk,color:'#dc2626',bg:'#fef2f2'},
-    {label:'PO Pending',val:noPO,color:'#7c3aed',bg:'#f5f3ff'},
-  ].forEach(function(t){
-    html+='<div style="padding:12px;background:'+t.bg+';border-radius:8px;border:1px solid '+t.color+'22">'
-      +'<div style="font-size:20px;font-weight:800;color:'+t.color+'">'+t.val+'</div>'
-      +'<div style="font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;margin-top:2px">'+t.label+'</div>'
-      +'</div>';
-  });
-  html+='</div>';
-
-  // Site cards
-  bdSites.forEach(function(r){
-    var tld=getTempLiveDate(r);
-    var fld=pd(r['Planned Completion']);
-    var poD=pd(r['PO Date']);
-    var idx=allData.indexOf(r);
-    var daysToTL=tld?Math.round((tld-today)/86400000):null;
-    var daysToFL=fld?Math.round((fld-today)/86400000):null;
-    var tlStr=tld?tld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'Not logged';
-    var flStr=fld?fld.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
-
-    // Risk colour
-    var cardBorder=daysToTL!==null?(daysToTL<0?'#dc2626':daysToTL<30?'#f97316':daysToTL<60?'#d97706':'#16a34a'):'#e2e8f0';
-    var riskLabel=daysToTL!==null?(daysToTL<0?'🔴 OVERDUE':daysToTL<30?'🔴 <30d':daysToTL<60?'🟡 <60d':'🟢 On Track'):'⚪ No TL Date';
-    var riskColor=daysToTL!==null?(daysToTL<0?'#dc2626':daysToTL<30?'#f97316':daysToTL<60?'#d97706':'#16a34a'):'#94a3b8';
-
-    // Timeline: pre-PO backtrack + forward milestones from PO
-    var chain=[];
-    if(tld){
-      // poRef: actual PO if available, else estimated = Temp Live − 15d
-      var poNeed=new Date(tld.getTime()-15*86400000);
-      var poRef=poD||poNeed;
-      // Pre-PO milestones (offset from PO)
-      var bdHandover=new Date(poRef.getTime()-30*86400000);
-      var layoutNeed=new Date(poRef.getTime()-23*86400000);
-      var boqNeed=new Date(poRef.getTime()-16*86400000);
-      var prNeed=new Date(poRef.getTime()-14*86400000);
-      // Forward milestones
-      var satDue=new Date(poRef.getTime()+60*86400000);  // SAT = PO + 60d
-      var uatDue=new Date(satDue.getTime()+10*86400000); // UAT = SAT + 10d
-      function _fmtBDD(d){return d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});}
-      function milestone(lbl,d,done){
-        var diff=Math.round((d-today)/86400000);
-        var col=done?'#16a34a':diff<0?'#dc2626':diff<7?'#d97706':'#64748b';
-        var icon=done?'✅':diff<0?'❌':'📅';
-        return '<div style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:11px">'
-          +'<span>'+icon+'</span>'
-          +'<span style="color:var(--muted);min-width:130px">'+lbl+'</span>'
-          +'<span style="font-weight:600;color:'+col+'">'+_fmtBDD(d)+'</span>'
-          +(diff<0&&!done?'<span style="font-size:10px;color:#dc2626;margin-left:4px">'+Math.abs(diff)+'d overdue</span>':'')
-          +'</div>';
-      }
-      chain.push(milestone('BD → Design Handover',bdHandover,false));
-      chain.push(milestone('First Cut Layout',layoutNeed,false));
-      chain.push(milestone('BOQ Done',boqNeed,false));
-      chain.push(milestone('PR Raised',prNeed,false));
-      chain.push(milestone('PO Released',poRef,!!poD));
-      chain.push(milestone('⭐ Temp Live (PO+15d)',tld,false));
-      chain.push(milestone('SAT (PO+60d)',satDue,!!pd(r['SAT Date'])));
-      chain.push(milestone('UAT (SAT+10d)',uatDue,!!pd(r['UAT DATE'])));
-    }
-
-    // 30-day team trigger buttons
-    var show30=daysToTL!==null&&daysToTL<=30;
-    var btnStyle='display:inline-flex;align-items:center;gap:3px;padding:4px 9px;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;white-space:nowrap;border:1px solid';
-    var activeBtnStyle=btnStyle+' #fde68a;background:#fffbeb;color:#d97706';
-    var inactiveBtnStyle=btnStyle+' var(--border);background:var(--surface);color:var(--muted)';
-
-    var teamBtns=['IT','NSO','Admin','HEM'].map(function(team){
-      var _bm=bdTeamMail(r,team,tld,fld);
-      var style=show30?activeBtnStyle:inactiveBtnStyle;
-      var eType='bd_'+team.toLowerCase();
-      var sn=r['Site Name']||'';
-      return '<span style="display:inline-flex;align-items:center;gap:3px">'
-        +'<a href="'+_bm.url+'" target="_blank" data-elog-site="'+esc(sn)+'" data-elog-type="'+eType+'" data-elog-subject="'+esc(_bm.subj)+'" style="'+style+'">📧 '+team+'</a>'
-        +emailLogBadge(sn,eType)
-        +'</span>';
-    }).join(' ');
-
-    html+='<div style="margin-bottom:12px;border:1.5px solid '+cardBorder+';border-radius:10px;overflow:hidden">';
-    // Card header
-    html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--surface);flex-wrap:wrap;gap:8px;cursor:pointer" onclick="openModal('+idx+')">'
-      +'<div>'
-      +'<div style="font-size:13px;font-weight:700">'+esc(r['Site Name']||'--')+'</div>'
-      +'<div style="font-size:11px;color:var(--muted);margin-top:1px">'+esc(r['Owner']||'--')+' · '+esc(r['Vendor']||'--')+' · Status: '+esc(r['Status']||'--')+'</div>'
-      +'</div>'
-      +'<span style="font-size:11px;font-weight:700;color:'+riskColor+'">'+riskLabel+'</span>'
-      +'</div>';
-
-    // Key dates row
-    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:0;border-top:1px solid var(--border)">';
-    [
-      {label:'PO Date',val:r['PO Date']||'Pending',alert:!poD},
-      {label:'Temp Live',val:tlStr+(daysToTL!==null?' ('+daysToTL+'d)':''),alert:daysToTL!==null&&daysToTL<30},
-      {label:'Final Live',val:flStr+(daysToFL!==null?' ('+daysToFL+'d)':''),alert:false},
-      {label:'Completion %',val:r['Percentage Completion']||'--',alert:false},
-    ].forEach(function(d){
-      html+='<div style="padding:8px 12px;border-right:1px solid var(--border)">'
-        +'<div style="font-size:9px;text-transform:uppercase;color:var(--muted);font-weight:600;margin-bottom:2px">'+d.label+'</div>'
-        +'<div style="font-size:12px;font-weight:600;color:'+(d.alert?'#dc2626':'var(--text)')+'">'+esc(d.val)+'</div>'
-        +'</div>';
-    });
-    html+='</div>';
-
-    // Timeline
-    if(chain.length){
-      html+='<div style="padding:10px 14px;border-top:1px solid var(--border)">'
-        +'<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Project Timeline (PO → Temp Live → SAT → UAT)</div>'
-        +chain.join('')+'</div>';
-    } else {
-      html+='<div style="padding:10px 14px;border-top:1px solid var(--border);font-size:11px;color:var(--muted)">'
-        +'Add <b>PO Date</b> or log <b>Temp Live Date: DD Mon</b> in daily updates to see timeline.</div>';
-    }
-
-    // Team trigger buttons
-    html+='<div style="padding:8px 14px;border-top:1px solid var(--border);background:#fffbeb;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-      +'<span style="font-size:10px;font-weight:700;color:#d97706;text-transform:uppercase">'+
-      (show30?'⚠️ 30-Day Setup Window Active — Initiate Now:':'Setup Triggers (activate within 30d of Temp Live):')+'</span>'
-      +teamBtns+'</div>';
-
-    html+='</div>';
-  });
-
-  el.innerHTML=html;
-  attachEmailTracking();
-}
-
-(function init(){
-  allData=[...CSV_DATA];
-  filteredData=[...allData];
-  buildFilters();
-  renderKPIs();
-  // Patch getDriveLink with smart fuzzy version
-  if (typeof getDriveLink === 'function') { window.getDriveLinkOriginal = getDriveLink; }
-  window.getDriveLink = getDriveLinkSmart;
-  // Init Supabase (restores session from localStorage if user was previously signed in)
-  initSupabase();
-  // Apply role view on load (defaults to viewer until auth resolves)
-  applyRoleBasedView();
-  // Build column toggle checkboxes
-  (function(){
-    const COLNAMES=['Sr No','Site Name','Owner','Vendor','Completion %','Status','PO Date','Kickoff','Work Start','SAT Date','UAT Date','Planned','Revised','Latest Update'];
-    const box=document.getElementById('col-toggles');
-    if(!box) return;
-    box.innerHTML=COLNAMES.map((name,ci)=>{
-      const id='col_'+ci;
-      return '<div class="col-chk-item"><input type="checkbox" id="'+id+'" checked onchange="toggleCol('+ci+')" style="cursor:pointer;accent-color:var(--accent);width:14px;height:14px"><label for="'+id+'" style="cursor:pointer;flex:1">'+name+'</label></div>';
-    }).join('');
-  })();
-  renderAll();
-  buildKpiPanel();
-  document.getElementById('dchip').textContent=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
-  document.getElementById('cchip').textContent=allData.length+' sites';
-
-  autoSync();
-})();// ═══════════════════════════════════════════════════════════════
 // REGIONAL INSIGHTS
 // ═══════════════════════════════════════════════════════════════
 function renderRegional() {
@@ -6232,8 +5916,6 @@ function markEmailSent(siteName, emailType, subject){
   // Re-render whichever tab is active
   var suv = document.getElementById('suv');
   if (suv && suv.classList.contains('show')) renderSatUat();
-  var bdv = document.getElementById('bdv');
-  if (bdv && bdv.classList.contains('show')) renderBDTab();
 }
 
 // Attach tracking to all email links after render — no URL embedded in onclick
@@ -7447,7 +7129,6 @@ if ('serviceWorker' in navigator) {
   <button onclick="bnavGo('inv',this)"><span class="bni">📈</span><span>Insights</span></button>
   <button onclick="bnavGo('taskv',this)"><span class="bni">📋</span><span>Tasks</span></button>
   <button onclick="bnavGo('tickv',this)"><span class="bni">🎫</span><span>Tickets</span></button>
-  <button onclick="bnavGo('bdv',this)"><span class="bni">🏗️</span><span>BD</span></button>
 </nav>
 </body>
 </html>
