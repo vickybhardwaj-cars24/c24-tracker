@@ -2,8 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>Cars24 Projects Tracker v4.11</title>
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="C24 Projects">
+<meta name="theme-color" content="#2563eb">
+<link rel="manifest" href="/projects-tracker/manifest.json">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<title>Cars24 Projects Tracker v4.13</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -450,8 +457,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
         <div id="col-toggles"></div>
       </div>
     </div>
-    <button class="btn btn-o" onclick="openTargetsPage()" style="font-size:11px">📅 Targets</button>
-    <button class="btn btn-o" onclick="exportCSV()">↓ Export CSV</button>
     <label class="btn btn-p" for="csv-inp" id="local-upload-lbl" style="cursor:pointer">↑ Upload CSV</label>
     <input type="file" id="csv-inp" accept=".csv" style="display:none" onchange="handleCSV(event)">
     <span id="csv-ts-hotp" style="font-size:10px;color:var(--muted)"></span>
@@ -479,26 +484,63 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   </div>
 </header>
 
-<!-- Login modal (auth for live CSV upload) -->
-<div id="login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)closeLoginModal()">
-  <div style="background:var(--white);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:340px;max-width:92vw;padding:22px 22px 18px;font-family:'Inter',sans-serif">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="font-size:15px;font-weight:700;color:var(--text);margin:0">🔐 Tracker Login</h2>
-      <button onclick="closeLoginModal()" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;line-height:1">×</button>
+<!-- Set Password modal (shown after clicking invite/reset link) -->
+<div id="setpw-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:9999;align-items:center;justify-content:center;padding:16px">
+  <div style="background:#fff;border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:360px;max-width:100%;overflow:hidden;font-family:'Inter',sans-serif">
+    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px 22px 16px">
+      <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:3px">🔐 Set Your Password</div>
+      <div style="font-size:11px;color:rgba(255,255,255,.75)">Choose a password to access the CARS24 Tracker</div>
     </div>
-    <p style="font-size:11px;color:var(--muted);margin:0 0 14px">Required for live CSV uploads. Credentials are not stored beyond this session.</p>
-    <form id="login-form" onsubmit="event.preventDefault();doLogin();">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Username</label>
-      <input id="login-username" type="text" autocomplete="username" required style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:10px">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
-      <input id="login-password" type="password" autocomplete="current-password" required style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:14px">
-      <div id="login-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button type="button" class="btn btn-o" onclick="closeLoginModal()">Cancel</button>
-        <button type="submit" class="btn btn-p" id="login-submit">Login</button>
-      </div>
-    </form>
+    <div style="padding:20px 22px 18px">
+      <label style="display:block;font-size:11px;font-weight:600;color:#7b8494;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">New Password</label>
+      <input id="setpw-input" type="password" placeholder="Min 8 characters" style="width:100%;padding:9px 11px;border:1.5px solid #d1d5de;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:10px" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor=''">
+      <label style="display:block;font-size:11px;font-weight:600;color:#7b8494;text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Confirm Password</label>
+      <input id="setpw-confirm" type="password" placeholder="Repeat password" style="width:100%;padding:9px 11px;border:1.5px solid #d1d5de;border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:14px" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor=''">
+      <div id="setpw-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
+      <button onclick="doSetPassword()" style="width:100%;padding:10px;background:#2563eb;color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;font-family:'Inter',sans-serif" id="setpw-btn">Set Password & Sign In →</button>
+    </div>
   </div>
+</div>
+
+<!-- Login modal (auth for live CSV upload) -->
+<div id="login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeLoginModal()">
+  <div style="background:var(--white);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:360px;max-width:100%;font-family:'Inter',sans-serif;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px 22px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:3px">🔐 CARS24 Tracker Login</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75)" id="login-subtitle">Sign in with your work email</div>
+        </div>
+        <button onclick="closeLoginModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+      </div>
+    </div>
+    <div style="padding:20px 22px 18px">
+      <form id="login-form" onsubmit="event.preventDefault();doLogin();" autocomplete="on">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Email / Username</label>
+        <input id="login-username" type="email" autocomplete="email" placeholder="your.name@cars24.com" required style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:10px;transition:border .15s" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor=''">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" required style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:4px;transition:border .15s" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor=''">
+        <div style="text-align:right;margin-bottom:14px"><button type="button" onclick="doForgotPassword()" style="background:none;border:none;font-size:11px;color:#2563eb;cursor:pointer;padding:0">Forgot password?</button></div>
+        <div id="login-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
+        <button type="submit" class="btn btn-p" id="login-submit" style="width:100%;justify-content:center;padding:10px;font-size:13px;font-weight:600;border-radius:8px">Sign in →</button>
+      </form>
+      <div id="login-legacy-section" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:none">
+        <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:8px">— or use legacy worker credentials —</div>
+        <input id="login-legacy-user" type="text" placeholder="Username" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;margin-bottom:6px">
+        <input id="login-legacy-pass" type="password" placeholder="Password" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;margin-bottom:8px">
+        <button class="btn btn-o btn-sm" onclick="doLegacyLogin()" style="width:100%;justify-content:center">Worker Login (CSV uploads)</button>
+      </div>
+      <div style="margin-top:10px;text-align:center">
+        <button type="button" onclick="toggleLegacyLogin()" style="background:none;border:none;font-size:10px;color:var(--muted);cursor:pointer">CSV upload only? Use legacy login ↓</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Photo Viewer Modal -->
+<div id="photo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9100;align-items:center;justify-content:center" onclick="document.getElementById('photo-modal').style.display='none'">
+  <img id="photo-modal-img" src="" style="max-width:92vw;max-height:88vh;border-radius:8px;object-fit:contain" onclick="event.stopPropagation()">
+  <button onclick="document.getElementById('photo-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
 </div>
 
 <div class="kpi-bar" id="kpi-bar" style="display:none"></div>
@@ -548,7 +590,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('slackv',this)">📣 Slack</button>
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
     <button class="vtab" onclick="setView('bdv',this)">🏗️ BD</button>
-    <button class="vtab" onclick="setView('attv',this)">📋 Attendance</button>
+    <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
   </div>
   <span class="cchip" id="cchip"></span>
 
@@ -568,7 +610,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="inv-tab" onclick="showInvTab('delay',this)">⏳ Delay Analysis</button>
     <button class="inv-tab" onclick="showInvTab('warn',this)">⚠ UAT Warnings</button>
   </div>
-  <div class="inv-content" id="inv-ov"><div id="ai-digest-wrap" style="margin-bottom:4px"></div><div class="ig-grid" id="igg"></div></div>
+  <div class="inv-content" id="inv-ov"><div class="ig-grid" id="igg"></div></div>
   <div class="inv-content" id="inv-kpis" style="display:none"></div>
   <div class="inv-content" id="inv-vr" style="display:none"></div>
   <div class="inv-content" id="inv-reg" style="display:none"></div>
@@ -592,15 +634,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 <div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="bdv" style="padding:16px 20px;overflow-y:auto;flex:1"></div></div>
 
-<div id="targets-overlay" style="display:none;position:fixed;inset:0;z-index:500;background:var(--bg);flex-direction:column">
-  <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 20px;background:var(--white);border-bottom:1px solid var(--border);flex-shrink:0">
-    <div style="font-size:16px;font-weight:700">📅 Target Dates & Calendar</div>
-    <button class="btn btn-o" onclick="closeTargetsPage()" style="font-size:13px">✕ Close</button>
-  </div>
-  <div style="flex:1;overflow-y:auto;padding:16px 20px">
-    <div id="cal-overlay-inner"></div>
-  </div>
-</div>
 <div class="overlay" id="overlay" onclick="onOvClick(event)">
   <div class="modal">
     <div class="mhdr">
@@ -638,183 +671,444 @@ const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
 
 // ═══════════════════════════════════════════════════════════════
-// GEMINI AI
+// SUPABASE CONFIG — fill in after creating project at supabase.com
 // ═══════════════════════════════════════════════════════════════
-const GEMINI_KEY = 'AIzaSyD0tzfwA_deKuLrek8qOgn-OsQpdXM336g';
+const SUPABASE_URL      = 'https://fnvylizldarvqejsfkbn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZudnlsaXpsZGFydnFlanNma2JuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODgzMDgsImV4cCI6MjA5NTA2NDMwOH0.YQwAIwpZCQGOev5kAABMSVFqdf36cZLwnrwPVFrhNfY';
+const SB_ENABLED = !SUPABASE_URL.includes('REPLACE_WITH');
 
-async function askGemini(prompt) {
-  const res = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${GEMINI_KEY}`,
-    { method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ contents:[{ parts:[{ text: prompt }] }] }) }
-  );
-  if (!res.ok) throw new Error(`Gemini API error: ${res.status}`);
-  const data = await res.json();
-  return data.candidates?.[0]?.content?.parts?.[0]?.text || 'No response from Gemini.';
-}
+var __sbClient  = null;
+var __sbUser    = null;   // Supabase auth user
+var __sbProfile = null;   // public.profiles row
+var __sbRole    = 'viewer'; // 'admin' | 'pm' | 'viewer'
 
-let _aiDigestRunning = false;
-async function runAIDigest() {
-  if (_aiDigestRunning) return;
-  const btn = document.getElementById('ai-digest-btn');
-  const out = document.getElementById('ai-digest-out');
-  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
-  _aiDigestRunning = true;
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  out.style.display = 'none';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const rows = allData.map(r => {
-    const stale = daysSinceUpdate(r);
-    const update = (getLatestUpdate(r) || '').substring(0, 150);
-    const satD = pd(r['SAT Date']), uatD = pd(r['UAT DATE']);
-    const uatOverdue = satD && !uatD && Math.round((today - satD) / 86400000) > 10;
-    return `- ${r['Site Name'] || '?'} | Status: ${r['Status'] || '?'} | ${r['Percentage Completion'] || '?'}% | Owner: ${r['Owner'] || '?'}${stale >= 5 ? ` | STALE ${stale}d` : ''}${uatOverdue ? ' | UAT OVERDUE' : ''} | Latest: ${update}`;
-  }).join('\n');
-  const prompt = `You are a project analyst for CARS24, a used-car company in India. Below is live data for ${allData.length} construction/fit-out sites across India. Each line: Site | Status | Completion | Owner | flags | latest update.\n\n${rows}\n\nRespond with a concise weekly digest in exactly this format (use plain text, no markdown symbols):\n\nPORTFOLIO HEALTH: [one line overall assessment]\n\nTOP 3 AT-RISK SITES:\n1. [site] – [reason]\n2. [site] – [reason]\n3. [site] – [reason]\n\nKEY BLOCKERS ACROSS PORTFOLIO:\n- [blocker type]: [sites affected]\n\nSITES READY FOR NEXT MILESTONE:\n- [site] – [what milestone]\n\nRECOMMENDED ACTIONS FOR THIS WEEK:\n1. [action]\n2. [action]\n3. [action]`;
+function initSupabase() {
+  if (!SB_ENABLED || typeof supabase === 'undefined') return;
   try {
-    const text = await askGemini(prompt);
-    out.innerHTML = text.split('\n').map(line => {
-      line = line.trim(); if (!line) return '';
-      if (line.endsWith(':') || line === line.toUpperCase()) return `<div style="font-weight:700;color:#1e3a5f;margin-top:10px;margin-bottom:2px;font-size:11px;text-transform:uppercase;letter-spacing:.04em">${esc(line)}</div>`;
-      return `<div style="font-size:12px;padding:2px 0 2px 8px;border-left:2px solid #c7d7f0;margin-bottom:3px">${esc(line)}</div>`;
-    }).join('');
-    out.style.display = 'block';
-  } catch(e) {
-    out.innerHTML = `<div style="color:#fca5a5;font-size:12px">⚠ ${esc(e.message)}</div>`;
-    out.style.display = 'block';
-  }
-  _aiDigestRunning = false;
-  btn.disabled = false; btn.textContent = '✨ Regenerate AI Digest';
-}
-
-async function runSiteAI(idx) {
-  const r = allData[idx]; if (!r) return;
-  const btn = document.getElementById(`site-ai-btn-${idx}`);
-  const out = document.getElementById(`site-ai-out-${idx}`);
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  out.style.display = 'none';
-  const updates = [...DATE_COLS].reverse().filter(d => (r[d] || '').length > 2).slice(0, 5).map(d => `  [${d}] ${r[d]}`).join('\n');
-  const revH = getRevHistory(r).map((h, i) => `  ${i+1}. First logged ${h.col} → Revised to ${h.dateStr}`).join('\n');
-  const stale = daysSinceUpdate(r);
-  const prompt = `You are a project analyst for CARS24. Analyse this single construction/fit-out site and give a concise PM-level assessment.\n\nSITE: ${r['Site Name'] || '?'}\nOwner: ${r['Owner'] || '?'} | Vendor: ${r['Vendor'] || '?'} | Status: ${r['Status'] || '?'} | Completion: ${r['Percentage Completion'] || '?'}%\nPO Date: ${r['PO Date'] || '—'} | Kickoff: ${r['Kickoff Date'] || '—'} | Work Start: ${r['Work Start Date'] || '—'}\nSAT Date: ${r['SAT Date'] || '—'} | UAT Date: ${r['UAT DATE'] || '—'}\nPlanned: ${r['Planned Completion'] || '—'} | Revised: ${r['Revised Completion'] || '—'}\n${stale >= 5 ? `WARNING: No update for ${stale} days.\n` : ''}${revH ? `Revision History:\n${revH}\n` : ''}Recent Updates (newest first):\n${updates || '  No updates logged.'}\n\nRespond in exactly this format (plain text, no markdown symbols):\n\nHEALTH: [one line — On Track / At Risk / Critical + brief reason]\n\nKEY RISK: [the single biggest risk or blocker right now]\n\nNEXT ACTION: [specific action the PM should take this week]`;
-  try {
-    const text = await askGemini(prompt);
-    out.innerHTML = text.split('\n').map(line => {
-      line = line.trim(); if (!line) return '';
-      if (/^(HEALTH|KEY RISK|NEXT ACTION):/.test(line)) {
-        const [label, ...rest] = line.split(':');
-        const val = rest.join(':').trim();
-        const color = label === 'HEALTH' ? '#1e3a5f' : label === 'KEY RISK' ? '#dc2626' : '#16a34a';
-        return `<div style="margin-bottom:8px"><span style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.04em">${esc(label)}: </span><span style="font-size:12px">${esc(val)}</span></div>`;
+    __sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    __sbClient.auth.onAuthStateChange(function(event, session) {
+      if (event === 'PASSWORD_RECOVERY' || (event === 'SIGNED_IN' && _isInviteFlow())) {
+        // Show set-password screen
+        document.getElementById('setpw-modal').style.display = 'flex';
+        _clearInviteHash();
+        return;
       }
-      return `<div style="font-size:12px;padding:1px 0">${esc(line)}</div>`;
-    }).join('');
-    out.style.display = 'block';
-  } catch(e) {
-    out.innerHTML = `<div style="color:#dc2626;font-size:12px">⚠ ${esc(e.message)}</div>`;
-    out.style.display = 'block';
-  }
-  btn.disabled = false; btn.textContent = '✨ Regenerate';
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AI — TASKS ACTION PLAN
-// ═══════════════════════════════════════════════════════════════
-let _aiTaskRunning = false;
-async function runTaskAI() {
-  if (_aiTaskRunning) return;
-  const btn = document.getElementById('ai-task-btn');
-  const out = document.getElementById('ai-task-out');
-  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
-  _aiTaskRunning = true;
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  out.style.display = 'none';
-  const today = new Date(); today.setHours(0,0,0,0);
-  // Collect all tasks with aging
-  const tasks = [];
-  allData.forEach(r => {
-    const siteName = r['Site Name'] || '?';
-    const owner = r['Owner'] || '?';
-    const status = r['Status'] || '?';
-    // Find first DATE_COL containing "Task:" to calculate age
-    let firstTaskCol = null;
-    for (let i = 0; i < DATE_COLS.length; i++) {
-      if (/task\s*:/i.test(r[DATE_COLS[i]] || '')) { firstTaskCol = DATE_COLS[i]; break; }
-    }
-    // Get latest task text
-    let latestTaskText = '';
-    for (let i = DATE_COLS.length - 1; i >= 0; i--) {
-      const txt = r[DATE_COLS[i]] || '';
-      const m = txt.match(/task\s*:\s*([\s\S]*)/i);
-      if (m) { latestTaskText = m[1].trim(); break; }
-    }
-    if (!latestTaskText) return;
-    // Calculate age from first logged task col
-    let ageDays = '?';
-    if (firstTaskCol) {
-      const colDate = pd(firstTaskCol);
-      if (colDate) ageDays = Math.round((today - colDate) / 86400000);
-    }
-    latestTaskText.split('\n').map(l => l.replace(/^\d+\.\s*/, '').trim()).filter(Boolean).forEach(item => {
-      tasks.push(`- ${siteName} | Owner: ${owner} | Status: ${status} | Age: ${ageDays}d | Task: ${item}`);
+      if (session && session.user) {
+        __sbUser = session.user;
+        loadSbProfile(session.user.id);
+      } else {
+        __sbUser = null; __sbProfile = null; __sbRole = 'viewer';
+        applyRoleBasedView();
+      }
     });
-  });
-  if (!tasks.length) {
-    out.innerHTML = '<div style="font-size:12px;color:#fff;opacity:.7">No tasks found. Add "Task: ..." entries in daily updates.</div>';
-    out.style.display = 'block';
-    _aiTaskRunning = false; btn.disabled = false; btn.textContent = '✨ AI Action Plan'; return;
-  }
-  const prompt = `You are a project manager at CARS24 overseeing construction/fit-out sites across India. Below are open action items extracted from daily updates, with how many days each has been pending.\n\n${tasks.join('\n')}\n\nRespond in exactly this format (plain text, no markdown symbols):\n\nCRITICAL - ACT TODAY:\n1. [Site] – [task] – [age]d pending – PM: [owner]\n\nTHIS WEEK:\n2. [Site] – [task] – [age]d pending – PM: [owner]\n\nFOLLOW UP NEXT WEEK:\n3. [Site] – [task]\n\nOVERALL ASSESSMENT: [1 line on backlog health and biggest bottleneck]`;
-  try {
-    const text = await askGemini(prompt);
-    out.innerHTML = text.split('\n').map(line => {
-      line = line.trim(); if (!line) return '';
-      if (/^(CRITICAL|THIS WEEK|FOLLOW UP|OVERALL)/.test(line)) {
-        const color = /CRITICAL/.test(line) ? '#fca5a5' : /THIS WEEK/.test(line) ? '#fde68a' : /OVERALL/.test(line) ? '#86efac' : '#cbd5e1';
-        return `<div style="font-weight:700;font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:${color};margin-top:10px;margin-bottom:3px">${esc(line)}</div>`;
+    __sbClient.auth.getSession().then(function(r) {
+      if (r.data && r.data.session && r.data.session.user) {
+        // Check if this session came from an invite link
+        if (_isInviteFlow()) {
+          document.getElementById('setpw-modal').style.display = 'flex';
+          _clearInviteHash();
+          return;
+        }
+        __sbUser = r.data.session.user;
+        loadSbProfile(r.data.session.user.id);
       }
-      return `<div style="font-size:12px;padding:2px 0 2px 8px;border-left:2px solid rgba(255,255,255,.25);margin-bottom:3px">${esc(line)}</div>`;
-    }).join('');
-    out.style.display = 'block';
-  } catch(e) {
-    out.innerHTML = `<div style="color:#fca5a5;font-size:12px">⚠ ${esc(e.message)}</div>`;
-    out.style.display = 'block';
-  }
-  _aiTaskRunning = false; btn.disabled = false; btn.textContent = '✨ Regenerate Action Plan';
+    });
+  } catch(e) { console.warn('Supabase init failed:', e); }
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AI — SLACK DRAFT
-// ═══════════════════════════════════════════════════════════════
-let _aiSlackRunning = false;
-async function runSlackAI() {
-  if (_aiSlackRunning) return;
-  const btn = document.getElementById('ai-slack-btn');
-  const out = document.getElementById('ai-slack-out');
-  const wrap = document.getElementById('ai-slack-wrap');
-  if (!allData.length) { toast('Upload CSV data first', 'err'); return; }
-  _aiSlackRunning = true;
-  btn.disabled = true; btn.textContent = '⏳ Thinking…';
-  if (wrap) wrap.style.display = 'block';
-  out.textContent = '';
-  const today = new Date(); today.setHours(0,0,0,0);
-  const rows = allData.map(r => {
-    const blockers = extractBlockers(getTodayUpdate(r));
-    const stale = daysSinceUpdate(r);
-    const satD = pd(r['SAT Date']), uatD = pd(r['UAT DATE']);
-    const uatOverdue = satD && !uatD ? Math.round((today - satD) / 86400000) : 0;
-    const handle = slackHandle(r['Owner'] || '');
-    return `- ${r['Site Name']||'?'} | PM: ${r['Owner']||'?'} (${handle}) | Status: ${r['Status']||'?'} | ${r['Percentage Completion']||'?'}%${blockers.length ? ' | Blockers: '+blockers.join(', ') : ''}${stale >= 5 ? ' | STALE '+stale+'d' : ''}${uatOverdue > 10 ? ' | UAT OVERDUE '+uatOverdue+'d' : ''} | Update: ${(getTodayUpdate(r)||'').substring(0,120)}`;
-  }).join('\n');
-  const dateStr = new Date().toLocaleDateString('en-IN', {day:'numeric', month:'short', year:'numeric'});
-  const prompt = `You are a project coordinator at CARS24. Generate a ready-to-paste Slack message for a weekly cross-functional update meeting. Use Slack formatting (*bold*, _italic_, bullet points with •). Keep it professional, concise, and action-oriented.\n\nSite data:\n${rows}\n\nFormat the message exactly like this:\n\n🚦 *Weekly Cross-Functional Update — ${dateStr}*\n\n🔴 *Urgent — Action Needed Today:*\n• *[Site]* [Blocker team] — [issue + days pending] — [Slack handle]\n\n🟡 *This Week:*\n• *[Site]* [Blocker team] — [issue] — [Slack handle]\n\n✅ *On Track / No Blockers:*\n• [Site list]\n\n📊 *Portfolio Summary:* [1 line — total sites, % on track, key risk]\n\n_AI-generated summary | ${dateStr}_`;
-  try {
-    out.textContent = await askGemini(prompt);
-  } catch(e) {
-    out.textContent = `⚠ ${e.message}`;
-  }
-  _aiSlackRunning = false; btn.disabled = false; btn.textContent = '✨ Regenerate';
+function _isInviteFlow() {
+  return window.location.hash.includes('type=invite') || window.location.hash.includes('type=recovery');
 }
+function _clearInviteHash() {
+  // Remove token from URL bar without reload
+  if (window.history && window.history.replaceState) {
+    window.history.replaceState(null, '', window.location.pathname);
+  }
+}
+
+async function doSetPassword() {
+  var pw  = document.getElementById('setpw-input').value;
+  var pw2 = document.getElementById('setpw-confirm').value;
+  var err = document.getElementById('setpw-error');
+  var btn = document.getElementById('setpw-btn');
+  err.style.display = 'none';
+  if (pw.length < 8) { err.textContent = 'Password must be at least 8 characters.'; err.style.display = ''; return; }
+  if (pw !== pw2)    { err.textContent = 'Passwords do not match.'; err.style.display = ''; return; }
+  btn.disabled = true; btn.textContent = 'Saving…';
+  try {
+    var r = await __sbClient.auth.updateUser({ password: pw });
+    if (r.error) throw r.error;
+    document.getElementById('setpw-modal').style.display = 'none';
+    // Now load profile and sign in properly
+    var sess = await __sbClient.auth.getSession();
+    if (sess.data && sess.data.session && sess.data.session.user) {
+      __sbUser = sess.data.session.user;
+      loadSbProfile(sess.data.session.user.id);
+    }
+    toast('✓ Password set! You are now signed in.', 'ok');
+  } catch(e) {
+    err.textContent = e.message || 'Failed to set password. Try again.';
+    err.style.display = '';
+    btn.disabled = false; btn.textContent = 'Set Password & Sign In →';
+  }
+}
+
+function loadSbProfile(userId) {
+  if (!__sbClient) return;
+  __sbClient.from('profiles').select('*').eq('id', userId).single()
+  .then(function(r) {
+    if (r.data) {
+      __sbProfile = r.data;
+      __sbRole = r.data.role || 'viewer';
+    }
+    onSbLoginSuccess();
+  }).catch(function() { onSbLoginSuccess(); });
+}
+
+function onSbLoginSuccess() {
+  var email = __sbUser ? __sbUser.email : '';
+  var name = (__sbProfile && __sbProfile.full_name) ? __sbProfile.full_name : email.split('@')[0];
+  closeLoginModal();
+  document.getElementById('login-btn').style.display = 'none';
+  document.getElementById('logout-btn').style.display = '';
+  document.getElementById('login-user').textContent = '(' + name + ')';
+  document.getElementById('local-upload-lbl').style.display = 'none';
+  document.getElementById('live-upload-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('snag-local-lbl').style.display   = 'none';
+  document.getElementById('snag-live-lbl').style.display    = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('ticket-local-lbl').style.display = 'none';
+  document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
+  applyRoleBasedView();
+  toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
+}
+
+function applyRoleBasedView() {
+  var isAdmin = __sbRole === 'admin';
+  // Hide admin-only tabs from non-admin users
+  document.querySelectorAll('[data-admin-only="true"]').forEach(function(el) {
+    el.style.display = isAdmin ? '' : 'none';
+  });
+  // If PM is currently viewing attendance tab, redirect to table
+  if (!isAdmin) {
+    var attv = document.getElementById('attv');
+    if (attv && (attv.classList.contains('show') || attv.style.display !== 'none')) {
+      setView('tv', document.querySelector('.vtab'));
+    }
+  }
+  // Filter table: PM only sees their own sites
+  if (__sbRole === 'pm' && __sbProfile) {
+    var ownerName = __sbProfile.full_name || '';
+    if (ownerName) {
+      var sel = document.getElementById('f-owner');
+      if (sel) {
+        // Find matching option
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value.toLowerCase().includes(ownerName.split(' ')[0].toLowerCase())) {
+            sel.value = sel.options[i].value;
+            break;
+          }
+        }
+        applyFilters();
+      }
+    }
+  }
+}
+
+// ── Supabase Login ──────────────────────────────────────────────
+async function doSupabaseLogin(email, password) {
+  var btn = document.getElementById('login-submit');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    var r = await __sbClient.auth.signInWithPassword({ email: email, password: password });
+    if (r.error) throw r.error;
+    // onAuthStateChange fires and calls onSbLoginSuccess
+  } catch(e) {
+    showLoginError(e.message || 'Sign-in failed. Check email and password.');
+    btn.disabled = false; btn.textContent = 'Sign in →';
+  }
+}
+
+async function doForgotPassword() {
+  var email = document.getElementById('login-username').value.trim();
+  if (!email || !email.includes('@')) { showLoginError('Enter your email first.'); return; }
+  if (!__sbClient) { showLoginError('Supabase not configured.'); return; }
+  var r = await __sbClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/projects-tracker/'
+  });
+  if (r.error) { showLoginError(r.error.message); return; }
+  showLoginError('✓ Password reset email sent to ' + email);
+  document.getElementById('login-error').style.color = '#16a34a';
+  document.getElementById('login-error').style.background = '#f0fdf4';
+  document.getElementById('login-error').style.borderColor = '#86efac';
+}
+
+function doLogin() {
+  var email = document.getElementById('login-username').value.trim();
+  var password = document.getElementById('login-password').value;
+  if (!email || !password) { showLoginError('Enter email and password.'); return; }
+  if (SB_ENABLED && __sbClient) {
+    doSupabaseLogin(email, password);
+  } else {
+    // Fall through to legacy login
+    showLoginError('Supabase not configured yet. Use legacy login below for CSV uploads.');
+    document.getElementById('login-legacy-section').style.display = '';
+  }
+}
+
+function doLogoutSupabase() {
+  if (__sbClient) __sbClient.auth.signOut();
+  __sbUser = null; __sbProfile = null; __sbRole = 'viewer';
+}
+
+function toggleLegacyLogin() {
+  var s = document.getElementById('login-legacy-section');
+  s.style.display = s.style.display === 'none' || !s.style.display ? '' : 'none';
+}
+
+function doLegacyLogin() {
+  var u = document.getElementById('login-legacy-user').value.trim();
+  var p = document.getElementById('login-legacy-pass').value;
+  if (!u || !p) { showLoginError('Enter legacy username and password.'); return; }
+  if (!WORKER_URL || WORKER_URL.indexOf('REPLACE-ME') !== -1) {
+    showLoginError('Worker URL not configured.'); return;
+  }
+  C24Uploader.verify({ workerUrl: WORKER_URL, auth: { username: u, password: p } })
+  .then(function(){
+    __auth = {username: u, password: p};
+    closeLoginModal();
+    document.getElementById('login-btn').style.display = 'none';
+    document.getElementById('logout-btn').style.display = '';
+    document.getElementById('login-user').textContent = '(' + u + ')';
+    document.getElementById('local-upload-lbl').style.display = 'none';
+    document.getElementById('live-upload-lbl').style.display  = '';
+    document.getElementById('snag-local-lbl').style.display   = 'none';
+    document.getElementById('snag-live-lbl').style.display    = '';
+    document.getElementById('ticket-local-lbl').style.display = 'none';
+    document.getElementById('ticket-live-lbl').style.display  = '';
+    toast('✓ Logged in (legacy) as ' + u, 'ok');
+  })
+  .catch(function(err){ showLoginError(err.message || 'Invalid credentials.'); });
+}
+
+// ── Supabase: save site update ──────────────────────────────────
+async function saveUpdateToSupabase(siteId, siteName, updateText) {
+  if (!__sbClient || !__sbUser) return false;
+  var r = await __sbClient.from('site_updates').insert({
+    site_id: siteId || null,
+    update_date: new Date().toISOString().split('T')[0],
+    update_text: updateText,
+    update_by: __sbUser.id,
+    update_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  });
+  if (!r.error) {
+    // Log audit
+    __sbClient.from('audit_log').insert({
+      site_name: siteName,
+      field_name: 'daily_update',
+      new_value: updateText.substring(0, 500),
+      changed_by: __sbUser.id,
+      changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    });
+  }
+  return !r.error;
+}
+
+async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
+  if (!__sbClient || !__sbUser) return;
+  __sbClient.from('audit_log').insert({
+    site_name: siteName,
+    field_name: fieldName,
+    old_value: String(oldValue || ''),
+    new_value: String(newValue || ''),
+    changed_by: __sbUser.id,
+    changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  });
+}
+
+// ── Photo Upload with Client-side Compression ───────────────────
+async function compressImage(file, maxWidthPx, qualityPct) {
+  maxWidthPx = maxWidthPx || 1200;
+  qualityPct = qualityPct || 0.72;
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      var w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxWidthPx) { h = Math.round(h * maxWidthPx / w); w = maxWidthPx; }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(function(blob) {
+        URL.revokeObjectURL(url);
+        if (!blob) { reject(new Error('Compression failed')); return; }
+        resolve({ blob: blob, width: w, height: h, sizeKb: Math.round(blob.size / 1024) });
+      }, 'image/jpeg', qualityPct);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+    img.src = url;
+  });
+}
+
+async function uploadSitePhoto(file, siteName, siteId, caption) {
+  if (!__sbClient || !__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
+  try {
+    var compressed = await compressImage(file, 1200, 0.72);
+    var dateStr = new Date().toISOString().split('T')[0];
+    var safeSite = (siteName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    var fileName = safeSite + '_' + dateStr + '_' + Date.now() + '.jpg';
+    var storagePath = 'sites/' + (siteId || safeSite) + '/' + dateStr + '/' + fileName;
+
+    var uploadResult = await __sbClient.storage.from('site-photos').upload(storagePath, compressed.blob, {
+      contentType: 'image/jpeg', upsert: false
+    });
+    if (uploadResult.error) throw uploadResult.error;
+
+    var dbResult = await __sbClient.from('site_photos').insert({
+      site_id: siteId || null,
+      site_name: siteName,
+      photo_date: dateStr,
+      storage_path: storagePath,
+      original_name: file.name,
+      file_size_kb: compressed.sizeKb,
+      width: compressed.width,
+      height: compressed.height,
+      caption: caption || '',
+      uploaded_by: __sbUser.id,
+      uploaded_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    });
+    if (dbResult.error) throw dbResult.error;
+    return storagePath;
+  } catch(e) {
+    toast('Photo upload failed: ' + (e.message || e), 'err');
+    return null;
+  }
+}
+
+async function getSitePhotos(siteName) {
+  if (!__sbClient) return [];
+  var r = await __sbClient.from('site_photos')
+    .select('*').eq('site_name', siteName)
+    .order('photo_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  return r.data || [];
+}
+
+async function getPhotoUrl(storagePath) {
+  if (!__sbClient || !storagePath) return null;
+  var r = await __sbClient.storage.from('site-photos').createSignedUrl(storagePath, 3600);
+  return r.data ? r.data.signedUrl : null;
+}
+
+// ── Photo section for modal ──────────────────────────────────────
+async function renderPhotoSection(siteName, siteId, container) {
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Loading photos…</div>';
+  var photos = await getSitePhotos(siteName);
+  // Group by date
+  var byDate = {};
+  photos.forEach(function(p) {
+    var d = p.photo_date || 'Unknown';
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(p);
+  });
+  var html = '<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  html += '<div style="font-size:12px;font-weight:700;color:var(--text)">📸 Site Photos</div>';
+  if (__sbUser) {
+    html += '<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:#2563eb;color:#fff;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">'
+      + '📷 Add Photos'
+      + '<input type="file" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotoUpload(event,\''+esc(siteName)+'\',\''+esc(siteId||'')+'\',this.closest(\'[id^=photo-sec]\'))">'
+      + '</label>';
+  }
+  html += '</div>';
+  if (!photos.length) {
+    html += '<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:12px">No photos yet. ' + (__sbUser ? 'Tap "Add Photos" to upload.' : 'Sign in to upload.') + '</div>';
+  } else {
+    var loadingCount = 0;
+    for (var dateKey in byDate) {
+      html += '<div style="margin-bottom:14px">';
+      html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' + dateKey + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+      byDate[dateKey].forEach(function(p) {
+        html += '<div style="position:relative;cursor:pointer" data-path="'+esc(p.storage_path)+'" onclick="viewPhoto(this)">'
+          + '<div style="width:80px;height:80px;background:var(--surface);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">'
+          + '<img data-path="'+esc(p.storage_path)+'" style="width:80px;height:80px;object-fit:cover;border-radius:6px" onerror="this.style.display=\'none\'">'
+          + '</div>'
+          + (p.caption ? '<div style="font-size:9px;color:var(--muted);text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.caption)+'</div>' : '')
+          + '</div>';
+      });
+      html += '</div></div>';
+      loadingCount += byDate[dateKey].length;
+    }
+    html += '<div style="font-size:10px;color:var(--muted);text-align:right">' + photos.length + ' photo' + (photos.length!==1?'s':'') + ' total</div>';
+  }
+  container.innerHTML = html;
+  // Load signed URLs for images
+  container.querySelectorAll('img[data-path]').forEach(async function(img) {
+    var url = await getPhotoUrl(img.getAttribute('data-path'));
+    if (url) img.src = url;
+  });
+}
+
+async function handlePhotoUpload(event, siteName, siteId, refreshContainer) {
+  var files = Array.from(event.target.files);
+  if (!files.length) return;
+  toast('Compressing & uploading ' + files.length + ' photo(s)…', '');
+  var uploaded = 0;
+  for (var i = 0; i < files.length; i++) {
+    var path = await uploadSitePhoto(files[i], siteName, siteId, '');
+    if (path) uploaded++;
+  }
+  event.target.value = '';
+  if (uploaded > 0) {
+    toast('✓ ' + uploaded + ' photo(s) uploaded', 'ok');
+    if (refreshContainer) renderPhotoSection(siteName, siteId, refreshContainer);
+  }
+}
+
+async function viewPhoto(el) {
+  var path = el.getAttribute('data-path');
+  var url = await getPhotoUrl(path);
+  if (!url) { toast('Cannot load photo', 'err'); return; }
+  document.getElementById('photo-modal-img').src = url;
+  document.getElementById('photo-modal').style.display = 'flex';
+}
+
+// ── Enhanced Drive folder matching ──────────────────────────────
+function normalizeSiteName(s) {
+  return (s || '').toLowerCase()
+    .replace(/[-_.,\/#!$%^&*;:{}=\-_`~()]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function getDriveLinkSmart(siteName) {
+  // Exact match first
+  if (DRIVE_MAP[siteName]) return DRIVE_MAP[siteName];
+  // Normalized exact
+  var norm = normalizeSiteName(siteName);
+  for (var key in DRIVE_MAP) {
+    if (normalizeSiteName(key) === norm) return DRIVE_MAP[key];
+  }
+  // Partial — site name contains a key or key contains site name
+  for (var key in DRIVE_MAP) {
+    var nk = normalizeSiteName(key);
+    if (nk && norm && (norm.includes(nk) || nk.includes(norm))) return DRIVE_MAP[key];
+  }
+  // Word-level overlap (≥2 significant words match)
+  var words = norm.split(' ').filter(function(w){ return w.length > 3; });
+  var best = null, bestScore = 0;
+  for (var key in DRIVE_MAP) {
+    var keyWords = normalizeSiteName(key).split(' ').filter(function(w){ return w.length > 3; });
+    var score = words.filter(function(w){ return keyWords.includes(w); }).length;
+    if (score >= 2 && score > bestScore) { bestScore = score; best = DRIVE_MAP[key]; }
+  }
+  if (best) return best;
+  return 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
+}
+
+// Override getDriveLink with smart version
+var _getDriveLinkOriginal = null; // will patch after DRIVE_MAP is defined
+
+
 
 // ═══════════════════════════════════════════════════════════════
 // UTILITIES
@@ -1816,8 +2110,6 @@ function showInvTab(tab,btn){
 }
 
 function renderInsights(){
-  const aiCard=document.getElementById('ai-digest-wrap');
-  if(aiCard && !aiCard.hasChildNodes()) aiCard.innerHTML=`<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:16px 18px;margin-bottom:16px;color:#fff"><div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px"><div><div style="font-size:13px;font-weight:700;margin-bottom:2px">✨ AI Weekly Digest</div><div style="font-size:11px;opacity:.8">Gemini reads all site data and surfaces risks, blockers &amp; actions</div></div><button id="ai-digest-btn" onclick="runAIDigest()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:7px 14px;font-size:12px;font-weight:700;cursor:pointer">✨ Generate AI Digest</button></div><div id="ai-digest-out" style="display:none;margin-top:14px;background:rgba(255,255,255,.12);border-radius:8px;padding:12px;font-size:12px;color:#fff;line-height:1.6"></div></div>`;
   const g=document.getElementById('igg');
   const sMap={},oMap={},vMap={};
   allData.forEach(r=>{
@@ -2076,31 +2368,52 @@ function openModal(idx){
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
     ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}
-    <div class="msec" style="background:linear-gradient(135deg,#f0f7ff 0%,#e8f0fe 100%);border:1px solid #c7d7f0;border-radius:8px;padding:12px 14px;margin-bottom:12px">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
-        <div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">🧠 AI Summary</div>
-        <button id="site-ai-btn-${idx}" onclick="runSiteAI(${idx})" style="background:#1e3a5f;color:#fff;border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ Analyse this site</button>
-      </div>
-      <div id="site-ai-out-${idx}" style="display:none;font-size:12px;line-height:1.6;padding-top:6px;border-top:1px solid #c7d7f0"></div>
-    </div>
     ${llScopeHtml}
     ${llHtml}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
       </div>
+    </div>
+    <div class="msec" style="margin-top:4px">
+      <div id="photo-sec-${idx}" style="padding:2px 0"></div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
+  // Load photos async after modal opens
+  var photoContainer = document.getElementById('photo-sec-'+idx);
+  if (photoContainer) {
+    var siteName2 = r['Site Name'] || '';
+    renderPhotoSection(siteName2, null, photoContainer);
+  }
+  // Override drive link with smart matching
+  var mdrive = document.getElementById('mdrive');
+  if (mdrive) {
+    var smartLink = getDriveLinkSmart(r['Site Name'] || '');
+    if (smartLink) { mdrive.href = smartLink; mdrive.style.display = ''; }
+  }
+  // Log edit session to audit if logged in
+  if (__sbUser && (r['Site Name'] || '')) {
+    __sbClient && __sbClient.from('audit_log').insert({
+      site_name: r['Site Name'],
+      field_name: 'modal_opened',
+      new_value: new Date().toISOString(),
+      changed_by: __sbUser.id,
+      changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    });
+  }
 }
 
 function saveMeta(f,idx,el){
   const v=el.textContent.trim();
+  const oldV = allData[idx][f] || '';
   allData[idx][f]=v;
   if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
     allData[idx]['Percentage Completion']=v.replace('%','').trim();
   }
   if(f==='Revised') allData[idx]['Revised Completion']=v;
   renderKPIs();applyFilters();buildKpiPanel();
+  // Audit log
+  if (oldV !== v) saveSiteFieldToSupabase(allData[idx]['Site Name']||'', f, oldV, v);
 }
 function toggleU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='none';if(e2)e2.style.display='block';}
 function cancelU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='block';if(e2)e2.style.display='none';}
@@ -2229,23 +2542,6 @@ function handleCSV(event){
   event.target.value='';
 }
 
-function exportCSV(){
-  try{
-    const allCols=[...META_COLS,...DATE_COLS];
-    const rows=[allCols.join(',')];
-    allData.forEach(r=>rows.push(allCols.map(c=>{
-      const v=(r[c]||''). replace(/"/g,'\"\"\"');
-      return (v.includes(',')||v.includes('\n')||v.includes('"')?`"${v}"`:v);
-    }).join(',')));
-    const blob=new Blob(['\uFEFF'+rows.join('\r\n')],{type:'text/csv;charset=utf-8;'});
-    const url=URL.createObjectURL(blob);
-    const a=document.createElement('a');
-    a.href=url;a.download='Cars24_Tracker_'+new Date().toISOString().split('T')[0]+'.csv';a.style.display='none';
-    document.body.appendChild(a);a.click();
-    setTimeout(()=>{document.body.removeChild(a);URL.revokeObjectURL(url);},200);
-    toast('Exported '+allData.length+' sites','ok');
-  }catch(e){toast('Export failed','err');}
-}
 
 // ═══════════════════════════════════════════════════════════════
 // INIT
@@ -2542,15 +2838,6 @@ function savePmKpis(){
 
 
 
-function openTargetsPage(){
-  // Show calv as full-page overlay
-  const overlay=document.getElementById('targets-overlay');
-  if(overlay){overlay.style.display='flex';renderCalendarTo('cal-overlay-inner');}
-}
-function closeTargetsPage(){
-  const overlay=document.getElementById('targets-overlay');
-  if(overlay) overlay.style.display='none';
-}
 
 
 function filterByOwner(oi){
@@ -2679,6 +2966,7 @@ function renderSnagTab(){
           '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:#2563eb;text-transform:uppercase">% Closed</th>'+
           '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Avg Days</th>'+
           '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Top Pending Vendor</th>'+
+          '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Notice</th>'+
         '</tr></thead>'+
         '<tbody>'+
           sites.map(function(s){
@@ -2711,6 +2999,7 @@ function renderSnagTab(){
               '<td style="padding:7px 10px;text-align:center"><span style="font-weight:700;color:'+pc+'">'+s.pctClosed+'%</span></td>'+
               '<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+(s.avgDays!=null?s.avgDays+'d':'—')+'</td>'+
               '<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+(s.topOwner?esc(s.topOwner[0])+' ('+s.topOwner[1]+')':'—')+'</td>'+
+              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a>':'—')+'</td>'+
             '</tr>';
           }).join('')+
         '</tbody>'+
@@ -2738,7 +3027,10 @@ function showSnagDetail(site){
     '<div class="igc" style="padding:14px">'+
     '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'+
     '<div class="reg-section-title" style="margin-bottom:0">🔧 '+esc(site)+' — Full Snag List</div>'+
+    '<div style="display:flex;gap:6px;align-items:center">'+
+    '<a href="'+snagVendorMailUrl(site)+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#dc2626;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Snag Notice to Vendor</a>'+
     '<button class="btn btn-o" onclick="document.getElementById(\'snag-detail-panel\').style.display=\'none\'" style="font-size:11px">✕ Close</button>'+
+    '</div>'+
     '</div>'+
     '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'+
     '<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">'+
@@ -3281,16 +3573,6 @@ function renderTaskTab(){
     +'<div style="font-size:14px;font-weight:700">📋 Action Items</div>'
     +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
-  // AI Action Plan card (render once)
-  html+='<div id="ai-task-card" style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:14px 16px;margin-bottom:16px;color:#fff">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
-    +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">🧠 AI Action Plan</div>'
-    +'<div style="font-size:10px;opacity:.8">Prioritises tasks by aging — Critical / This Week / Follow Up</div></div>'
-    +'<button id="ai-task-btn" onclick="runTaskAI()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ AI Action Plan</button>'
-    +'</div>'
-    +'<div id="ai-task-out" style="display:none;margin-top:12px;background:rgba(255,255,255,.1);border-radius:8px;padding:10px;line-height:1.6"></div>'
-    +'</div>';
-
   // Procurement plan auto-tasks: sites with PO issued but plan not yet received
   var procPending=allData.filter(function(r){
     return (r['PO Date']||'').trim()&&(r['PO Date']||'').trim()!=='—'&&(r['PO Date']||'').trim().toLowerCase()!=='pending'&&!hasProcurementPlan(r);
@@ -4300,6 +4582,43 @@ function vendorDelayMail(r){
   return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
 
+// ═══ SNAG VENDOR MAIL ════════════════════════════════════════════
+function snagVendorMailUrl(site){
+  var rows=SNAG_DATA[site]||[];
+  var open=rows.filter(function(r){
+    var s=(r.status||'').toLowerCase();
+    return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';
+  });
+  // Find matching allData row for site context
+  var pr=allData.find(function(r){return (r['Site Name']||'').trim()===site.trim();})||{};
+  var owner=pr['Owner']||'PM';
+  var vendor=pr['Vendor']||'Vendor';
+  var satDate=pr['SAT Date']||'—';
+  var uatD=pd(pr['SAT Date']);
+  var uatTgt=uatD?new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var today=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
+  var subj='Post-SAT Snag Closure Notice — '+site+' — '+open.length+' Open Items';
+  var snagLines=open.map(function(r,i){
+    var area=r.area||'General';
+    var desc=r.desc||r.title||'—';
+    var status=r.status||'Pending';
+    return '  '+(i+1)+'. ['+area+'] '+desc+' (Status: '+status+')';
+  }).join('\n');
+  var body='Dear '+vendor+' Team,\n\n'
+    +'SAT inspection for '+site+' has been completed on '+satDate+'. As per our site inspection, the following '
+    +open.length+' snag item'+(open.length!==1?'s remain':'s remain')+'s pending closure before UAT sign-off.\n\n'
+    +'OPEN SNAG LIST — '+site+':\n'+snagLines+'\n\n'
+    +'UAT Target Date: '+uatTgt+'\n\n'
+    +'You are requested to:\n'
+    +'  1. Resolve all open snags on priority before the UAT date.\n'
+    +'  2. Update status for each snag item in the tracker.\n'
+    +'  3. Intimate the site PM ('+owner+') once all snags are addressed for re-inspection scheduling.\n\n'
+    +'Non-closure of snags by UAT date will be noted as a performance issue under your contract and may result in penalty deductions.\n\n'
+    +'This is a system-generated notice. For queries, contact '+owner+', CARS24 Projects.\n\n'
+    +'Regards,\n'+owner+'\nCARS24 Projects Team\nDate: '+today;
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+
 // ═══ SLACK TAB ═══════════════════════════════════════════════════
 function renderSlackTab(subTab){
   subTab=subTab||'crossfunc';
@@ -4309,18 +4628,6 @@ function renderSlackTab(subTab){
   var nav='<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSlackTab(\'crossfunc\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='crossfunc'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Cross-Functional</button>'
     +'<button onclick="renderSlackTab(\'pmupdate\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='pmupdate'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">PM Update</button>'
-    +'</div>'
-    +'<div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);border-radius:10px;padding:14px 16px;margin-bottom:16px;color:#fff">'
-    +'<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:0">'
-    +'<div><div style="font-size:12px;font-weight:700;margin-bottom:2px">✨ AI Slack Draft</div>'
-    +'<div style="font-size:10px;opacity:.8">AI generates a polished cross-functional Slack post — ready to copy & paste</div></div>'
-    +'<div style="display:flex;gap:6px">'
-    +'<button id="ai-slack-btn" onclick="runSlackAI()" style="background:#fff;color:#1e3a5f;border:none;border-radius:6px;padding:6px 12px;font-size:11px;font-weight:700;cursor:pointer">✨ Generate</button>'
-    +'<button onclick="copyToClipboard(\'ai-slack-out\')" style="background:rgba(255,255,255,.15);color:#fff;border:1px solid rgba(255,255,255,.3);border-radius:6px;padding:6px 10px;font-size:11px;font-weight:600;cursor:pointer">📋 Copy</button>'
-    +'</div></div>'
-    +'<div id="ai-slack-wrap" style="display:none;margin-top:12px">'
-    +'<pre id="ai-slack-out" style="background:#0d1117;color:#c9d1d9;padding:12px;border-radius:8px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6;margin:0"></pre>'
-    +'</div>'
     +'</div>';
   if(subTab==='crossfunc'){
     var bt={'IT':[],'Design':[],'Commercial':[],'HEM':[],'BD':[],'Other':[]};
@@ -4725,6 +5032,13 @@ function renderBDTab(){
   filteredData=[...allData];
   buildFilters();
   renderKPIs();
+  // Patch getDriveLink with smart fuzzy version
+  if (typeof getDriveLink === 'function') { window.getDriveLinkOriginal = getDriveLink; }
+  window.getDriveLink = getDriveLinkSmart;
+  // Init Supabase (restores session from localStorage if user was previously signed in)
+  initSupabase();
+  // Apply role view on load (defaults to viewer until auth resolves)
+  applyRoleBasedView();
   // Build column toggle checkboxes
   (function(){
     const COLNAMES=['Sr No','Site Name','Owner','Vendor','Completion %','Status','PO Date','Kickoff','Work Start','SAT Date','UAT Date','Planned','Revised','Latest Update'];
@@ -5760,38 +6074,10 @@ function showLoginError(msg){
   el.textContent = msg;
   el.style.display = 'block';
 }
-function doLogin(){
-  var u = document.getElementById('login-username').value.trim();
-  var p = document.getElementById('login-password').value;
-  if (!u || !p) { showLoginError('Enter both username and password.'); return; }
-  if (!WORKER_URL || WORKER_URL.indexOf('REPLACE-ME') !== -1) {
-    showLoginError('Worker URL not configured yet (edit WORKER_URL in this file).');
-    return;
-  }
-  var btn = document.getElementById('login-submit');
-  btn.disabled = true; btn.textContent = 'Verifying...';
-  C24Uploader.verify({ workerUrl: WORKER_URL, auth: { username: u, password: p } })
-  .then(function(){
-    __auth = {username: u, password: p};
-    closeLoginModal();
-    document.getElementById('login-btn').style.display = 'none';
-    document.getElementById('logout-btn').style.display = '';
-    document.getElementById('login-user').textContent = '(' + u + ')';
-    document.getElementById('local-upload-lbl').style.display = 'none';
-    document.getElementById('live-upload-lbl').style.display  = '';
-    document.getElementById('snag-local-lbl').style.display   = 'none';
-    document.getElementById('snag-live-lbl').style.display    = '';
-    document.getElementById('ticket-local-lbl').style.display = 'none';
-    document.getElementById('ticket-live-lbl').style.display  = '';
-    toast('✓ Logged in as ' + u, 'ok');
-  })
-  .catch(function(err){
-    showLoginError(err.message || 'Invalid credentials.');
-  })
-  .finally(function(){ btn.disabled = false; btn.textContent = 'Login'; });
-}
 function doLogout(){
   __auth = null;
+  doLogoutSupabase();
+  __sbRole = 'viewer';
   document.getElementById('login-btn').style.display = '';
   document.getElementById('logout-btn').style.display = 'none';
   document.getElementById('login-user').textContent = '';
@@ -5801,7 +6087,8 @@ function doLogout(){
   document.getElementById('snag-live-lbl').style.display    = 'none';
   document.getElementById('ticket-local-lbl').style.display = '';
   document.getElementById('ticket-live-lbl').style.display  = 'none';
-  toast('Logged out', 'ok');
+  applyRoleBasedView();
+  toast('Signed out', 'ok');
 }
 
 // Authenticated CSV upload — POSTs file content to the Worker which commits it to GitHub.
@@ -5949,6 +6236,12 @@ function handleLiveTicketCSV(event){
   }
 }
 
+// ── PWA service worker registration ──────────────────────────────
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', function() {
+    navigator.serviceWorker.register('/projects-tracker/sw.js').catch(function(){});
+  });
+}
 </script>
 <div id="slack-modal" onclick="if(event.target===this)this.style.display='none'"><div class="slack-box"><h3>📋 Slack Preview</h3><pre id="slack-preview"></pre><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-p btn-sm" onclick="copySlack()">📋 Copy</button><button class="btn btn-o btn-sm" onclick="document.getElementById('slack-modal').style.display='none'">Close</button></div></div></div>
 </body>

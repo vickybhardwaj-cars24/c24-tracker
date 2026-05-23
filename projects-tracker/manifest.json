@@ -1,0 +1,37 @@
+{
+  "name": "CARS24 Projects Tracker",
+  "short_name": "C24 Projects",
+  "description": "CARS24 Expansion & Projects — pan-India site tracker",
+  "start_url": "/projects-tracker/",
+  "display": "standalone",
+  "background_color": "#f5f6fa",
+  "theme_color": "#2563eb",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/cars24-round-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/cars24-round-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "shortcuts": [
+    {
+      "name": "Projects Table",
+      "url": "/projects-tracker/?view=table",
+      "description": "Open site table"
+    },
+    {
+      "name": "SAT → UAT",
+      "url": "/projects-tracker/?view=sat",
+      "description": "SAT/UAT tracker"
+    }
+  ]
+}
