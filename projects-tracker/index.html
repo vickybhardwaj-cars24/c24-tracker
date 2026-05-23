@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.23</title>
+<title>Cars24 Projects Tracker v4.24</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -796,16 +796,15 @@ function onSbLoginSuccess() {
   document.getElementById('ticket-local-lbl').style.display = 'none';
   document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
   applyRoleBasedView();
-  // Wire Supabase JWT to Worker, then reload data if table is still blank
+  // Wire Supabase JWT to Worker, then reload data
   _wireWorkerWithSbToken().then(function() {
+    var tok = window.__sbUploadToken;
+    console.log('[C24] post-login token present:', !!tok, '__originLoaded:', __originLoaded);
     toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
-    if (!__originLoaded) {
-      Promise.all([
-        workerFetchText(WORKER_URL + TOOL_PATH + '.csv'),
-        loadHOTPUpdates(),
-        loadSchedData()
-      ]).then(function(results) {
-        var text = results[0];
+    // Always reload — ensures fresh data even if __originLoaded was set by a partial/failed load
+    workerFetchText(WORKER_URL + TOOL_PATH + '.csv')
+      .then(function(text) {
+        console.log('[C24] CSV fetched, length:', text && text.length);
         var parsed = parseCSV(text);
         if (parsed && parsed.length) {
           __originLoaded = true;
@@ -815,11 +814,16 @@ function onSbLoginSuccess() {
           var c = document.getElementById('cchip');
           if (c) c.textContent = allData.length + ' sites';
           loadSupabaseUpdates().then(function(){ buildFilters(); renderKPIs(); renderAll(); });
+          toast('✓ ' + allData.length + ' sites loaded', 'ok');
         } else {
-          toast('No data loaded — check Worker connection', 'err');
+          toast('Worker returned empty CSV — upload data first', 'err');
+          console.warn('[C24] Empty CSV response:', text && text.substring(0, 200));
         }
-      }).catch(function(e){ toast('Data load failed: ' + (e.message||e), 'err'); console.warn('Post-login reload failed:', e); });
-    }
+      })
+      .catch(function(e){
+        toast('Data load failed: ' + (e.message||e), 'err');
+        console.error('[C24] Worker fetch error:', e);
+      });
   });
 }
 
