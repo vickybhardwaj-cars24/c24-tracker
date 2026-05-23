@@ -6124,22 +6124,27 @@ function renderAdminTab() {
   if (__sbRole !== 'admin') { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Admin access only.</div>'; return; }
   el.innerHTML = '<div style="max-width:900px;margin:0 auto">'
     + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">⚙ Admin Panel</div>'
-    + '<div style="font-size:11px;color:var(--muted);margin-bottom:20px">Manage team logins, view edit history, control access</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Manage team logins, view edit history, control access</div>'
+    // System status bar
+    + '<div id="sys-status" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
-    // Invite card
+    // Create user card (direct — no email needed)
     + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px">'
-    + '<div style="font-size:13px;font-weight:700;margin-bottom:12px">👥 Invite Team Member</div>'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:4px">👥 Add Team Member</div>'
+    + '<div style="font-size:10px;color:var(--muted);margin-bottom:12px">Creates account instantly — share credentials with PM directly</div>'
     + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Full Name</label>'
     + '<input id="inv-name" type="text" placeholder="e.g. Kamal Saini" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:8px;outline:none">'
     + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Work Email</label>'
     + '<input id="inv-email" type="email" placeholder="pm@cars24.com" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:8px;outline:none">'
+    + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Temporary Password</label>'
+    + '<input id="inv-pass" type="text" placeholder="e.g. Cars24@2025" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:8px;outline:none">'
     + '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Role</label>'
     + '<select id="inv-role" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;margin-bottom:12px;outline:none;background:var(--bg)">'
     + '<option value="pm">PM — Can update their sites</option>'
     + '<option value="viewer">Viewer — Read only</option>'
     + '<option value="admin">Admin — Full access</option>'
     + '</select>'
-    + '<button onclick="doInviteTeamMember()" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif" id="inv-btn">📧 Send Invite</button>'
+    + '<button onclick="doCreateUser()" style="width:100%;padding:8px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif" id="inv-btn">✅ Create Account</button>'
     + '<div id="inv-msg" style="display:none;font-size:11px;margin-top:8px;padding:7px 9px;border-radius:6px"></div>'
     + '</div>'
     // Team list card
@@ -6172,6 +6177,7 @@ function renderAdminTab() {
     + '</div>';
   loadTeamList();
   loadAuditLog();
+  checkSystemStatus();
 }
 
 async function doInviteTeamMember() {
@@ -6206,6 +6212,59 @@ async function doInviteTeamMember() {
     showInvMsg(e.message || 'Failed to send invite.', 'err');
   }
   btn.disabled = false; btn.textContent = '📧 Send Invite';
+}
+
+// ── System Status Check ──────────────────────────────────────────
+async function checkSystemStatus() {
+  var el = document.getElementById('sys-status'); if (!el) return;
+  function chip(label, ok, detail) {
+    var bg = ok ? '#f0fdf4' : '#fef2f2', clr = ok ? '#16a34a' : '#dc2626', border = ok ? '#86efac' : '#fecaca';
+    return '<div style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:'+bg+';color:'+clr+';border:1px solid '+border+';border-radius:6px;font-size:11px;font-weight:600">'
+      + (ok ? '✓' : '✗') + ' ' + label + (detail ? ' <span style="font-weight:400;opacity:.8">'+detail+'</span>' : '') + '</div>';
+  }
+  el.innerHTML = chip('Supabase', !!__sbUser, __sbUser ? __sbUser.email : 'not signed in')
+    + chip('Role', true, __sbRole)
+    + '<div id="worker-status-chip" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:#fffbeb;color:#92400e;border:1px solid #fcd34d;border-radius:6px;font-size:11px;font-weight:600">⏳ Checking Worker…</div>';
+  // Test Worker connectivity
+  try {
+    var r = await fetch(WORKER_URL + 'hotp-updates.csv', { method: 'HEAD', cache: 'no-store' });
+    document.getElementById('worker-status-chip').outerHTML = chip('Worker', r.ok || r.status === 404, r.ok ? 'connected' : 'status '+r.status);
+  } catch(e) {
+    document.getElementById('worker-status-chip').outerHTML = chip('Worker', false, 'unreachable');
+  }
+}
+
+// ── Create User Directly (no email invite needed) ─────────────────
+async function doCreateUser() {
+  var name  = (document.getElementById('inv-name').value || '').trim();
+  var email = (document.getElementById('inv-email').value || '').trim();
+  var pass  = (document.getElementById('inv-pass').value || '').trim();
+  var role  = document.getElementById('inv-role').value;
+  var btn   = document.getElementById('inv-btn');
+  if (!name)  { showInvMsg('Enter full name.', 'err'); return; }
+  if (!email || !email.includes('@')) { showInvMsg('Enter a valid email.', 'err'); return; }
+  if (!pass || pass.length < 6) { showInvMsg('Password must be at least 6 characters.', 'err'); return; }
+  btn.disabled = true; btn.textContent = 'Creating…';
+  try {
+    // Sign up user with email+password (email confirmation bypassed via Supabase settings)
+    var r2 = await __sbClient.auth.signUp({ email: email, password: pass, options: { data: { full_name: name } } });
+    if (r2.error) throw r2.error;
+    var data = r2.data && r2.data.user;
+    if (!data) throw new Error('User creation returned no data. Check Supabase Auth settings.');
+    var newId = data && data.id;
+    // Set profile with role
+    if (newId && __sbClient) {
+      await __sbClient.from('profiles').upsert({ id: newId, email: email, full_name: name, role: role }, { onConflict: 'id' });
+    }
+    showInvMsg('✅ Account created for ' + name + '!\n\nShare these login details:\nURL: https://c24-projects.vercel.app/projects-tracker/\nEmail: ' + email + '\nPassword: ' + pass + '\n\nThey can change their password after first login.', 'ok');
+    document.getElementById('inv-name').value = '';
+    document.getElementById('inv-email').value = '';
+    document.getElementById('inv-pass').value = '';
+    setTimeout(loadTeamList, 800);
+  } catch(e) {
+    showInvMsg('Error: ' + (e.message || 'Could not create user. Check Supabase permissions.'), 'err');
+  }
+  btn.disabled = false; btn.textContent = '✅ Create Account';
 }
 
 // ── Drive Map Management ─────────────────────────────────────────
