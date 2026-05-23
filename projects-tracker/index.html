@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.47</title>
+<title>Cars24 Projects Tracker v4.48</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1128,80 +1128,52 @@ async function syncAllSitesToSupabase() {
 // ── Load field overrides from Supabase → merge into allData ─────
 async function loadSupabaseSiteFields() {
   if (!__sbClient) return;
-  var colMap = {
-    'status': 'Status', 'owner': 'Owner', 'vendor': 'Vendor',
-    'vendor_rating': 'Vendor Rating', 'pct_completion': 'Percentage Completion',
-    'sat_date': 'SAT Date', 'uat_date': 'UAT DATE', 'planned_completion': 'Planned Completion',
-    'revised_completion': 'Revised Completion', 'kickoff_date': 'Kickoff Date',
-    'work_start_date': 'Work Start Date', 'po_date': 'PO Date', 'zone': 'Zone',
-    'bu': 'BU', 'reason_for_delay': 'Reason for Delay'
-  };
-  var r = await __sbClient.from('sites').select('site_name,cost_center,' + Object.keys(colMap).join(',')).catch(function(){ return { error: true }; });
+  var r = await __sbClient.from('site_field_overrides')
+    .select('site_name,field_name,field_value')
+    .catch(function(){ return { error: true }; });
   if (r.error || !r.data || !r.data.length) return;
   try {
-    r.data.forEach(function(sb) {
-      var sn = (sb.site_name||'').trim();
+    r.data.forEach(function(sfo) {
+      var sn = (sfo.site_name||'').trim();
       var row = allData.find(function(d){ return (d['Site Name']||'').trim() === sn; });
       if (!row) return;
-      Object.keys(colMap).forEach(function(col) {
-        if (sb[col] !== null && sb[col] !== undefined) {
-          var v = String(sb[col]);
-          if (['sat_date','uat_date','planned_completion','revised_completion','kickoff_date','work_start_date','po_date'].includes(col)) {
-            if (v && v.match(/^\d{4}-\d{2}-\d{2}/)) {
-              var d = new Date(v.substring(0,10) + 'T00:00:00');
-              var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-              v = d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear();
-            }
-          }
-          if (v && v !== 'null') row[colMap[col]] = v;
-        }
-      });
-      if (sb.cost_center) { row['Cost Center'] = sb.cost_center; CC_MAP[sn] = sb.cost_center; }
+      var fn = (sfo.field_name||'').trim();
+      var v  = (sfo.field_value||'').trim();
+      if (fn && v && v !== 'null') {
+        row[fn] = v;
+        if (fn === 'Cost Center') CC_MAP[sn] = v;
+      }
     });
   } catch(e) { console.warn('loadSupabaseSiteFields apply error:', e); }
 }
 
 async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
   if (!__sbClient || !__sbUser) return;
-  var colMap = {
-    'Status': 'status', 'Owner': 'owner', 'Vendor': 'vendor',
-    'Vendor Rating': 'vendor_rating', 'Percentage Completion': 'percentage_completion',
-    'SAT Date': 'sat_date', 'UAT DATE': 'uat_date', 'Planned Completion': 'planned_completion',
-    'Revised Completion': 'revised_completion', 'Kickoff Date': 'kickoff_date',
-    'Work Start Date': 'work_start_date', 'PO Date': 'po_date', 'Zone': 'zone',
-    'BU': 'bu', 'Reason for Delay': 'reason_for_delay',
-    'Cost Center': 'cost_center', 'Site Name': 'site_name'
-  };
-  var col = colMap[fieldName];
-  if (col) {
-    var DATE_DB_COLS = ['sat_date','uat_date','planned_completion','revised_completion','kickoff_date','work_start_date','po_date'];
-    var valueToSave = newValue;
-    if (DATE_DB_COLS.includes(col)) {
-      var dParsed = pd(newValue);
-      valueToSave = (dParsed && !isNaN(dParsed)) ? dParsed.toISOString().split('T')[0] : null;
-    }
-    var upsertRow = { site_name: siteName, updated_at: new Date().toISOString() };
-    if (fieldName === 'Site Name') { upsertRow.site_name = newValue; }
-    else { upsertRow[col] = valueToSave; }
-    console.log('saveSiteFieldToSupabase:', siteName, col, '=', valueToSave);
-    var sr = await __sbClient.from('sites').upsert(
-      upsertRow,
-      { onConflict: 'site_name', ignoreDuplicates: false }
-    );
-    if (sr.error) {
-      console.error('saveSiteFieldToSupabase error:', sr.error);
-      toast('Field save failed: ' + (sr.error.message || sr.error.code || JSON.stringify(sr.error)), 'err');
-      return;
-    }
-    console.log('saveSiteFieldToSupabase: saved OK');
+  var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
+  console.log('saveSiteField:', siteName, fieldName, '=', newValue);
+  var sr = await __sbClient.from('site_field_overrides').upsert(
+    {
+      site_name:       siteName,
+      field_name:      fieldName,
+      field_value:     String(newValue !== null && newValue !== undefined ? newValue : ''),
+      updated_by_name: byName,
+      updated_at:      new Date().toISOString()
+    },
+    { onConflict: 'site_name,field_name' }
+  );
+  if (sr.error) {
+    console.error('saveSiteField error:', sr.error);
+    toast('Save failed: ' + (sr.error.message || sr.error.code || JSON.stringify(sr.error)), 'err');
+    return;
   }
+  console.log('saveSiteField: OK ✓');
   __sbClient.from('audit_log').insert({
-    site_name: siteName,
-    field_name: fieldName,
-    old_value: String(oldValue || ''),
-    new_value: String(newValue || ''),
-    changed_by: null,
-    changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    site_name:        siteName,
+    field_name:       fieldName,
+    old_value:        String(oldValue || ''),
+    new_value:        String(newValue || ''),
+    changed_by:       null,
+    changed_by_name:  byName
   }).catch(function(){});
 }
 
