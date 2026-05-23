@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.35</title>
+<title>Cars24 Projects Tracker v4.36</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -984,14 +984,34 @@ function doLogin() {
   var email = document.getElementById('login-username').value.trim();
   var password = document.getElementById('login-password').value;
   if (!email || !password) { showLoginError('Enter email and password.'); return; }
-  if (!__sbClient) initSupabase(); // retry in case CDN loaded after initial call
+  if (!__sbClient) initSupabase();
   if (SB_ENABLED && __sbClient) {
     doSupabaseLogin(email, password);
-  } else {
-    // Fall through to legacy login
-    showLoginError('Supabase not configured yet. Use legacy login below for CSV uploads.');
-    document.getElementById('login-legacy-section').style.display = '';
+    return;
   }
+  // CDN may still be loading — poll up to 3s then fall through
+  if (SB_ENABLED) {
+    var btn = document.getElementById('login-submit');
+    if (btn) { btn.disabled = true; btn.textContent = 'Connecting…'; }
+    var tries = 0;
+    var poll = setInterval(function() {
+      tries++;
+      if (!__sbClient) initSupabase();
+      if (__sbClient) {
+        clearInterval(poll);
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign in →'; }
+        doSupabaseLogin(email, password);
+      } else if (tries >= 15) {
+        clearInterval(poll);
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign in →'; }
+        showLoginError('Could not connect to auth service. Use legacy login below.');
+        document.getElementById('login-legacy-section').style.display = '';
+      }
+    }, 200);
+    return;
+  }
+  showLoginError('Supabase not configured yet. Use legacy login below for CSV uploads.');
+  document.getElementById('login-legacy-section').style.display = '';
 }
 
 function doLogoutSupabase() {
