@@ -1,0 +1,47 @@
+{
+  "name": "C24 Expansion Hub",
+  "short_name": "C24 Hub",
+  "description": "CARS24 Expansion Hub — projects, budget, PR/PO and NSO tracking",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#1A1A1A",
+  "theme_color": "#4736FE",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/cars24-round-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/cars24-round-icon.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "business"],
+  "shortcuts": [
+    {
+      "name": "Projects Tracker",
+      "url": "/projects-tracker/",
+      "description": "Open site projects tracker"
+    },
+    {
+      "name": "PR/PO Tracker",
+      "url": "/pr-po-tracker/",
+      "description": "Open PR/PO tracker"
+    },
+    {
+      "name": "Budget FY 26-27",
+      "url": "/budget/",
+      "description": "Open budget tracker"
+    },
+    {
+      "name": "NSO Tracker",
+      "url": "/nso-tracker/",
+      "description": "Open NSO tracker"
+    }
+  ]
+}
