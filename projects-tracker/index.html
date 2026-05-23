@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.34</title>
+<title>Cars24 Projects Tracker v4.35</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -6805,15 +6805,21 @@ var _ccMapEdits = {};
 
 function buildCCMapRows() {
   var merged = Object.assign({}, CC_MAP, _ccMapEdits);
+  // Include ALL sites from allData so unmapped ones show up for easy filling
+  allData.forEach(function(r) {
+    var sn = (r['Site Name'] || '').trim();
+    if (sn && !(sn in merged)) merged[sn] = '';
+  });
   var sites = Object.keys(merged).sort();
-  if (!sites.length) return '<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--muted);font-size:12px">No cost centers mapped yet.</td></tr>';
+  if (!sites.length) return '<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--muted);font-size:12px">No sites loaded.</td></tr>';
   return sites.map(function(site) {
     var code = merged[site] || '';
-    return '<tr style="border-bottom:1px solid var(--border)">'
-      + '<td style="padding:5px 8px;font-size:12px;font-weight:500">' + esc(site) + '</td>'
+    var missing = !code;
+    return '<tr style="border-bottom:1px solid var(--border);' + (missing ? 'background:#fffbeb' : '') + '">'
+      + '<td style="padding:5px 8px;font-size:12px;font-weight:500">' + esc(site) + (missing ? '<span style="font-size:9px;color:#d97706;margin-left:5px">missing</span>' : '') + '</td>'
       + '<td style="padding:5px 8px">'
       + '<input type="text" value="' + esc(code) + '" data-site="' + esc(site) + '" class="cc-inp" placeholder="e.g. CC-1234" '
-      + 'style="width:100%;padding:4px 7px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:Inter,sans-serif;outline:none" '
+      + 'style="width:100%;padding:4px 7px;border:1px solid ' + (missing ? '#fde68a' : 'var(--border2)') + ';border-radius:5px;font-size:11px;font-family:Inter,sans-serif;outline:none" '
       + 'oninput="_ccMapEdits[this.dataset.site]=this.value">'
       + '</td>'
       + '<td style="padding:5px 8px;text-align:center">'
