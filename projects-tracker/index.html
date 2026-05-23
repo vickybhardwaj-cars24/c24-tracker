@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.51</title>
+<title>Cars24 Projects Tracker v4.52</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -29,7 +29,7 @@ html,body{height:100%;overflow:hidden}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;display:flex;flex-direction:column}
 header{background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;z-index:200;box-shadow:var(--sh);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:10px}
-.logo img{height:34px;border-radius:6px;display:block}
+.logo img{height:34px;width:auto;object-fit:contain;display:block}
 .logo h1{font-size:14px;font-weight:700}.logo p{font-size:11px;color:var(--muted)}
 .hdr-r{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:4px;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all .15s;line-height:1.4}
@@ -551,8 +551,9 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px 22px 16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:3px">🔐 CARS24 Tracker Login</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.75)" id="login-subtitle">Sign in with your work email</div>
+          <img src="/src/logo_white.webp" alt="CARS24" style="height:20px;width:auto;object-fit:contain;display:block;margin-bottom:8px">
+          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">Projects Tracker</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.72)" id="login-subtitle">Sign in with your work email</div>
         </div>
         <button onclick="closeLoginModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
       </div>
