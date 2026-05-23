@@ -9,7 +9,8 @@
 <meta name="apple-mobile-web-app-title" content="C24 Projects">
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
-<title>Cars24 Projects Tracker v4.12</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<title>Cars24 Projects Tracker v4.13</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -484,25 +485,44 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 </header>
 
 <!-- Login modal (auth for live CSV upload) -->
-<div id="login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:9000;align-items:center;justify-content:center" onclick="if(event.target===this)closeLoginModal()">
-  <div style="background:var(--white);border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.25);width:340px;max-width:92vw;padding:22px 22px 18px;font-family:'Inter',sans-serif">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
-      <h2 style="font-size:15px;font-weight:700;color:var(--text);margin:0">🔐 Tracker Login</h2>
-      <button onclick="closeLoginModal()" style="background:none;border:none;font-size:18px;color:var(--muted);cursor:pointer;line-height:1">×</button>
-    </div>
-    <p style="font-size:11px;color:var(--muted);margin:0 0 14px">Required for live CSV uploads. Credentials are not stored beyond this session.</p>
-    <form id="login-form" onsubmit="event.preventDefault();doLogin();">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Username</label>
-      <input id="login-username" type="text" autocomplete="username" required style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:10px">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
-      <input id="login-password" type="password" autocomplete="current-password" required style="width:100%;padding:8px 10px;border:1px solid var(--border2);border-radius:6px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:14px">
-      <div id="login-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;margin-bottom:10px"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button type="button" class="btn btn-o" onclick="closeLoginModal()">Cancel</button>
-        <button type="submit" class="btn btn-p" id="login-submit">Login</button>
+<div id="login-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeLoginModal()">
+  <div style="background:var(--white);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:360px;max-width:100%;font-family:'Inter',sans-serif;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px 22px 16px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:3px">🔐 CARS24 Tracker Login</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.75)" id="login-subtitle">Sign in with your work email</div>
+        </div>
+        <button onclick="closeLoginModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
       </div>
-    </form>
+    </div>
+    <div style="padding:20px 22px 18px">
+      <form id="login-form" onsubmit="event.preventDefault();doLogin();" autocomplete="on">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Email / Username</label>
+        <input id="login-username" type="email" autocomplete="email" placeholder="your.name@cars24.com" required style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:10px;transition:border .15s" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor=''">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Password</label>
+        <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" required style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:4px;transition:border .15s" onfocus="this.style.borderColor='#2563eb'" onblur="this.style.borderColor=''">
+        <div style="text-align:right;margin-bottom:14px"><button type="button" onclick="doForgotPassword()" style="background:none;border:none;font-size:11px;color:#2563eb;cursor:pointer;padding:0">Forgot password?</button></div>
+        <div id="login-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
+        <button type="submit" class="btn btn-p" id="login-submit" style="width:100%;justify-content:center;padding:10px;font-size:13px;font-weight:600;border-radius:8px">Sign in →</button>
+      </form>
+      <div id="login-legacy-section" style="margin-top:12px;padding-top:12px;border-top:1px solid var(--border);display:none">
+        <div style="font-size:10px;color:var(--muted);text-align:center;margin-bottom:8px">— or use legacy worker credentials —</div>
+        <input id="login-legacy-user" type="text" placeholder="Username" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;margin-bottom:6px">
+        <input id="login-legacy-pass" type="password" placeholder="Password" style="width:100%;padding:7px 10px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:'Inter',sans-serif;outline:none;margin-bottom:8px">
+        <button class="btn btn-o btn-sm" onclick="doLegacyLogin()" style="width:100%;justify-content:center">Worker Login (CSV uploads)</button>
+      </div>
+      <div style="margin-top:10px;text-align:center">
+        <button type="button" onclick="toggleLegacyLogin()" style="background:none;border:none;font-size:10px;color:var(--muted);cursor:pointer">CSV upload only? Use legacy login ↓</button>
+      </div>
+    </div>
   </div>
+</div>
+
+<!-- Photo Viewer Modal -->
+<div id="photo-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.85);z-index:9100;align-items:center;justify-content:center" onclick="document.getElementById('photo-modal').style.display='none'">
+  <img id="photo-modal-img" src="" style="max-width:92vw;max-height:88vh;border-radius:8px;object-fit:contain" onclick="event.stopPropagation()">
+  <button onclick="document.getElementById('photo-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
 </div>
 
 <div class="kpi-bar" id="kpi-bar" style="display:none"></div>
@@ -552,7 +572,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('slackv',this)">📣 Slack</button>
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
     <button class="vtab" onclick="setView('bdv',this)">🏗️ BD</button>
-    <button class="vtab" onclick="setView('attv',this)">📋 Attendance</button>
+    <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
   </div>
   <span class="cchip" id="cchip"></span>
 
@@ -631,6 +651,395 @@ const TICKET_CLOSED = new Set(); // session-only closed ticket IDs
 const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra'];
 const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
+
+// ═══════════════════════════════════════════════════════════════
+// SUPABASE CONFIG — fill in after creating project at supabase.com
+// ═══════════════════════════════════════════════════════════════
+const SUPABASE_URL      = 'REPLACE_WITH_YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'REPLACE_WITH_YOUR_SUPABASE_ANON_KEY';
+const SB_ENABLED = !SUPABASE_URL.includes('REPLACE_WITH');
+
+var __sbClient  = null;
+var __sbUser    = null;   // Supabase auth user
+var __sbProfile = null;   // public.profiles row
+var __sbRole    = 'viewer'; // 'admin' | 'pm' | 'viewer'
+
+function initSupabase() {
+  if (!SB_ENABLED || typeof supabase === 'undefined') return;
+  try {
+    __sbClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    __sbClient.auth.onAuthStateChange(function(event, session) {
+      if (session && session.user) {
+        __sbUser = session.user;
+        loadSbProfile(session.user.id);
+      } else {
+        __sbUser = null; __sbProfile = null; __sbRole = 'viewer';
+        applyRoleBasedView();
+      }
+    });
+    __sbClient.auth.getSession().then(function(r) {
+      if (r.data && r.data.session && r.data.session.user) {
+        __sbUser = r.data.session.user;
+        loadSbProfile(r.data.session.user.id);
+      }
+    });
+  } catch(e) { console.warn('Supabase init failed:', e); }
+}
+
+function loadSbProfile(userId) {
+  if (!__sbClient) return;
+  __sbClient.from('profiles').select('*').eq('id', userId).single()
+  .then(function(r) {
+    if (r.data) {
+      __sbProfile = r.data;
+      __sbRole = r.data.role || 'viewer';
+    }
+    onSbLoginSuccess();
+  }).catch(function() { onSbLoginSuccess(); });
+}
+
+function onSbLoginSuccess() {
+  var email = __sbUser ? __sbUser.email : '';
+  var name = (__sbProfile && __sbProfile.full_name) ? __sbProfile.full_name : email.split('@')[0];
+  closeLoginModal();
+  document.getElementById('login-btn').style.display = 'none';
+  document.getElementById('logout-btn').style.display = '';
+  document.getElementById('login-user').textContent = '(' + name + ')';
+  document.getElementById('local-upload-lbl').style.display = 'none';
+  document.getElementById('live-upload-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('snag-local-lbl').style.display   = 'none';
+  document.getElementById('snag-live-lbl').style.display    = __sbRole === 'admin' ? '' : 'none';
+  document.getElementById('ticket-local-lbl').style.display = 'none';
+  document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
+  applyRoleBasedView();
+  toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
+}
+
+function applyRoleBasedView() {
+  var isAdmin = __sbRole === 'admin';
+  // Hide admin-only tabs from non-admin users
+  document.querySelectorAll('[data-admin-only="true"]').forEach(function(el) {
+    el.style.display = isAdmin ? '' : 'none';
+  });
+  // If PM is currently viewing attendance tab, redirect to table
+  if (!isAdmin) {
+    var attv = document.getElementById('attv');
+    if (attv && (attv.classList.contains('show') || attv.style.display !== 'none')) {
+      setView('tv', document.querySelector('.vtab'));
+    }
+  }
+  // Filter table: PM only sees their own sites
+  if (__sbRole === 'pm' && __sbProfile) {
+    var ownerName = __sbProfile.full_name || '';
+    if (ownerName) {
+      var sel = document.getElementById('f-owner');
+      if (sel) {
+        // Find matching option
+        for (var i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value.toLowerCase().includes(ownerName.split(' ')[0].toLowerCase())) {
+            sel.value = sel.options[i].value;
+            break;
+          }
+        }
+        applyFilters();
+      }
+    }
+  }
+}
+
+// ── Supabase Login ──────────────────────────────────────────────
+async function doSupabaseLogin(email, password) {
+  var btn = document.getElementById('login-submit');
+  btn.disabled = true; btn.textContent = 'Signing in…';
+  try {
+    var r = await __sbClient.auth.signInWithPassword({ email: email, password: password });
+    if (r.error) throw r.error;
+    // onAuthStateChange fires and calls onSbLoginSuccess
+  } catch(e) {
+    showLoginError(e.message || 'Sign-in failed. Check email and password.');
+    btn.disabled = false; btn.textContent = 'Sign in →';
+  }
+}
+
+async function doForgotPassword() {
+  var email = document.getElementById('login-username').value.trim();
+  if (!email || !email.includes('@')) { showLoginError('Enter your email first.'); return; }
+  if (!__sbClient) { showLoginError('Supabase not configured.'); return; }
+  var r = await __sbClient.auth.resetPasswordForEmail(email, {
+    redirectTo: window.location.origin + '/projects-tracker/'
+  });
+  if (r.error) { showLoginError(r.error.message); return; }
+  showLoginError('✓ Password reset email sent to ' + email);
+  document.getElementById('login-error').style.color = '#16a34a';
+  document.getElementById('login-error').style.background = '#f0fdf4';
+  document.getElementById('login-error').style.borderColor = '#86efac';
+}
+
+function doLogin() {
+  var email = document.getElementById('login-username').value.trim();
+  var password = document.getElementById('login-password').value;
+  if (!email || !password) { showLoginError('Enter email and password.'); return; }
+  if (SB_ENABLED && __sbClient) {
+    doSupabaseLogin(email, password);
+  } else {
+    // Fall through to legacy login
+    showLoginError('Supabase not configured yet. Use legacy login below for CSV uploads.');
+    document.getElementById('login-legacy-section').style.display = '';
+  }
+}
+
+function doLogoutSupabase() {
+  if (__sbClient) __sbClient.auth.signOut();
+  __sbUser = null; __sbProfile = null; __sbRole = 'viewer';
+}
+
+function toggleLegacyLogin() {
+  var s = document.getElementById('login-legacy-section');
+  s.style.display = s.style.display === 'none' || !s.style.display ? '' : 'none';
+}
+
+function doLegacyLogin() {
+  var u = document.getElementById('login-legacy-user').value.trim();
+  var p = document.getElementById('login-legacy-pass').value;
+  if (!u || !p) { showLoginError('Enter legacy username and password.'); return; }
+  if (!WORKER_URL || WORKER_URL.indexOf('REPLACE-ME') !== -1) {
+    showLoginError('Worker URL not configured.'); return;
+  }
+  C24Uploader.verify({ workerUrl: WORKER_URL, auth: { username: u, password: p } })
+  .then(function(){
+    __auth = {username: u, password: p};
+    closeLoginModal();
+    document.getElementById('login-btn').style.display = 'none';
+    document.getElementById('logout-btn').style.display = '';
+    document.getElementById('login-user').textContent = '(' + u + ')';
+    document.getElementById('local-upload-lbl').style.display = 'none';
+    document.getElementById('live-upload-lbl').style.display  = '';
+    document.getElementById('snag-local-lbl').style.display   = 'none';
+    document.getElementById('snag-live-lbl').style.display    = '';
+    document.getElementById('ticket-local-lbl').style.display = 'none';
+    document.getElementById('ticket-live-lbl').style.display  = '';
+    toast('✓ Logged in (legacy) as ' + u, 'ok');
+  })
+  .catch(function(err){ showLoginError(err.message || 'Invalid credentials.'); });
+}
+
+// ── Supabase: save site update ──────────────────────────────────
+async function saveUpdateToSupabase(siteId, siteName, updateText) {
+  if (!__sbClient || !__sbUser) return false;
+  var r = await __sbClient.from('site_updates').insert({
+    site_id: siteId || null,
+    update_date: new Date().toISOString().split('T')[0],
+    update_text: updateText,
+    update_by: __sbUser.id,
+    update_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  });
+  if (!r.error) {
+    // Log audit
+    __sbClient.from('audit_log').insert({
+      site_name: siteName,
+      field_name: 'daily_update',
+      new_value: updateText.substring(0, 500),
+      changed_by: __sbUser.id,
+      changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    });
+  }
+  return !r.error;
+}
+
+async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
+  if (!__sbClient || !__sbUser) return;
+  __sbClient.from('audit_log').insert({
+    site_name: siteName,
+    field_name: fieldName,
+    old_value: String(oldValue || ''),
+    new_value: String(newValue || ''),
+    changed_by: __sbUser.id,
+    changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  });
+}
+
+// ── Photo Upload with Client-side Compression ───────────────────
+async function compressImage(file, maxWidthPx, qualityPct) {
+  maxWidthPx = maxWidthPx || 1200;
+  qualityPct = qualityPct || 0.72;
+  return new Promise(function(resolve, reject) {
+    var img = new Image();
+    var url = URL.createObjectURL(file);
+    img.onload = function() {
+      var w = img.naturalWidth, h = img.naturalHeight;
+      if (w > maxWidthPx) { h = Math.round(h * maxWidthPx / w); w = maxWidthPx; }
+      var canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(function(blob) {
+        URL.revokeObjectURL(url);
+        if (!blob) { reject(new Error('Compression failed')); return; }
+        resolve({ blob: blob, width: w, height: h, sizeKb: Math.round(blob.size / 1024) });
+      }, 'image/jpeg', qualityPct);
+    };
+    img.onerror = function() { URL.revokeObjectURL(url); reject(new Error('Image load failed')); };
+    img.src = url;
+  });
+}
+
+async function uploadSitePhoto(file, siteName, siteId, caption) {
+  if (!__sbClient || !__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
+  try {
+    var compressed = await compressImage(file, 1200, 0.72);
+    var dateStr = new Date().toISOString().split('T')[0];
+    var safeSite = (siteName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+    var fileName = safeSite + '_' + dateStr + '_' + Date.now() + '.jpg';
+    var storagePath = 'sites/' + (siteId || safeSite) + '/' + dateStr + '/' + fileName;
+
+    var uploadResult = await __sbClient.storage.from('site-photos').upload(storagePath, compressed.blob, {
+      contentType: 'image/jpeg', upsert: false
+    });
+    if (uploadResult.error) throw uploadResult.error;
+
+    var dbResult = await __sbClient.from('site_photos').insert({
+      site_id: siteId || null,
+      site_name: siteName,
+      photo_date: dateStr,
+      storage_path: storagePath,
+      original_name: file.name,
+      file_size_kb: compressed.sizeKb,
+      width: compressed.width,
+      height: compressed.height,
+      caption: caption || '',
+      uploaded_by: __sbUser.id,
+      uploaded_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    });
+    if (dbResult.error) throw dbResult.error;
+    return storagePath;
+  } catch(e) {
+    toast('Photo upload failed: ' + (e.message || e), 'err');
+    return null;
+  }
+}
+
+async function getSitePhotos(siteName) {
+  if (!__sbClient) return [];
+  var r = await __sbClient.from('site_photos')
+    .select('*').eq('site_name', siteName)
+    .order('photo_date', { ascending: false })
+    .order('created_at', { ascending: false });
+  return r.data || [];
+}
+
+async function getPhotoUrl(storagePath) {
+  if (!__sbClient || !storagePath) return null;
+  var r = await __sbClient.storage.from('site-photos').createSignedUrl(storagePath, 3600);
+  return r.data ? r.data.signedUrl : null;
+}
+
+// ── Photo section for modal ──────────────────────────────────────
+async function renderPhotoSection(siteName, siteId, container) {
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:20px;color:var(--muted);font-size:12px">Loading photos…</div>';
+  var photos = await getSitePhotos(siteName);
+  // Group by date
+  var byDate = {};
+  photos.forEach(function(p) {
+    var d = p.photo_date || 'Unknown';
+    if (!byDate[d]) byDate[d] = [];
+    byDate[d].push(p);
+  });
+  var html = '<div style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">';
+  html += '<div style="font-size:12px;font-weight:700;color:var(--text)">📸 Site Photos</div>';
+  if (__sbUser) {
+    html += '<label style="display:inline-flex;align-items:center;gap:5px;padding:5px 11px;background:#2563eb;color:#fff;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">'
+      + '📷 Add Photos'
+      + '<input type="file" accept="image/*" multiple capture="environment" style="display:none" onchange="handlePhotoUpload(event,\''+esc(siteName)+'\',\''+esc(siteId||'')+'\',this.closest(\'[id^=photo-sec]\'))">'
+      + '</label>';
+  }
+  html += '</div>';
+  if (!photos.length) {
+    html += '<div style="text-align:center;padding:24px 0;color:var(--muted);font-size:12px">No photos yet. ' + (__sbUser ? 'Tap "Add Photos" to upload.' : 'Sign in to upload.') + '</div>';
+  } else {
+    var loadingCount = 0;
+    for (var dateKey in byDate) {
+      html += '<div style="margin-bottom:14px">';
+      html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' + dateKey + '</div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
+      byDate[dateKey].forEach(function(p) {
+        html += '<div style="position:relative;cursor:pointer" data-path="'+esc(p.storage_path)+'" onclick="viewPhoto(this)">'
+          + '<div style="width:80px;height:80px;background:var(--surface);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">'
+          + '<img data-path="'+esc(p.storage_path)+'" style="width:80px;height:80px;object-fit:cover;border-radius:6px" onerror="this.style.display=\'none\'">'
+          + '</div>'
+          + (p.caption ? '<div style="font-size:9px;color:var(--muted);text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.caption)+'</div>' : '')
+          + '</div>';
+      });
+      html += '</div></div>';
+      loadingCount += byDate[dateKey].length;
+    }
+    html += '<div style="font-size:10px;color:var(--muted);text-align:right">' + photos.length + ' photo' + (photos.length!==1?'s':'') + ' total</div>';
+  }
+  container.innerHTML = html;
+  // Load signed URLs for images
+  container.querySelectorAll('img[data-path]').forEach(async function(img) {
+    var url = await getPhotoUrl(img.getAttribute('data-path'));
+    if (url) img.src = url;
+  });
+}
+
+async function handlePhotoUpload(event, siteName, siteId, refreshContainer) {
+  var files = Array.from(event.target.files);
+  if (!files.length) return;
+  toast('Compressing & uploading ' + files.length + ' photo(s)…', '');
+  var uploaded = 0;
+  for (var i = 0; i < files.length; i++) {
+    var path = await uploadSitePhoto(files[i], siteName, siteId, '');
+    if (path) uploaded++;
+  }
+  event.target.value = '';
+  if (uploaded > 0) {
+    toast('✓ ' + uploaded + ' photo(s) uploaded', 'ok');
+    if (refreshContainer) renderPhotoSection(siteName, siteId, refreshContainer);
+  }
+}
+
+async function viewPhoto(el) {
+  var path = el.getAttribute('data-path');
+  var url = await getPhotoUrl(path);
+  if (!url) { toast('Cannot load photo', 'err'); return; }
+  document.getElementById('photo-modal-img').src = url;
+  document.getElementById('photo-modal').style.display = 'flex';
+}
+
+// ── Enhanced Drive folder matching ──────────────────────────────
+function normalizeSiteName(s) {
+  return (s || '').toLowerCase()
+    .replace(/[-_.,\/#!$%^&*;:{}=\-_`~()]/g, ' ')
+    .replace(/\s+/g, ' ').trim();
+}
+
+function getDriveLinkSmart(siteName) {
+  // Exact match first
+  if (DRIVE_MAP[siteName]) return DRIVE_MAP[siteName];
+  // Normalized exact
+  var norm = normalizeSiteName(siteName);
+  for (var key in DRIVE_MAP) {
+    if (normalizeSiteName(key) === norm) return DRIVE_MAP[key];
+  }
+  // Partial — site name contains a key or key contains site name
+  for (var key in DRIVE_MAP) {
+    var nk = normalizeSiteName(key);
+    if (nk && norm && (norm.includes(nk) || nk.includes(norm))) return DRIVE_MAP[key];
+  }
+  // Word-level overlap (≥2 significant words match)
+  var words = norm.split(' ').filter(function(w){ return w.length > 3; });
+  var best = null, bestScore = 0;
+  for (var key in DRIVE_MAP) {
+    var keyWords = normalizeSiteName(key).split(' ').filter(function(w){ return w.length > 3; });
+    var score = words.filter(function(w){ return keyWords.includes(w); }).length;
+    if (score >= 2 && score > bestScore) { bestScore = score; best = DRIVE_MAP[key]; }
+  }
+  if (best) return best;
+  return 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
+}
+
+// Override getDriveLink with smart version
+var _getDriveLinkOriginal = null; // will patch after DRIVE_MAP is defined
 
 
 
@@ -1898,18 +2307,46 @@ function openModal(idx){
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
       </div>
+    </div>
+    <div class="msec" style="margin-top:4px">
+      <div id="photo-sec-${idx}" style="padding:2px 0"></div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
+  // Load photos async after modal opens
+  var photoContainer = document.getElementById('photo-sec-'+idx);
+  if (photoContainer) {
+    var siteName2 = r['Site Name'] || '';
+    renderPhotoSection(siteName2, null, photoContainer);
+  }
+  // Override drive link with smart matching
+  var mdrive = document.getElementById('mdrive');
+  if (mdrive) {
+    var smartLink = getDriveLinkSmart(r['Site Name'] || '');
+    if (smartLink) { mdrive.href = smartLink; mdrive.style.display = ''; }
+  }
+  // Log edit session to audit if logged in
+  if (__sbUser && (r['Site Name'] || '')) {
+    __sbClient && __sbClient.from('audit_log').insert({
+      site_name: r['Site Name'],
+      field_name: 'modal_opened',
+      new_value: new Date().toISOString(),
+      changed_by: __sbUser.id,
+      changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    });
+  }
 }
 
 function saveMeta(f,idx,el){
   const v=el.textContent.trim();
+  const oldV = allData[idx][f] || '';
   allData[idx][f]=v;
   if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
     allData[idx]['Percentage Completion']=v.replace('%','').trim();
   }
   if(f==='Revised') allData[idx]['Revised Completion']=v;
   renderKPIs();applyFilters();buildKpiPanel();
+  // Audit log
+  if (oldV !== v) saveSiteFieldToSupabase(allData[idx]['Site Name']||'', f, oldV, v);
 }
 function toggleU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='none';if(e2)e2.style.display='block';}
 function cancelU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='block';if(e2)e2.style.display='none';}
@@ -4528,6 +4965,13 @@ function renderBDTab(){
   filteredData=[...allData];
   buildFilters();
   renderKPIs();
+  // Patch getDriveLink with smart fuzzy version
+  if (typeof getDriveLink === 'function') { window.getDriveLinkOriginal = getDriveLink; }
+  window.getDriveLink = getDriveLinkSmart;
+  // Init Supabase (restores session from localStorage if user was previously signed in)
+  initSupabase();
+  // Apply role view on load (defaults to viewer until auth resolves)
+  applyRoleBasedView();
   // Build column toggle checkboxes
   (function(){
     const COLNAMES=['Sr No','Site Name','Owner','Vendor','Completion %','Status','PO Date','Kickoff','Work Start','SAT Date','UAT Date','Planned','Revised','Latest Update'];
@@ -5563,38 +6007,10 @@ function showLoginError(msg){
   el.textContent = msg;
   el.style.display = 'block';
 }
-function doLogin(){
-  var u = document.getElementById('login-username').value.trim();
-  var p = document.getElementById('login-password').value;
-  if (!u || !p) { showLoginError('Enter both username and password.'); return; }
-  if (!WORKER_URL || WORKER_URL.indexOf('REPLACE-ME') !== -1) {
-    showLoginError('Worker URL not configured yet (edit WORKER_URL in this file).');
-    return;
-  }
-  var btn = document.getElementById('login-submit');
-  btn.disabled = true; btn.textContent = 'Verifying...';
-  C24Uploader.verify({ workerUrl: WORKER_URL, auth: { username: u, password: p } })
-  .then(function(){
-    __auth = {username: u, password: p};
-    closeLoginModal();
-    document.getElementById('login-btn').style.display = 'none';
-    document.getElementById('logout-btn').style.display = '';
-    document.getElementById('login-user').textContent = '(' + u + ')';
-    document.getElementById('local-upload-lbl').style.display = 'none';
-    document.getElementById('live-upload-lbl').style.display  = '';
-    document.getElementById('snag-local-lbl').style.display   = 'none';
-    document.getElementById('snag-live-lbl').style.display    = '';
-    document.getElementById('ticket-local-lbl').style.display = 'none';
-    document.getElementById('ticket-live-lbl').style.display  = '';
-    toast('✓ Logged in as ' + u, 'ok');
-  })
-  .catch(function(err){
-    showLoginError(err.message || 'Invalid credentials.');
-  })
-  .finally(function(){ btn.disabled = false; btn.textContent = 'Login'; });
-}
 function doLogout(){
   __auth = null;
+  doLogoutSupabase();
+  __sbRole = 'viewer';
   document.getElementById('login-btn').style.display = '';
   document.getElementById('logout-btn').style.display = 'none';
   document.getElementById('login-user').textContent = '';
@@ -5604,7 +6020,8 @@ function doLogout(){
   document.getElementById('snag-live-lbl').style.display    = 'none';
   document.getElementById('ticket-local-lbl').style.display = '';
   document.getElementById('ticket-live-lbl').style.display  = 'none';
-  toast('Logged out', 'ok');
+  applyRoleBasedView();
+  toast('Signed out', 'ok');
 }
 
 // Authenticated CSV upload — POSTs file content to the Worker which commits it to GitHub.
