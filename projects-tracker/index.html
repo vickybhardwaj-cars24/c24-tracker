@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.30</title>
+<title>Cars24 Projects Tracker v4.31</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3800,23 +3800,6 @@ function renderTaskTab(){
     +'<div style="font-size:14px;font-weight:700">📋 Action Items</div>'
     +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
-  // Procurement plan auto-tasks: sites with PO issued but plan not yet received
-  var procPending=allData.filter(function(r){
-    return (r['PO Date']||'').trim()&&(r['PO Date']||'').trim()!=='—'&&(r['PO Date']||'').trim().toLowerCase()!=='pending'&&!hasProcurementPlan(r);
-  });
-  if(procPending.length){
-    html+='<div style="margin-bottom:16px;border:1.5px solid #fbbf24;border-radius:8px;overflow:hidden">';
-    html+='<div style="padding:8px 12px;background:#fffbeb;font-size:11px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">📦 Procurement Plan Pending ('+procPending.length+') — PO issued, awaiting vendor plan</div>';
-    procPending.forEach(function(r){
-      html+='<div style="padding:8px 12px;border-top:1px solid #fde68a;background:var(--surface)">'
-        +'<div style="font-size:12px;font-weight:600">'+esc(r['Site Name']||'—')
-        +(r['Owner']?' <span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(r['Owner'])+'</span>':'')+'</div>'
-        +'<div style="font-size:12px;color:#92400e;margin-top:3px">• Get Procurement Plan from vendor (PO: '+esc(r['PO Date'])+')</div>'
-        +'</div>';
-    });
-    html+='</div>';
-  }
-
   dateCols.forEach(function(col){
     html+='<div style="margin-bottom:16px">';
     html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border)">'+esc(col)+'</div>';
