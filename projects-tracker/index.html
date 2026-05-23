@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.31</title>
+<title>Cars24 Projects Tracker v4.32</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1065,7 +1065,7 @@ async function loadSupabaseSiteFields() {
     'work_start_date': 'Work Start Date', 'po_date': 'PO Date', 'zone': 'Zone',
     'bu': 'BU', 'reason_for_delay': 'Reason for Delay'
   };
-  var r = await __sbClient.from('sites').select('site_name,' + Object.keys(colMap).join(',')).catch(function(){ return { error: true }; });
+  var r = await __sbClient.from('sites').select('site_name,cost_center,' + Object.keys(colMap).join(',')).catch(function(){ return { error: true }; });
   if (r.error || !r.data || !r.data.length) return;
   r.data.forEach(function(sb) {
     var sn = (sb.site_name||'').trim();
@@ -1085,6 +1085,8 @@ async function loadSupabaseSiteFields() {
         if (v && v !== 'null') row[colMap[col]] = v;
       }
     });
+    // cost_center handled separately
+    if (sb.cost_center) { row['Cost Center'] = sb.cost_center; CC_MAP[sn] = sb.cost_center; }
   });
 }
 
@@ -1097,7 +1099,8 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
     'SAT Date': 'sat_date', 'UAT DATE': 'uat_date', 'Planned Completion': 'planned_completion',
     'Revised Completion': 'revised_completion', 'Kickoff Date': 'kickoff_date',
     'Work Start Date': 'work_start_date', 'PO Date': 'po_date', 'Zone': 'zone',
-    'BU': 'bu', 'Reason for Delay': 'reason_for_delay'
+    'BU': 'bu', 'Reason for Delay': 'reason_for_delay',
+    'Cost Center': 'cost_center'
   };
   var col = colMap[fieldName];
   if (col) {
@@ -1151,20 +1154,12 @@ async function uploadSitePhoto(file, siteName, siteId, caption) {
     var fileName = safeSite + '_' + Date.now() + '.jpg';
     var r2Key = 'photos/' + safeSite + '/' + dateStr + '/' + fileName;
 
-    // Upload to Cloudflare R2 via Worker
-    var workerBase = WORKER_URL.replace(/\/+$/, '');
-    var uploadResp = await fetch(workerBase + '/photo-upload', {
-      method: 'POST',
-      headers: {
-        'Authorization': workerAuthHeader(),
-        'X-Site-Name': safeSite,
-        'X-Photo-Date': dateStr,
-        'X-File-Name': fileName,
-        'Content-Type': 'image/jpeg'
-      },
-      body: compressed.blob
+    // Upload to Supabase Storage (bucket: site-photos)
+    if (!__sbClient) throw new Error('Supabase not connected');
+    var storeRes = await __sbClient.storage.from('site-photos').upload(r2Key, compressed.blob, {
+      contentType: 'image/jpeg', upsert: false
     });
-    if (!uploadResp.ok) { var err = await uploadResp.json(); throw new Error(err.error || 'Upload failed'); }
+    if (storeRes.error) throw new Error(storeRes.error.message || 'Storage upload failed');
 
     // Record metadata in Supabase
     if (__sbClient) {
@@ -1199,10 +1194,9 @@ async function getSitePhotos(siteName) {
 }
 
 async function getPhotoUrl(storagePath) {
-  if (!storagePath) return null;
-  // Photos served directly from Cloudflare Worker R2
-  var workerBase = WORKER_URL.replace(/\/+$/, '');
-  return workerBase + '/photos/' + encodeURIComponent(storagePath);
+  if (!storagePath || !__sbClient) return null;
+  var res = await __sbClient.storage.from('site-photos').createSignedUrl(storagePath, 3600);
+  return res.data && res.data.signedUrl ? res.data.signedUrl : null;
 }
 
 // ── Photo section for modal ──────────────────────────────────────
@@ -2032,7 +2026,7 @@ function renderSatUat(){
       }
     }
     // No revised date flag
-    if(!uatD&&!st.includes('uat done')&&!st.includes('completed')){
+    if(!uatD&&!st.includes('uat done')&&!st.includes('completed')&&!st.includes('hold')&&!st.includes('cancel')&&!st.includes('on hold')){
       const _revD2=pd(r['Revised Completion']),_planD2=pd(r['Planned Completion']);
       const _comm2=_revD2||_planD2;
       if(_comm2&&_comm2<today3){
@@ -2365,33 +2359,306 @@ function renderInsights(){
     </div>`;
 }
 
-function renderVendorRatings(){
-  const panel=document.getElementById('inv-vr');
-  const vrMap2={};
-  allData.forEach(r=>{if(r.Vendor&&r['Vendor Rating']){const n=parseInt(r['Vendor Rating']);if(n>=1&&n<=5){if(!vrMap2[r.Vendor])vrMap2[r.Vendor]={sum:0,cnt:0,sites:[]};vrMap2[r.Vendor].sum+=n;vrMap2[r.Vendor].cnt++;vrMap2[r.Vendor].sites.push({name:r['Site Name'],rating:n,idx5:allData.indexOf(r)});}}});
-  if(!Object.keys(vrMap2).length){panel.innerHTML='<div style="padding:30px;text-align:center;color:var(--muted)">No vendor ratings entered yet.</div>';return;}
-  const sorted=Object.entries(vrMap2).map(([v,d])=>({v,avg:d.sum/d.cnt,cnt:d.cnt,sites:d.sites.sort((a,b)=>b.rating-a.rating)})).sort((a,b)=>b.avg-a.avg);
-  const rClr=n=>(['#9ca3af','#dc2626','#ea580c','#ca8a04','#16a34a','#15803d'][Math.round(n)]||'#9ca3af');
-  panel.innerHTML=`
-    <h3 style="font-size:14px;font-weight:700;margin-bottom:14px">Vendor Leaderboard</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px">
-      ${sorted.map((d,i)=>`<div style="background:var(--white);border:1px solid var(--border);border-radius:var(--r);padding:14px;box-shadow:var(--sh)">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
-          <div style="display:flex;align-items:center;gap:8px">
-            <div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">${i+1}</div>
-            <span style="font-weight:700;font-size:13px">${esc(d.v)}</span>
-          </div>
-          <span class="rbadge r${Math.round(d.avg)}">${'★'.repeat(Math.round(d.avg))+'☆'.repeat(5-Math.round(d.avg))} ${d.avg.toFixed(1)}/5</span>
-        </div>
-        <div style="height:5px;background:var(--surface);border-radius:3px;margin-bottom:10px;overflow:hidden"><div style="height:100%;width:${(d.avg/5*100).toFixed(0)}%;background:${rClr(d.avg)};border-radius:3px"></div></div>
-        <div style="font-size:10px;color:var(--muted);margin-bottom:8px">${d.cnt} site${d.cnt>1?'s':''} rated</div>
-        ${d.sites.map(s=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 0;border-top:1px solid var(--border);cursor:pointer" onclick="openModal(${s.idx5})"><span style="font-size:11px">${esc(s.name)}</span><span style="color:${rClr(s.rating)};font-weight:600;font-size:11px">${'★'.repeat(s.rating)+'☆'.repeat(5-s.rating)} ${s.rating}/5</span></div>`).join('')}
-      </div>`).join('')}
-    </div>`;
+// ─── Vendor Rating: 7-criteria weighted scoring system ──────────
+var VR_CRITERIA = [
+  {key:'quality_of_work',       label:'Quality of Work',                 weight:0.25},
+  {key:'timely_completion',     label:'Timely Completion',               weight:0.20},
+  {key:'response_extra_tasks',  label:'Response to Additional Tasks',    weight:0.15},
+  {key:'billing_accuracy',      label:'Billing Accuracy & Closure',      weight:0.15},
+  {key:'snag_closure',          label:'Snag List Closure',               weight:0.10},
+  {key:'communication',         label:'Communication & Coordination',    weight:0.10},
+  {key:'compliance',            label:'Compliance & Site Documentation', weight:0.05}
+];
+function vrWeighted(vals){
+  return VR_CRITERIA.reduce(function(s,c){ return s + (parseInt(vals[c.key])||0)*c.weight; },0);
+}
+function vrClr(n){ return n>=4?'#15803d':n>=3?'#ca8a04':n>=2?'#ea580c':'#dc2626'; }
+function vrStars(n){var r=Math.round(n);return '★'.repeat(r)+'☆'.repeat(5-r);}
+
+async function loadVendorRatings(){
+  if(!__sbClient) return;
+  var r=await __sbClient.from('vendor_ratings').select('*').eq('is_deleted',false).order('rated_at',{ascending:false});
+  VR_CACHE=r.data||[];
+}
+
+async function renderVendorRatings(){
+  const panel=document.getElementById('inv-vr'); if(!panel) return;
+  panel.innerHTML='<div style="font-size:12px;color:var(--muted)">Loading…</div>';
+  await loadVendorRatings();
+
+  // UAT-done sites eligible for rating
+  const uatSites=allData.filter(function(r){ return (r['UAT DATE']||'').trim()&&(r['Vendor']||'').trim(); });
+  const ratedKeys=new Set(VR_CACHE.map(function(v){ return v.site_name+'|'+v.vendor_name; }));
+
+  // Build vendor leaderboard from VR_CACHE
+  var vMap={};
+  VR_CACHE.forEach(function(vr){
+    var v=vr.vendor_name||'Unknown';
+    if(!vMap[v]) vMap[v]={sum:0,cnt:0,ratings:[]};
+    vMap[v].sum+=Number(vr.weighted_score||0);
+    vMap[v].cnt++;
+    vMap[v].ratings.push(vr);
+  });
+  var sorted=Object.entries(vMap).map(function([v,d]){ return {v,avg:d.cnt?d.sum/d.cnt:0,cnt:d.cnt,ratings:d.ratings}; }).sort(function(a,b){ return b.avg-a.avg; });
+
+  var html='<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:16px">'
+    +'<div style="font-size:14px;font-weight:700">⭐ Vendor Rating Leaderboard</div>'
+    +'<div style="font-size:11px;color:var(--muted)">Only UAT-completed sites are eligible. Ratings are permanent once submitted.</div>'
+    +'</div>';
+
+  // Leaderboard
+  if(sorted.length){
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">';
+    sorted.forEach(function(d,i){
+      var avg=d.avg.toFixed(2);
+      html+='<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        +'<div style="width:24px;height:24px;border-radius:50%;background:var(--accent);color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+(i+1)+'</div>'
+        +'<div style="font-weight:700;font-size:13px;flex:1">'+esc(d.v)+'</div>'
+        +'<span style="font-size:12px;font-weight:700;color:'+vrClr(d.avg)+'">'+vrStars(d.avg)+' '+avg+'/5</span>'
+        +'</div>'
+        +'<div style="height:5px;background:var(--surface);border-radius:3px;margin-bottom:8px;overflow:hidden"><div style="height:100%;width:'+(d.avg/5*100).toFixed(0)+'%;background:'+vrClr(d.avg)+';border-radius:3px"></div></div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+d.cnt+' site'+(d.cnt>1?'s':'')+' rated</div>'
+        +'<div style="margin-top:8px">';
+      d.ratings.forEach(function(vr){
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-top:1px solid var(--border);font-size:11px">'
+          +'<span>'+esc(vr.site_name)+'</span>'
+          +'<span style="color:'+vrClr(vr.weighted_score)+';font-weight:600">'+Number(vr.weighted_score).toFixed(2)+'/5</span>'
+          +(__sbRole==='admin'?'<button onclick="deleteVendorRating(\''+vr.id+'\')" style="font-size:9px;padding:1px 5px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:3px;cursor:pointer">Delete</button>':'')
+          +'</div>';
+      });
+      html+='</div></div>';
+    });
+    html+='</div>';
+  } else {
+    html+='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;margin-bottom:20px">No ratings yet. Rate UAT-completed sites below.</div>';
+  }
+
+  // Rating form: UAT-done sites not yet rated
+  if(__sbUser){
+    var toRate=uatSites.filter(function(r){ return !ratedKeys.has(((r['Site Name']||'')+'|'+(r['Vendor']||'')).trim()); });
+    if(toRate.length){
+      html+='<div style="font-size:13px;font-weight:700;margin-bottom:10px">📝 Rate a Site</div>';
+      html+='<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">'
+        +'<div style="margin-bottom:10px"><label style="font-size:11px;font-weight:600;color:var(--muted)">Select Site</label>'
+        +'<select id="vr-site-sel" style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none;background:var(--bg)" onchange="vrUpdateVendor()">'
+        +'<option value="">— choose site —</option>'
+        +toRate.map(function(r){ return '<option value="'+esc(r['Site Name'])+'">'+esc(r['Site Name'])+' ('+esc(r['Vendor']||'No vendor')+')</option>'; }).join('')
+        +'</select></div>'
+        +'<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px">Vendor: <span id="vr-vendor-lbl" style="color:var(--text)">—</span></div>'
+        +'<div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px">'
+        +VR_CRITERIA.map(function(cr){
+          return '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px;background:var(--surface);border-radius:6px">'
+            +'<div>'
+            +'<div style="font-size:12px;font-weight:600">'+esc(cr.label)+'</div>'
+            +'<div style="font-size:10px;color:var(--muted)">Weight: '+(cr.weight*100).toFixed(0)+'%</div>'
+            +'</div>'
+            +'<div style="display:flex;gap:6px">'
+            +[1,2,3,4,5].map(function(n){
+              return '<label style="cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px">'
+                +'<input type="radio" name="vr-'+cr.key+'" value="'+n+'" style="display:none" onchange="vrCalcScore()">'
+                +'<span id="vr-star-'+cr.key+'-'+n+'" style="font-size:18px;color:#d1d5db;transition:color .1s" onclick="vrSelectStar(\''+cr.key+'\','+n+')">★</span>'
+                +'<span style="font-size:9px;color:var(--muted)">'+n+'</span>'
+                +'</label>';
+            }).join('')
+            +'</div></div>';
+        }).join('')
+        +'</div>'
+        +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">'
+        +'<div style="font-size:13px;font-weight:700">Weighted Score: <span id="vr-score-display" style="color:#2563eb">—</span></div>'
+        +'</div>'
+        +'<div style="margin-bottom:10px"><label style="font-size:11px;font-weight:600;color:var(--muted)">Notes (optional)</label>'
+        +'<textarea id="vr-notes" placeholder="Any remarks about vendor performance…" style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none;resize:vertical;min-height:60px;box-sizing:border-box"></textarea></div>'
+        +'<button onclick="submitVendorRating()" style="padding:8px 20px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif">Submit Rating 🔒</button>'
+        +'<div id="vr-msg" style="display:none;font-size:11px;margin-top:8px;padding:7px 9px;border-radius:6px"></div>'
+        +'</div>';
+    } else {
+      html+='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted);background:var(--white);border:1px solid var(--border);border-radius:8px">All UAT-completed sites have been rated ✅</div>';
+    }
+  } else {
+    html+='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Sign in to rate vendors.</div>';
+  }
+
+  panel.innerHTML=html;
+}
+
+function vrUpdateVendor(){
+  var sel=document.getElementById('vr-site-sel'); if(!sel) return;
+  var sn=sel.value; var lbl=document.getElementById('vr-vendor-lbl');
+  if(!sn||!lbl){if(lbl)lbl.textContent='—';return;}
+  var row=allData.find(function(r){ return r['Site Name']===sn; });
+  if(lbl) lbl.textContent=row?(row['Vendor']||'Not set'):'—';
+}
+
+function vrSelectStar(key, val){
+  [1,2,3,4,5].forEach(function(n){
+    var s=document.getElementById('vr-star-'+key+'-'+n);
+    if(s) s.style.color=n<=val?'#f59e0b':'#d1d5db';
+  });
+  var inp=document.querySelector('input[name="vr-'+key+'"][value="'+val+'"]');
+  if(inp){ inp.checked=true; vrCalcScore(); }
+}
+
+function vrCalcScore(){
+  var total=0; var allSet=true;
+  VR_CRITERIA.forEach(function(cr){
+    var inp=document.querySelector('input[name="vr-'+cr.key+'"]:checked');
+    if(inp){ total+=Number(inp.value)*cr.weight; } else { allSet=false; }
+  });
+  var el=document.getElementById('vr-score-display');
+  if(el) el.textContent=allSet?total.toFixed(2)+'/5':'(select all criteria)';
+}
+
+async function submitVendorRating(){
+  if(!__sbClient||!__sbUser){ toast('Sign in first','err'); return; }
+  var sel=document.getElementById('vr-site-sel'); var sn=sel?sel.value:'';
+  if(!sn){ toast('Select a site','err'); return; }
+  var row=allData.find(function(r){ return r['Site Name']===sn; });
+  var vendor=row?(row['Vendor']||''):'';
+  var vals={};
+  var allSet=true;
+  VR_CRITERIA.forEach(function(cr){
+    var inp=document.querySelector('input[name="vr-'+cr.key+'"]:checked');
+    if(inp){ vals[cr.key]=Number(inp.value); } else { allSet=false; }
+  });
+  if(!allSet){ toast('Please rate all criteria','err'); return; }
+  var score=vrWeighted(vals);
+  var notes=(document.getElementById('vr-notes').value||'').trim();
+  var rec=Object.assign({site_name:sn,vendor_name:vendor,weighted_score:parseFloat(score.toFixed(2)),notes:notes,rated_by:(__sbProfile&&__sbProfile.full_name)||__sbUser.email,is_deleted:false},vals);
+  var msgEl=document.getElementById('vr-msg');
+  function vrMsg(t,ok){ if(msgEl){msgEl.textContent=t;msgEl.style.display='';msgEl.style.background=ok?'#f0fdf4':'#fef2f2';msgEl.style.color=ok?'#16a34a':'#dc2626';msgEl.style.border='1px solid '+(ok?'#86efac':'#fecaca');} }
+  var res=await __sbClient.from('vendor_ratings').insert(rec);
+  if(res.error){ vrMsg('Error: '+(res.error.message||''), false); return; }
+  vrMsg('✅ Rating submitted and locked for '+sn, true);
+  setTimeout(function(){ renderVendorRatings(); }, 1200);
+}
+
+async function deleteVendorRating(id){
+  if(!__sbClient||__sbRole!=='admin'){ toast('Admin only','err'); return; }
+  if(!confirm('Delete this rating? This cannot be undone.')) return;
+  await __sbClient.from('vendor_ratings').update({is_deleted:true}).eq('id',id);
+  renderVendorRatings();
 }
 
 // ═══════════════════════════════════════════════════════════════
 // MODAL
+// ─── Field rendering helper (field locking, revised date picker) ────
+var LOCKED_TAG = '<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">🔒 locked</span>';
+var ADMIN_CHIP = '<span style="font-size:8px;background:#eff6ff;color:#2563eb;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">admin</span>';
+
+function _meLock(label, val, extra) {
+  return '<div class="mi"><div class="ml">'+esc(label)+(extra||'')+'</div><div class="mv" style="color:var(--text);user-select:text">'+esc(val||'—')+'</div></div>';
+}
+function _meEdit(label, val, idx, fieldKey) {
+  return '<div class="mi"><div class="ml">'+esc(label)+'</div>'
+    +'<div class="mv" contenteditable="true" data-meta-field="'+esc(fieldKey)+'" data-meta-idx="'+idx+'" onblur="saveMeta(this.dataset.metaField,parseInt(this.dataset.metaIdx),this)">'+esc(val)+'</div></div>';
+}
+
+function renderMetaField(l, v, idx, r) {
+  var isAdmin = __sbRole === 'admin';
+
+  // Revised Completion: always editable, prompts for reason
+  if (l === 'Revised') {
+    var curRev = r ? (r['Revised Completion'] || '') : '';
+    return '<div class="mi"><div class="ml">Revised Date</div>'
+      + '<div class="mv"><input type="text" id="rev-inp-'+idx+'" value="'+esc(curRev)+'" placeholder="DD Mon YYYY" '
+      + 'style="border:1px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:11px;font-family:Inter,sans-serif;width:100%;box-sizing:border-box;outline:none;background:var(--white)" '
+      + 'onblur="saveRevisedDate('+idx+',this.value)"></div></div>';
+  }
+
+  // Planned: admin-only
+  if (l === 'Planned') {
+    if (!isAdmin) return _meLock('Planned', v, ADMIN_CHIP);
+    return _meEdit('Planned', v, idx, 'Planned Completion');
+  }
+
+  // Work Start + Kickoff: editable once (locked if value exists), admin always
+  if (l === 'Work Start' || l === 'Kickoff Date') {
+    var hasVal = v && v.trim() && v !== '—';
+    if (!isAdmin && hasVal) return _meLock(l, v, LOCKED_TAG);
+    if (!isAdmin && !hasVal) {
+      var fk2 = l === 'Work Start' ? 'Work Start Date' : 'Kickoff Date';
+      return '<div class="mi"><div class="ml">'+esc(l)+'</div>'
+        +'<div class="mv" contenteditable="true" data-meta-field="'+fk2+'" data-meta-idx="'+idx+'" data-once="1" onblur="saveMetaOnce(this.dataset.metaField,parseInt(this.dataset.metaIdx),this)">'+esc(v)+'</div></div>';
+    }
+    var fk3 = l === 'Work Start' ? 'Work Start Date' : 'Kickoff Date';
+    return _meEdit(l, v, idx, fk3);
+  }
+
+  // SAT, UAT, PO: admin-only
+  if (l === 'SAT Date' || l === 'UAT Date' || l === 'PO Date') {
+    if (!isAdmin) return _meLock(l, v, ADMIN_CHIP);
+    var fk4 = l === 'UAT Date' ? 'UAT DATE' : l;
+    return _meEdit(l, v, idx, fk4);
+  }
+
+  // Vendor Rating: display only (rated via Insights tab)
+  if (l === 'Vendor Rating') {
+    return _meLock('Vendor Rating', v || 'Rate via Insights tab', '');
+  }
+
+  // T-Live: computed, read-only
+  if (l === 'T-Live') return _meLock(l, v, '');
+
+  // Cost Center: admin-only edit
+  if (l === 'Cost Center') {
+    if (!isAdmin) return _meLock(l, v, ADMIN_CHIP);
+    return _meEdit(l, v, idx, 'Cost Center');
+  }
+
+  // Owner, Vendor, % Completion: editable for signed-in users
+  if (l === 'Owner' || l === 'Vendor' || l === '% Completion (HOTP)') {
+    if (!__sbUser) return _meLock(l, v, '');
+    return _meEdit(l, v, idx, l);
+  }
+
+  // Default: admin editable, others locked
+  if (!isAdmin) return _meLock(l, v, '');
+  return _meEdit(l, v, idx, l);
+}
+
+
+function saveRevisedDate(idx, newDate) {
+  var r = allData[idx]; if (!r) return;
+  var siteName = r['Site Name'] || '';
+  var oldDate = r['Revised Completion'] || '';
+  newDate = (newDate || '').trim();
+  if (!newDate || newDate === oldDate) return;
+  // Require reason for delay
+  var reason = prompt('Reason for revising date' + (oldDate ? ' from ' + oldDate : '') + ' to ' + newDate + ':');
+  if (reason === null) {
+    var inp = document.getElementById('rev-inp-' + idx);
+    if (inp) inp.value = oldDate;
+    return;
+  }
+  reason = reason.trim() || 'Date revised';
+  var today = new Date();
+  var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var dateStr = today.getDate() + ' ' + MONS[today.getMonth()] + ' ' + today.getFullYear();
+  var entry = '[' + dateStr + '] Revised to ' + newDate + ': ' + reason;
+  var existingReason = (r['Reason for Delay'] || '').trim();
+  var newReason = existingReason ? existingReason + ' | ' + entry : entry;
+  allData[idx]['Revised Completion'] = newDate;
+  allData[idx]['Reason for Delay'] = newReason;
+  saveSiteFieldToSupabase(siteName, 'Revised Completion', oldDate, newDate);
+  saveSiteFieldToSupabase(siteName, 'Reason for Delay', existingReason, newReason);
+  renderKPIs(); applyFilters(); buildKpiPanel();
+  toast('✓ Revised date updated for ' + siteName, 'ok');
+}
+
+function saveMetaOnce(f, idx, el) {
+  // f is the actual data key (e.g., 'Work Start Date', 'Kickoff Date')
+  var v = el.textContent.trim();
+  if (!v || v === '—') { el.textContent = allData[idx][f] || ''; return; }
+  var oldV = allData[idx][f] || '';
+  if (v === oldV) return;
+  allData[idx][f] = v;
+  saveSiteFieldToSupabase(allData[idx]['Site Name']||'', f, oldV, v);
+  renderKPIs(); applyFilters();
+  toast('✓ ' + f + ' set — now locked', 'ok');
+  el.contentEditable = 'false'; el.style.background = 'transparent'; el.style.cursor = 'default';
+}
+
 // ═══════════════════════════════════════════════════════════════
 function openModal(idx){
   const r=allData[idx];if(!r) return;
@@ -2412,7 +2679,7 @@ function openModal(idx){
     ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
     ['PO Date',r['PO Date']||'—'],['Kickoff Date',r['Kickoff Date']||'—'],['Work Start',r['Work Start Date']||'—'],
     ['T-Live',(()=>{const tl=getTempLiveDate(r);return tl?fmtD(tl):'—';})()],
-    ['SAT Date',r['SAT Date']||'—'],['UAT Date',r['UAT DATE']||'—'],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
+    ['Cost Center',r['Cost Center']||''],['SAT Date',r['SAT Date']||'—'],['UAT Date',r['UAT DATE']||'—'],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
   ];
   const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';
   const sortedCols=[...DATE_COLS].reverse().filter(d=>(r[d]||'').length>2);
@@ -2627,15 +2894,18 @@ function openModal(idx){
 
 function saveMeta(f,idx,el){
   const v=el.textContent.trim();
-  const oldV = allData[idx][f] || '';
-  allData[idx][f]=v;
+  const fieldMap={'Planned':'Planned Completion','SAT Date':'SAT Date','UAT Date':'UAT DATE','PO Date':'PO Date','Work Start':'Work Start Date','Kickoff Date':'Kickoff Date','Cost Center':'Cost Center'};
+  const dataKey=fieldMap[f]||f;
+  const oldV = allData[idx][dataKey] || '';
+  allData[idx][dataKey]=v;
   if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
     allData[idx]['Percentage Completion']=v.replace('%','').trim();
   }
-  if(f==='Revised') allData[idx]['Revised Completion']=v;
+  if(f==='Revised'||f==='Revised Completion') allData[idx]['Revised Completion']=v;
+  if(f==='Cost Center') CC_MAP[allData[idx]['Site Name']||'']=v;
   renderKPIs();applyFilters();buildKpiPanel();
-  // Audit log
-  if (oldV !== v) saveSiteFieldToSupabase(allData[idx]['Site Name']||'', f, oldV, v);
+  // Audit log + Supabase persist
+  if (oldV !== v) saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, v);
 }
 function toggleU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='none';if(e2)e2.style.display='block';}
 function cancelU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='block';if(e2)e2.style.display='none';}
@@ -3943,6 +4213,9 @@ function autoSync(){
 
 
 const DRIVE_MAP = {"C2B Gurgaon": "https://drive.google.com/drive/folders/1uSUjD-fTbVcayLYyUzunwSHtxJto-z9t", "Dombivali Barrier and Guard Room": "https://drive.google.com/drive/folders/1uMHOMJYpRNtC8mrUJxIbear5bl6CKG6l", "Vadodara": "https://drive.google.com/drive/folders/1nXwPjjNzkkZi2KqAOO3q0I2xs3-5JCOn", "Rohini C2B": "https://drive.google.com/drive/folders/1gfopRd0Of04NCuEcNCIjhhkrzMEb4QqW", "Chennai Open": "https://drive.google.com/drive/folders/1OhQUWyUq0P5cbsLgrpwifuu8CLx5YnLa", "Naroda HRC": "https://drive.google.com/drive/folders/1lvdG8AazvTfjZrr8z4GcxNyORA-WDtkS", "Naroda Upgrade": "https://drive.google.com/drive/folders/1WRi33YezFDfmKW-xdDFACj0Uc4dIe0oq", "Sapphire Parking Upgrade": "https://drive.google.com/drive/folders/1GBpF0sn65h1aVgfWvuIJfVBhY3vVpdA0", "Karnavati Revamp": "https://drive.google.com/drive/folders/1tRK4gzhXIloGC_m-R7XF9glNedhxkXGo", "Gurgaon Sector 18 Landscaping and HRC": "https://drive.google.com/drive/folders/12jAL3iNiJBN8l1N2y5o8r0cDy2CYs_ep", "Bhoruka upgrade": "https://drive.google.com/drive/folders/1RXuXsnHMANhghRe4qA6djpx4zdQiRPUx", "Rohini CEC": "https://drive.google.com/drive/folders/1rh2LmtGEMQ0n7Ym6owUrMOiPVjanUSoq", "Kochi VR": "https://drive.google.com/drive/folders/1eWwgWchKe1O6Qm20-STGmxUgfzHPIGI6", "Bangalore Fourdoor Studio": "https://drive.google.com/drive/folders/1DvzqhB5trRAzEuXUZ7G9qLZULTLMQ8kd", "Amanora Washroom": "https://drive.google.com/drive/folders/1-8TO36Co0llizjZQMfAg1GZqHu-ik6UL", "RCUBE CEC": "https://drive.google.com/drive/folders/1eQd4L7bYNZpNm6Z_S5GZGch66deCmVE3", "South Court Saket": "https://drive.google.com/drive/folders/17B3vbmGWH4vw0ndzt1R3XVmcu_XqcPFI", "Belapur": "https://drive.google.com/drive/folders/1tcX3j5XjyGWO4I-cflnNhPHojpTi1p4r", "Wave One Noida": "https://drive.google.com/drive/folders/1V8UStUNPgPHaGdTAiP-FdijU0VVCmRwc", "Jaipur Revamp": "https://drive.google.com/drive/folders/1uRfJrUVp0TXTsmbBXEJqO7K5Nr03pKX8", "PCMC Pavers": "https://drive.google.com/drive/folders/1YGR5_903gEeGibAlLlykcn2LmcUX0opG", "Jakkur Pavers and Arch Gate": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "Rohini Pavers": "https://drive.google.com/drive/folders/1yrtN2lAU-InP8YIrUsZR6OLgzPKMgctk", "Patna Upgrade": "https://drive.google.com/drive/folders/19O12McHmIGXEGhp_bt6xtYrtIYIjHw6j", "YRS VikasPuri": "https://drive.google.com/drive/folders/1ZgvpdhEW4F5A1dNM_RQRtPDbJtSq3qmK", "Astra C2B": "https://drive.google.com/drive/folders/1ABwhgO0iB80u6M7qN3Tc85zeLxMeo_Cd", "GT World mall": "https://drive.google.com/drive/folders/17CRpb_QbqHto8XicfEfyVqUIzBlIP-Ir", "Goregaon replacement": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Amanora Facade": "https://drive.google.com/drive/folders/1-8TO36Co0llizjZQMfAg1GZqHu-ik6UL", "Pune Katraj": "https://drive.google.com/drive/folders/1yAhjzAk5RxAM2pRY7fXUBZzglW7Q9YFA", "Awadh one Lucknow": "https://drive.google.com/drive/folders/17H4xFoGkVg916LmDIqlWYG6uk9Yp3z_y", "Jaipur C2B": "https://drive.google.com/drive/folders/1VzQ9Vwhdv0X0avDX3Wz9byXmWZu5W6Us", "Kormangala Tensile": "https://drive.google.com/drive/folders/1KbXIf5-L_VDMrMbNwsYSr2WnjjGWcv97", "Surat New CEC": "https://drive.google.com/drive/folders/150Sg_iZcmccEebCZKazwPaJrImOY1t5t", "Kompally Additional Pavers": "https://drive.google.com/drive/folders/1jgkQW7mTzBgx63huXjh2G95iVkjdxyn9", "Jakkur Detailing Bay {Customer Lounge}": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "Gaur Ops Area": "https://drive.google.com/drive/folders/1fAvH6buBYmOOMzGCkCdVG0qU0GE3TxQ1", "Kompally Delivery Area": "https://drive.google.com/drive/folders/1jgkQW7mTzBgx63huXjh2G95iVkjdxyn9", "Jakkur Studio Rectification": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "M3M Customer Lounge": "https://drive.google.com/drive/folders/10sMFfE2M_dhb-DdyoZawgOcaeOVzF_MZ", "Vizag Celest Mall": "https://drive.google.com/drive/folders/1UPx8dNaLYl3Dg3uhEWiZI_rrJgy4oKa0", "Kanpur": "https://drive.google.com/drive/folders/1Gq_ZcRZjGry94JjNAQzjUH2dmSh1jNvW", "Piyush Mahindra Tiling": "https://drive.google.com/drive/folders/1DtDtPA4Tc7sI6OXTuV4ytlUxN2bypIYZ", "Dombivali HRC": "https://drive.google.com/drive/folders/1xallpSGtgGfAzRsBYGhkLbI1w-haefSJ", "Andheri": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Karnal": "https://drive.google.com/drive/folders/12jAL3iNiJBN8l1N2y5o8r0cDy2CYs_ep", "Upal": "https://drive.google.com/drive/folders/1Chfe1wP8vn5aY6WlvIBQgeDvTcED4_c3", "Uppal": "https://drive.google.com/drive/folders/1Chfe1wP8vn5aY6WlvIBQgeDvTcED4_c3", "Office": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Jaipur HRC": "https://drive.google.com/drive/folders/1cgTClY0WP1ZJ7Tgc_xYBlEhtweDb8Spd", "Bhopal": "https://drive.google.com/drive/folders/1IVYwqjfnmr37ZQHposkEHJiJzxu2WtcJ", "Bajrang Wadi Rajkot": "https://drive.google.com/drive/folders/133fMN-3LMvukocGAHUkSh-rQ79nGAMg6", "Rajkot": "https://drive.google.com/drive/folders/133fMN-3LMvukocGAHUkSh-rQ79nGAMg6", "PCMC Security Cabin": "https://drive.google.com/drive/folders/1YGR5_903gEeGibAlLlykcn2LmcUX0opG", "Pune New Container": "https://drive.google.com/drive/folders/1ymzzgfKx6QBiKskEjpI4MMyGRW-gurUK", "Miyapur": "https://drive.google.com/drive/folders/1X16XN-DeILqYqYorSq6MKY0jubbTpXx8", "Ranchi": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Dehradun": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Jakkur Detailing Bay & Washing Area": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "PCMC HRC": "https://drive.google.com/drive/folders/1i385Rl_O1duw3NQ_FisypbPvisO5JxgK", "Naroda GS": "https://drive.google.com/drive/folders/1WRi33YezFDfmKW-xdDFACj0Uc4dIe0oq", "Naroda C2B": "https://drive.google.com/drive/folders/1mtIMv_mnjBg7b2U0-7SDeKIglORy7cRl", "Jaipur GS": "https://drive.google.com/drive/folders/1uRfJrUVp0TXTsmbBXEJqO7K5Nr03pKX8", "Rohini HRC": "https://drive.google.com/drive/folders/1yrtN2lAU-InP8YIrUsZR6OLgzPKMgctk", "Rohini GS": "https://drive.google.com/drive/folders/1rh2LmtGEMQ0n7Ym6owUrMOiPVjanUSoq", "Kandivali": "https://drive.google.com/drive/folders/1U7vk2aJLi4yMK4JiQtux8jal3-sYDGZ3", "M3M": "https://drive.google.com/drive/folders/1H1OsaAlB3gHhGBfAL2SF18JsDBXBwZgN", "GNB GHAZIABAD": "https://drive.google.com/drive/folders/1K_FMzJdmtRtsnYUgJF9h8a304Dw27Je6", "Avani Mall GS": "https://drive.google.com/drive/folders/1zwRF0KnrXTfn9gOCX4qb7jE0qb_Xdhg7", "Kochi HRC": "https://drive.google.com/drive/folders/1eWwgWchKe1O6Qm20-STGmxUgfzHPIGI6", "Dwarka Radission": "https://drive.google.com/drive/folders/1itAqy0rnjWgVaUMbGhoT9QoygZ0EL1WA", "Gaur City Noida": "https://drive.google.com/drive/folders/1KgjO6yaz1og8PHEXtwFTs8gMegh_UgPr", "Patna GS": "https://drive.google.com/drive/folders/19O12McHmIGXEGhp_bt6xtYrtIYIjHw6j", "YRS Vikaspuri": "https://drive.google.com/drive/folders/1ZgvpdhEW4F5A1dNM_RQRtPDbJtSq3qmK", "South Court": "https://drive.google.com/drive/folders/17B3vbmGWH4vw0ndzt1R3XVmcu_XqcPFI", "Gurgaon Sec 18": "https://drive.google.com/drive/folders/1VWsXqvY86eEh9tm4gM1XPEcxngr_Nw8U", "Kompally GS": "https://drive.google.com/drive/folders/1jgkQW7mTzBgx63huXjh2G95iVkjdxyn9", "Bhoruka Tech Park": "https://drive.google.com/drive/folders/1RXuXsnHMANhghRe4qA6djpx4zdQiRPUx"};
+var CC_MAP = {}; // site_name → cost_center code, loaded from Supabase
+var VR_CACHE = []; // vendor_ratings loaded from Supabase
+
 const DRIVE_ROOT = 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
 function getDriveLink(s){return DRIVE_MAP[(s||'').trim()]||DRIVE_ROOT;}
 
@@ -6366,9 +6639,43 @@ function _renderAdminTabInner(el) {
     + '<tbody id="drive-map-body">' + buildDriveMapRows() + '</tbody>'
     + '</table></div>'
     + '</div>'
+    // Cost Center manager
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div><div style="font-size:13px;font-weight:700">🏷 Cost Centers</div>'
+    + '<div style="font-size:11px;color:var(--muted)">Map each site to its cost center code. Shown in site details and linked to PR/PO tracker.</div></div>'
+    + '<button onclick="addCCRow()" style="padding:5px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">+ Add Site</button>'
+    + '</div>'
+    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    + '<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Site Name</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Cost Center Code</th>'
+    + '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Action</th>'
+    + '</tr></thead><tbody id="cc-map-body">' + buildCCMapRows() + '</tbody></table></div>'
+    + '</div>'
+    // Add New Project
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="font-size:13px;font-weight:700;margin-bottom:4px">➕ Add New Project</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:12px">Creates a new site. Planned Completion is set once and locked — can only be changed from Admin.</div>'
+    + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Site Name *</label><input id="np-name" type="text" placeholder="e.g. Gurgaon CEC" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">BU</label><input id="np-bu" type="text" placeholder="e.g. CEC / HRC / C2B" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Zone</label><input id="np-zone" type="text" placeholder="e.g. North / South" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Owner (PM)</label><input id="np-owner" type="text" placeholder="e.g. Kamal" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Vendor</label><input id="np-vendor" type="text" placeholder="e.g. M/s XYZ" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Planned Completion 🔒</label><input id="np-planned" type="text" placeholder="DD Mon YYYY" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Status</label>'
+    + '<select id="np-status" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none;background:var(--bg)">'
+    + '<option>WIP</option><option>Design</option><option>BOQ</option><option>BD</option><option>On Hold</option><option>Cancelled</option></select></div>'
+    + '<div><label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:3px">Cost Center</label><input id="np-cc" type="text" placeholder="e.g. CC-1234" style="width:100%;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none"></div>'
+    + '</div>'
+    + '<button onclick="doAddNewProject()" style="padding:8px 20px;background:#16a34a;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;font-family:Inter,sans-serif">➕ Create Project</button>'
+    + '<div id="np-msg" style="display:none;font-size:11px;margin-top:8px;padding:7px 9px;border-radius:6px"></div>'
+    + '</div>'
     + '</div>';
   loadTeamList();
   loadAuditLog();
+  loadCCMapInAdmin();
   checkSystemStatus();
 }
 
@@ -6485,6 +6792,90 @@ async function doCreateUser() {
 }
 
 // ── Drive Map Management ─────────────────────────────────────────
+// ─── Cost Center map (parallel to Drive map) ───────────────────
+var _ccMapEdits = {};
+
+function buildCCMapRows() {
+  var merged = Object.assign({}, CC_MAP, _ccMapEdits);
+  var sites = Object.keys(merged).sort();
+  if (!sites.length) return '<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--muted);font-size:12px">No cost centers mapped yet.</td></tr>';
+  return sites.map(function(site) {
+    var code = merged[site] || '';
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:5px 8px;font-size:12px;font-weight:500">' + esc(site) + '</td>'
+      + '<td style="padding:5px 8px">'
+      + '<input type="text" value="' + esc(code) + '" data-site="' + esc(site) + '" class="cc-inp" placeholder="e.g. CC-1234" '
+      + 'style="width:100%;padding:4px 7px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:Inter,sans-serif;outline:none" '
+      + 'oninput="_ccMapEdits[this.dataset.site]=this.value">'
+      + '</td>'
+      + '<td style="padding:5px 8px;text-align:center">'
+      + '<button onclick="saveCCRow(\'' + esc(site).replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
+      + '</td></tr>';
+  }).join('');
+}
+
+function addCCRow() {
+  var site = prompt('Enter the exact site name:');
+  if (!site || !site.trim()) return;
+  site = site.trim();
+  _ccMapEdits[site] = _ccMapEdits[site] || '';
+  document.getElementById('cc-map-body').innerHTML = buildCCMapRows();
+}
+
+function saveCCRow(site) {
+  var inp = document.querySelector('.cc-inp[data-site="' + site + '"]');
+  var code = inp ? inp.value.trim() : '';
+  CC_MAP[site] = code;
+  _ccMapEdits[site] = code;
+  // Persist to allData
+  var row = allData.find(function(r){ return (r['Site Name']||'').trim() === site; });
+  if (row) row['Cost Center'] = code;
+  // Persist to Supabase
+  if (__sbClient) {
+    __sbClient.from('sites').upsert({ site_name: site, cost_center: code, updated_at: new Date().toISOString() }, { onConflict: 'site_name' });
+  }
+  toast('✓ Cost center saved for ' + site, 'ok');
+  document.getElementById('cc-map-body').innerHTML = buildCCMapRows();
+}
+
+async function loadCCMapInAdmin() {
+  if (!__sbClient) return;
+  var r = await __sbClient.from('sites').select('site_name,cost_center').not('cost_center','is',null);
+  if (r.data) {
+    r.data.forEach(function(s){ if(s.cost_center){ CC_MAP[s.site_name]=s.cost_center; var row=allData.find(function(d){ return d['Site Name']===s.site_name; }); if(row) row['Cost Center']=s.cost_center; } });
+    var el = document.getElementById('cc-map-body'); if(el) el.innerHTML = buildCCMapRows();
+  }
+}
+
+// ─── Add New Project ────────────────────────────────────────────
+async function doAddNewProject() {
+  var name = (document.getElementById('np-name').value||'').trim();
+  var bu   = (document.getElementById('np-bu').value||'').trim();
+  var zone = (document.getElementById('np-zone').value||'').trim();
+  var owner= (document.getElementById('np-owner').value||'').trim();
+  var vendor=(document.getElementById('np-vendor').value||'').trim();
+  var planned=(document.getElementById('np-planned').value||'').trim();
+  var status=(document.getElementById('np-status').value||'WIP').trim();
+  var cc   = (document.getElementById('np-cc').value||'').trim();
+  var msgEl= document.getElementById('np-msg');
+  function npMsg(t,ok){ msgEl.textContent=t; msgEl.style.display=''; msgEl.style.background=ok?'#f0fdf4':'#fef2f2'; msgEl.style.color=ok?'#16a34a':'#dc2626'; msgEl.style.border='1px solid '+(ok?'#86efac':'#fecaca'); }
+  if (!name) { npMsg('Site name is required.', false); return; }
+  if (allData.find(function(r){ return (r['Site Name']||'').trim().toLowerCase()===name.toLowerCase(); })) { npMsg('Site already exists in tracker.', false); return; }
+  // Add to allData
+  var newRow = { 'Site Name':name, 'BU':bu, 'Zone':zone, 'Owner':owner, 'Vendor':vendor, 'Planned Completion':planned, 'Status':status, 'Cost Center':cc, 'S.No.':allData.length+1, 'Percentage Completion':'0', 'Vendor Rating':'' };
+  allData.push(newRow);
+  filteredData = [...allData];
+  if (cc) CC_MAP[name] = cc;
+  // Push to Supabase
+  var toDate = function(v) { if(!v) return null; var d=pd(v); return d?d.toISOString().split('T')[0]:null; };
+  if (__sbClient) {
+    var res = await __sbClient.from('sites').upsert({ site_name:name, bu:bu, zone:zone, owner:owner, vendor:vendor, planned_completion:toDate(planned), status:status, cost_center:cc||null, serial_no:allData.length, pct_completion:0, updated_at:new Date().toISOString() }, { onConflict:'site_name' });
+    if (res.error) { npMsg('Created locally but Supabase error: '+(res.error.message||''), false); } else { npMsg('✅ Project "'+name+'" created!', true); }
+  } else { npMsg('✅ Project "'+name+'" created locally (Supabase not connected).', true); }
+  buildFilters(); renderKPIs(); renderAll();
+  ['np-name','np-bu','np-zone','np-owner','np-vendor','np-planned','np-cc'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+}
+
 var _driveMapEdits = {}; // session overrides: site → url
 
 function buildDriveMapRows() {
