@@ -952,34 +952,48 @@ async function compressImage(file, maxWidthPx, qualityPct) {
 }
 
 async function uploadSitePhoto(file, siteName, siteId, caption) {
-  if (!__sbClient || !__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
+  if (!__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
+  var authState = C24Uploader ? C24Uploader.getAuth() : null;
+  if (!authState || !authState.username) { toast('Login with username/password first to enable photo uploads', 'err'); return null; }
   try {
     var compressed = await compressImage(file, 1200, 0.72);
     var dateStr = new Date().toISOString().split('T')[0];
     var safeSite = (siteName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
-    var fileName = safeSite + '_' + dateStr + '_' + Date.now() + '.jpg';
-    var storagePath = 'sites/' + (siteId || safeSite) + '/' + dateStr + '/' + fileName;
+    var fileName = safeSite + '_' + Date.now() + '.jpg';
+    var r2Key = 'photos/' + safeSite + '/' + dateStr + '/' + fileName;
 
-    var uploadResult = await __sbClient.storage.from('site-photos').upload(storagePath, compressed.blob, {
-      contentType: 'image/jpeg', upsert: false
+    // Upload to Cloudflare R2 via Worker
+    var workerBase = WORKER_URL.replace(/\/+$/, '');
+    var uploadResp = await fetch(workerBase + '/photo-upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Basic ' + btoa(authState.username + ':' + authState.password),
+        'X-Site-Name': safeSite,
+        'X-Photo-Date': dateStr,
+        'X-File-Name': fileName,
+        'Content-Type': 'image/jpeg'
+      },
+      body: compressed.blob
     });
-    if (uploadResult.error) throw uploadResult.error;
+    if (!uploadResp.ok) { var err = await uploadResp.json(); throw new Error(err.error || 'Upload failed'); }
 
-    var dbResult = await __sbClient.from('site_photos').insert({
-      site_id: siteId || null,
-      site_name: siteName,
-      photo_date: dateStr,
-      storage_path: storagePath,
-      original_name: file.name,
-      file_size_kb: compressed.sizeKb,
-      width: compressed.width,
-      height: compressed.height,
-      caption: caption || '',
-      uploaded_by: __sbUser.id,
-      uploaded_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-    });
-    if (dbResult.error) throw dbResult.error;
-    return storagePath;
+    // Record metadata in Supabase
+    if (__sbClient) {
+      await __sbClient.from('site_photos').insert({
+        site_id: siteId || null,
+        site_name: siteName,
+        photo_date: dateStr,
+        storage_path: r2Key,
+        original_name: file.name,
+        file_size_kb: compressed.sizeKb,
+        width: compressed.width,
+        height: compressed.height,
+        caption: caption || '',
+        uploaded_by: __sbUser.id,
+        uploaded_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+      });
+    }
+    return r2Key;
   } catch(e) {
     toast('Photo upload failed: ' + (e.message || e), 'err');
     return null;
@@ -996,9 +1010,10 @@ async function getSitePhotos(siteName) {
 }
 
 async function getPhotoUrl(storagePath) {
-  if (!__sbClient || !storagePath) return null;
-  var r = await __sbClient.storage.from('site-photos').createSignedUrl(storagePath, 3600);
-  return r.data ? r.data.signedUrl : null;
+  if (!storagePath) return null;
+  // Photos served directly from Cloudflare Worker R2
+  var workerBase = WORKER_URL.replace(/\/+$/, '');
+  return workerBase + '/photos/' + encodeURIComponent(storagePath);
 }
 
 // ── Photo section for modal ──────────────────────────────────────
