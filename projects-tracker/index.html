@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.45</title>
+<title>Cars24 Projects Tracker v4.46</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1161,7 +1161,6 @@ async function loadSupabaseSiteFields() {
 
 async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
   if (!__sbClient || !__sbUser) return;
-  // Map UI label → Supabase column name
   var colMap = {
     'Status': 'status', 'Owner': 'owner', 'Vendor': 'vendor',
     'Vendor Rating': 'vendor_rating', 'Percentage Completion': 'percentage_completion',
@@ -1169,15 +1168,22 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
     'Revised Completion': 'revised_completion', 'Kickoff Date': 'kickoff_date',
     'Work Start Date': 'work_start_date', 'PO Date': 'po_date', 'Zone': 'zone',
     'BU': 'bu', 'Reason for Delay': 'reason_for_delay',
-    'Cost Center': 'cost_center'
+    'Cost Center': 'cost_center', 'Site Name': 'site_name'
   };
   var col = colMap[fieldName];
   if (col) {
-    // Upsert so the row is created if this site hasn't been written to Supabase yet
-    __sbClient.from('sites').upsert(
-      { site_name: siteName, [col]: newValue, updated_at: new Date().toISOString() },
+    var upsertRow = { site_name: siteName, updated_at: new Date().toISOString() };
+    if (fieldName === 'Site Name') { upsertRow.site_name = newValue; }
+    else { upsertRow[col] = newValue; }
+    var sr = await __sbClient.from('sites').upsert(
+      upsertRow,
       { onConflict: 'site_name', ignoreDuplicates: false }
     );
+    if (sr.error) {
+      console.error('saveSiteFieldToSupabase upsert error:', sr.error);
+      toast('Field save failed: ' + (sr.error.message || sr.error.code || JSON.stringify(sr.error)), 'err');
+      return;
+    }
   }
   __sbClient.from('audit_log').insert({
     site_name: siteName,
