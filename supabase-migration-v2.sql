@@ -1,9 +1,9 @@
 -- Migration v2: fix site_updates FK + add unique constraint on sites.site_name
 -- Run this in Supabase SQL Editor (Dashboard → SQL Editor → New Query)
 
--- 1. Add UNIQUE constraint on sites.site_name so upsert works
-alter table public.sites
-  add constraint if not exists sites_site_name_unique unique (site_name);
+-- 1. Add UNIQUE index on sites.site_name so upsert works
+-- (CREATE UNIQUE INDEX supports IF NOT EXISTS; ADD CONSTRAINT does not in all PG versions)
+create unique index if not exists idx_sites_site_name on public.sites (site_name);
 
 -- 2. Drop the NOT NULL + FK constraint on site_updates.site_id
 --    We save updates by site_name, not UUID, so site_id must be nullable
