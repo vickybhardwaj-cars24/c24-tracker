@@ -2395,6 +2395,16 @@ function openModal(idx){
     </div>
     <div class="msec" style="margin-top:4px">
       <div id="photo-sec-${idx}" style="padding:2px 0"></div>
+    </div>
+    <div class="msec" style="margin-top:4px" id="const-pm-sec-${idx}">
+      <div style="border-bottom:2px solid var(--border);margin-bottom:12px;display:flex;gap:0">
+        <button onclick="showConstTab('gates','${idx}')" id="ctab-gates-${idx}" style="padding:7px 13px;font-size:11px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid var(--accent);color:var(--accent);background:none;margin-bottom:-2px">🏗 Milestones</button>
+        <button onclick="showConstTab('rfi','${idx}')" id="ctab-rfi-${idx}" style="padding:7px 13px;font-size:11px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);background:none;margin-bottom:-2px">📋 RFI Log</button>
+        <button onclick="showConstTab('materials','${idx}')" id="ctab-materials-${idx}" style="padding:7px 13px;font-size:11px;font-weight:600;border:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--muted);background:none;margin-bottom:-2px">🧱 Materials</button>
+      </div>
+      <div id="const-gates-${idx}"></div>
+      <div id="const-rfi-${idx}" style="display:none"></div>
+      <div id="const-materials-${idx}" style="display:none"></div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
   // Load photos async after modal opens
@@ -2403,6 +2413,10 @@ function openModal(idx){
     var siteName2 = r['Site Name'] || '';
     renderPhotoSection(siteName2, null, photoContainer);
   }
+  // Load construction PM sections
+  var siteNameConst = r['Site Name'] || '';
+  renderMilestoneGates(siteNameConst, idx);
+  showConstTab('gates', String(idx));
   // Override drive link with smart matching
   var mdrive = document.getElementById('mdrive');
   if (mdrive) {
@@ -4586,6 +4600,206 @@ function slackHandle(name){
 function copyToClipboard(elId){
   var el=document.getElementById(elId); if(!el) return;
   navigator.clipboard.writeText(el.textContent).then(function(){toast('Copied for Slack','ok');});
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CONSTRUCTION PM FEATURES — Milestones, RFI, Materials
+// ═══════════════════════════════════════════════════════════════
+
+var DEFAULT_GATES = [
+  'Site Handover from Civil',
+  'Electrical Rough-in Complete',
+  'HVAC / MEP Rough-in Complete',
+  'False Ceiling Grid Up',
+  'Flooring Laid',
+  'Joinery / Furniture Installation',
+  'Branding / Signage Complete',
+  'IT Infrastructure Ready',
+  'SAT Punch List Cleared',
+  'UAT Ready'
+];
+
+function showConstTab(tab, idx) {
+  ['gates','rfi','materials'].forEach(function(t) {
+    var el = document.getElementById('const-'+t+'-'+idx);
+    var btn = document.getElementById('ctab-'+t+'-'+idx);
+    if (el) el.style.display = t === tab ? '' : 'none';
+    if (btn) {
+      btn.style.borderBottomColor = t === tab ? 'var(--accent)' : 'transparent';
+      btn.style.color = t === tab ? 'var(--accent)' : 'var(--muted)';
+    }
+  });
+  if (tab === 'rfi') renderRFILog(idx);
+  if (tab === 'materials') renderMaterialApprovals(idx);
+}
+
+async function renderMilestoneGates(siteName, idx) {
+  var el = document.getElementById('const-gates-'+idx); if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Loading…</div>';
+  var gates = [];
+  if (__sbClient) {
+    var r = await __sbClient.from('milestone_gates').select('*').eq('site_name', siteName).order('gate_order');
+    if (r.data && r.data.length) {
+      gates = r.data;
+    } else {
+      // Seed default gates for this site
+      var inserts = DEFAULT_GATES.map(function(g, i) { return { site_name: siteName, gate_name: g, gate_order: i+1 }; });
+      var ins = await __sbClient.from('milestone_gates').insert(inserts).select();
+      gates = (ins.data || []);
+    }
+  }
+  if (!gates.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">No milestone data. Sign in to track milestones.</div>'; return; }
+  var done = gates.filter(function(g) { return g.is_done; }).length;
+  var pct = Math.round(done / gates.length * 100);
+  var barClr = pct === 100 ? '#16a34a' : pct >= 60 ? '#2563eb' : '#d97706';
+  el.innerHTML = '<div style="margin-bottom:10px">'
+    + '<div style="display:flex;justify-content:space-between;margin-bottom:4px"><span style="font-size:11px;font-weight:600">Construction Progress</span><span style="font-size:12px;font-weight:700;color:'+barClr+'">'+done+'/'+gates.length+' ('+pct+'%)</span></div>'
+    + '<div style="height:6px;background:var(--surface);border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+barClr+';border-radius:3px;transition:width .3s"></div></div>'
+    + '</div>'
+    + gates.map(function(g) {
+      var safeId = g.id;
+      return '<div style="display:flex;align-items:center;gap:9px;padding:6px 0;border-bottom:1px solid var(--border)">'
+        + '<input type="checkbox"' + (g.is_done ? ' checked' : '') + ' onchange="toggleGate(\''+safeId+'\',this.checked,\''+idx+'\')" style="width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0">'
+        + '<span style="font-size:12px;flex:1;'+(g.is_done?'text-decoration:line-through;color:var(--muted)':'')+'">'+ esc(g.gate_name) +'</span>'
+        + (g.done_date ? '<span style="font-size:10px;color:var(--muted);white-space:nowrap">'+g.done_date+'</span>' : '')
+        + '</div>';
+    }).join('');
+}
+
+async function toggleGate(gateId, isDone, idx) {
+  if (!__sbClient || !__sbUser) { toast('Sign in to update milestones', 'err'); return; }
+  var today = new Date().toISOString().split('T')[0];
+  await __sbClient.from('milestone_gates').update({
+    is_done: isDone,
+    done_date: isDone ? today : null,
+    done_by: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  }).eq('id', gateId);
+  // Refresh the gates view
+  var siteNameConst = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  if (siteNameConst) renderMilestoneGates(siteNameConst, idx);
+  toast(isDone ? '✓ Milestone marked done' : 'Milestone unmarked', 'ok');
+}
+
+async function renderRFILog(idx) {
+  var el = document.getElementById('const-rfi-'+idx); if (!el) return;
+  el.innerHTML = '<div style="color:var(--muted);font-size:12px;padding:8px 0">Loading…</div>';
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var rfis = [];
+  if (__sbClient && siteName) {
+    var r = await __sbClient.from('rfis').select('*').eq('site_name', siteName).order('created_at', { ascending: false });
+    rfis = r.data || [];
+  }
+  var statusColor = { Open:'#dc2626', Answered:'#d97706', Closed:'#16a34a', 'On Hold':'#6b7280' };
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<span style="font-size:12px;font-weight:700">RFI Log <span style="font-size:10px;font-weight:400;color:var(--muted)">(Request For Information)</span></span>'
+    + (__sbUser ? '<button onclick="openAddRFI(\''+idx+'\')" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">+ Add RFI</button>' : '')
+    + '</div>'
+    + '<div id="add-rfi-form-'+idx+'" style="display:none;background:#f0f7ff;border:1px solid #bfdbfe;border-radius:8px;padding:12px;margin-bottom:10px">'
+    + '<input id="rfi-subj-'+idx+'" type="text" placeholder="Subject / Question" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;margin-bottom:6px;font-family:Inter,sans-serif;outline:none">'
+    + '<div style="display:flex;gap:6px;margin-bottom:6px">'
+    + '<input id="rfi-to-'+idx+'" type="text" placeholder="Raised to (e.g. Design team)" style="flex:1;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none">'
+    + '<select id="rfi-pri-'+idx+'" style="padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none;background:var(--bg)">'
+    + '<option>Critical</option><option selected>High</option><option>Medium</option><option>Low</option>'
+    + '</select></div>'
+    + '<textarea id="rfi-desc-'+idx+'" placeholder="Description / details…" rows="2" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none;resize:vertical;margin-bottom:6px"></textarea>'
+    + '<div style="display:flex;gap:6px"><button onclick="submitRFI(\''+idx+'\')" style="padding:5px 12px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">Submit RFI</button>'
+    + '<button onclick="document.getElementById(\'add-rfi-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;font-size:11px;cursor:pointer">Cancel</button></div>'
+    + '</div>'
+    + (!rfis.length ? '<div style="color:var(--muted);font-size:12px;padding:8px 0">No RFIs logged yet.</div>'
+      : rfis.map(function(rfi) {
+        var sc = statusColor[rfi.status] || '#6b7280';
+        return '<div style="padding:8px 0;border-bottom:1px solid var(--border)">'
+          + '<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+          + '<span style="font-size:11px;font-weight:700">'+esc(rfi.rfi_number || 'RFI')+'</span>'
+          + '<span style="flex:1;font-size:12px;font-weight:600">'+esc(rfi.subject||'—')+'</span>'
+          + '<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:'+sc+'22;color:'+sc+'">'+esc(rfi.status)+'</span>'
+          + '</div>'
+          + '<div style="font-size:10px;color:var(--muted)">To: '+esc(rfi.raised_to||'—')+' · '+esc(rfi.raised_date||'—')+'</div>'
+          + (rfi.description ? '<div style="font-size:11px;color:var(--text);margin-top:2px">'+esc(rfi.description.substring(0,100))+'</div>' : '')
+          + '</div>';
+      }).join(''));
+}
+
+function openAddRFI(idx) {
+  var el = document.getElementById('add-rfi-form-'+idx);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitRFI(idx) {
+  if (!__sbClient || !__sbUser) { toast('Sign in first', 'err'); return; }
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var subj = (document.getElementById('rfi-subj-'+idx).value || '').trim();
+  var to   = (document.getElementById('rfi-to-'+idx).value || '').trim();
+  var pri  = document.getElementById('rfi-pri-'+idx).value;
+  var desc = (document.getElementById('rfi-desc-'+idx).value || '').trim();
+  if (!subj) { toast('Enter RFI subject', 'err'); return; }
+  // Auto-number RFI
+  var count = await __sbClient.from('rfis').select('id', { count: 'exact', head: true }).eq('site_name', siteName);
+  var num = 'RFI-' + String((count.count || 0) + 1).padStart(3, '0');
+  var r = await __sbClient.from('rfis').insert({
+    site_name: siteName, rfi_number: num, subject: subj, raised_to: to,
+    priority: pri, description: desc,
+    raised_by: (__sbProfile && __sbProfile.full_name) || __sbUser.email,
+    raised_date: new Date().toISOString().split('T')[0],
+    created_by: __sbUser.id
+  });
+  if (r.error) { toast('Failed: '+r.error.message, 'err'); return; }
+  toast('✓ RFI '+num+' logged', 'ok');
+  document.getElementById('add-rfi-form-'+idx).style.display = 'none';
+  renderRFILog(idx);
+}
+
+async function renderMaterialApprovals(idx) {
+  var el = document.getElementById('const-materials-'+idx); if (!el) return;
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var items = [];
+  if (__sbClient && siteName) {
+    var r = await __sbClient.from('material_approvals').select('*').eq('site_name', siteName).order('created_at', { ascending: false });
+    items = r.data || [];
+  }
+  var statusColor = { Pending:'#d97706', 'Under Review':'#2563eb', Approved:'#16a34a', Rejected:'#dc2626', Resubmit:'#7c3aed' };
+  el.innerHTML = '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">'
+    + '<span style="font-size:12px;font-weight:700">Material Approvals</span>'
+    + (__sbUser ? '<button onclick="openAddMaterial(\''+idx+'\')" style="padding:4px 10px;background:#2563eb;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">+ Add</button>' : '')
+    + '</div>'
+    + '<div id="add-mat-form-'+idx+'" style="display:none;background:#f0fdf4;border:1px solid #86efac;border-radius:8px;padding:12px;margin-bottom:10px">'
+    + '<input id="mat-name-'+idx+'" type="text" placeholder="Material (e.g. Flooring tiles, False ceiling)" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;margin-bottom:6px;font-family:Inter,sans-serif;outline:none">'
+    + '<input id="mat-vendor-'+idx+'" type="text" placeholder="Vendor / Supplier" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;margin-bottom:6px;font-family:Inter,sans-serif;outline:none">'
+    + '<textarea id="mat-spec-'+idx+'" placeholder="Specification / notes" rows="2" style="width:100%;padding:6px 9px;border:1px solid var(--border2);border-radius:5px;font-size:12px;font-family:Inter,sans-serif;outline:none;resize:vertical;margin-bottom:6px"></textarea>'
+    + '<div style="display:flex;gap:6px"><button onclick="submitMaterial(\''+idx+'\')" style="padding:5px 12px;background:#16a34a;color:#fff;border:none;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">Submit</button>'
+    + '<button onclick="document.getElementById(\'add-mat-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:var(--surface);border:1px solid var(--border2);border-radius:5px;font-size:11px;cursor:pointer">Cancel</button></div>'
+    + '</div>'
+    + (!items.length ? '<div style="color:var(--muted);font-size:12px;padding:8px 0">No material approvals tracked yet.</div>'
+      : items.map(function(m) {
+        var sc = statusColor[m.status] || '#6b7280';
+        return '<div style="padding:7px 0;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px">'
+          + '<div style="flex:1"><div style="font-size:12px;font-weight:600">'+esc(m.material_name)+'</div>'
+          + '<div style="font-size:10px;color:var(--muted)">'+esc(m.submitted_by||'—')+(m.submitted_date?' · '+m.submitted_date:'')+'</div></div>'
+          + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:'+sc+'22;color:'+sc+'">'+esc(m.status)+'</span>'
+          + '</div>';
+      }).join(''));
+}
+
+function openAddMaterial(idx) {
+  var el = document.getElementById('add-mat-form-'+idx);
+  if (el) el.style.display = el.style.display === 'none' ? '' : 'none';
+}
+
+async function submitMaterial(idx) {
+  if (!__sbClient || !__sbUser) { toast('Sign in first', 'err'); return; }
+  var siteName = allData[parseInt(idx)] ? allData[parseInt(idx)]['Site Name'] : '';
+  var name   = (document.getElementById('mat-name-'+idx).value || '').trim();
+  var vendor = (document.getElementById('mat-vendor-'+idx).value || '').trim();
+  var spec   = (document.getElementById('mat-spec-'+idx).value || '').trim();
+  if (!name) { toast('Enter material name', 'err'); return; }
+  var r = await __sbClient.from('material_approvals').insert({
+    site_name: siteName, material_name: name, submitted_by: vendor,
+    specification: spec, submitted_date: new Date().toISOString().split('T')[0]
+  });
+  if (r.error) { toast('Failed: '+r.error.message, 'err'); return; }
+  toast('✓ Material logged for approval', 'ok');
+  document.getElementById('add-mat-form-'+idx).style.display = 'none';
+  renderMaterialApprovals(idx);
 }
 
 // ═══ VENDOR DELAY MAIL ═══════════════════════════════════════════
