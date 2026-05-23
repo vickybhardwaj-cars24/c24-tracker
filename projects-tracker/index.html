@@ -984,6 +984,7 @@ function doLogin() {
   var email = document.getElementById('login-username').value.trim();
   var password = document.getElementById('login-password').value;
   if (!email || !password) { showLoginError('Enter email and password.'); return; }
+  if (!__sbClient) initSupabase(); // retry in case CDN loaded after initial call
   if (SB_ENABLED && __sbClient) {
     doSupabaseLogin(email, password);
   } else {
@@ -7153,6 +7154,9 @@ function handleLiveTicketCSV(event){
     lbl.style.pointerEvents = '';
   }
 }
+
+// Retry Supabase init after full page load in case CDN was slow
+window.addEventListener('load', function() { if (!__sbClient) initSupabase(); });
 
 // ── PWA service worker registration ──────────────────────────────
 if ('serviceWorker' in navigator) {
