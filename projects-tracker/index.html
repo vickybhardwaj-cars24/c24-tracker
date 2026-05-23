@@ -279,8 +279,12 @@ td{padding:7px 12px;vertical-align:middle}
 .ham-btn svg{display:block}
 @media(max-width:640px){
   html,body{height:auto;overflow:auto}
-  #main-scroll{overflow:visible;flex:none;min-height:60vh}
-  header{padding:8px 12px;gap:8px;flex-wrap:nowrap;align-items:center;position:relative}
+  #main-scroll{overflow:visible;flex:none;min-height:60vh;padding-bottom:calc(64px + env(safe-area-inset-bottom,0px))}
+  header{
+    padding:8px 12px;gap:8px;flex-wrap:nowrap;align-items:center;position:relative;
+    padding-left:max(12px,env(safe-area-inset-left,0px));
+    padding-right:max(12px,env(safe-area-inset-right,0px));
+  }
   .logo img{height:26px}
   .logo h1{font-size:13px}
   .logo p{display:none}
@@ -298,14 +302,13 @@ td{padding:7px 12px;vertical-align:middle}
   .kpi-l,.kpi-s{font-size:9px}
   .toolbar{padding:6px 10px;gap:5px}
   .sw{min-width:130px}
-  .vtabs{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
-  .vtabs::-webkit-scrollbar{display:none}
-  .vtab{white-space:nowrap;padding:4px 9px;font-size:10px}
+  /* Hide the inline tab bar — replaced by bottom nav */
+  .vtabs{display:none!important}
   .chk-btn{min-width:110px;font-size:11px}
   .su-grid{grid-template-columns:1fr!important}
   .mgrid{grid-template-columns:1fr!important}
   .overlay{padding:0;align-items:flex-end}
-  .modal{border-radius:13px 13px 0 0;max-height:90vh;max-width:100%}
+  .modal{border-radius:18px 18px 0 0;max-height:92vh;max-width:100%}
   .inv-tabs{padding:0 10px;overflow-x:auto;flex-wrap:nowrap}
   .inv-tab{white-space:nowrap;padding:8px 12px;font-size:11px}
   .inv-content{padding:10px 12px}
@@ -319,8 +322,48 @@ td{padding:7px 12px;vertical-align:middle}
   .date-badge,.warn-badge{font-size:11px;padding:4px 8px}
   .btn{padding:5px 10px;font-size:11px}
   .btn-sm{padding:3px 7px;font-size:10px}
+  /* Sticky site-name column — hide Sr No, pin Site Name */
+  #tv table th:nth-child(1),
+  #tv table td:nth-child(1){display:none}
+  #tv table th:nth-child(2),
+  #tv table td:nth-child(2){
+    position:sticky;left:0;z-index:3;
+    background:var(--white);
+    box-shadow:2px 0 6px rgba(0,0,0,.06);
+  }
 }
 @media(max-width:600px){.mgrid{grid-template-columns:1fr}.su-grid{grid-template-columns:1fr}}
+
+/* ── Bottom Navigation Bar (mobile only) ──────────────── */
+#bnav{display:none}
+@media(max-width:640px){
+  #bnav{
+    display:flex;
+    position:fixed;bottom:0;left:0;right:0;
+    z-index:250;
+    background:var(--white);
+    border-top:1px solid var(--border);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    box-shadow:0 -2px 12px rgba(0,0,0,.08);
+  }
+  #bnav button{
+    flex:1;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    gap:3px;
+    padding:8px 2px 6px;
+    background:none;border:none;
+    color:var(--muted);
+    font-family:'Inter',sans-serif;
+    font-size:9px;font-weight:500;
+    cursor:pointer;
+    transition:color .15s;
+    -webkit-tap-highlight-color:transparent;
+    min-height:54px;
+  }
+  #bnav button.bnav-active{color:var(--primary)}
+  #bnav button .bni{font-size:19px;line-height:1;display:block}
+  #bnav button span:last-child{display:block;font-size:9px;letter-spacing:.1px}
+}
 
 #main-scroll{flex:1;overflow-y:auto;overflow-x:auto;min-height:0}
 /* ── REGIONAL INSIGHTS ── */
@@ -1713,6 +1756,19 @@ function setView(v,btn){
     if(id==='tv'){el.classList.toggle('hide',v!=='tv');}
     else{el.classList.toggle('show',v===id);}
   });
+  // sync bottom nav
+  var bnavMap={tv:0,suv:1,inv:2,taskv:3,tickv:4,bdv:5};
+  var bbtns=document.querySelectorAll('#bnav button');
+  bbtns.forEach(function(b){b.classList.remove('bnav-active');});
+  if(bnavMap[v]!==undefined && bbtns[bnavMap[v]]) bbtns[bnavMap[v]].classList.add('bnav-active');
+}
+
+function bnavGo(v,btn){
+  var tab=document.querySelector('.vtab[onclick*="\''+v+'\'"]');
+  setView(v,tab);
+  // sync bnav active manually since setView will clear then re-set
+  document.querySelectorAll('#bnav button').forEach(function(b){b.classList.remove('bnav-active');});
+  if(btn) btn.classList.add('bnav-active');
 }
 
 function renderAll(){ renderTable(); renderSatUat(); renderCalendar(); renderInsights(); renderWarnings(); }
@@ -7384,5 +7440,14 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 <div id="slack-modal" onclick="if(event.target===this)this.style.display='none'"><div class="slack-box"><h3>📋 Slack Preview</h3><pre id="slack-preview"></pre><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-p btn-sm" onclick="copySlack()">📋 Copy</button><button class="btn btn-o btn-sm" onclick="document.getElementById('slack-modal').style.display='none'">Close</button></div></div></div>
+
+<nav id="bnav" aria-label="Main navigation">
+  <button class="bnav-active" onclick="bnavGo('tv',this)"><span class="bni">📊</span><span>Table</span></button>
+  <button onclick="bnavGo('suv',this)"><span class="bni">🚦</span><span>SAT→UAT</span></button>
+  <button onclick="bnavGo('inv',this)"><span class="bni">📈</span><span>Insights</span></button>
+  <button onclick="bnavGo('taskv',this)"><span class="bni">📋</span><span>Tasks</span></button>
+  <button onclick="bnavGo('tickv',this)"><span class="bni">🎫</span><span>Tickets</span></button>
+  <button onclick="bnavGo('bdv',this)"><span class="bni">🏗️</span><span>BD</span></button>
+</nav>
 </body>
 </html>
