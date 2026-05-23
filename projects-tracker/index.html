@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.38</title>
+<title>Cars24 Projects Tracker v4.39</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2702,13 +2702,24 @@ function _meEdit(label, val, idx, fieldKey) {
 function renderMetaField(l, v, idx, r) {
   var isAdmin = __sbRole === 'admin';
 
-  // Revised Completion: always editable, prompts for reason
+  // Revised Completion: click-to-edit with calendar picker + reason input
   if (l === 'Revised') {
     var curRev = r ? (r['Revised Completion'] || '') : '';
-    return '<div class="mi"><div class="ml">Revised Date</div>'
-      + '<div class="mv"><input type="text" id="rev-inp-'+idx+'" value="'+esc(curRev)+'" placeholder="DD Mon YYYY" '
-      + 'style="border:1px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:11px;font-family:Inter,sans-serif;width:100%;box-sizing:border-box;outline:none;background:var(--white)" '
-      + 'onblur="saveRevisedDate('+idx+',this.value)"></div></div>';
+    return '<div class="mi"><div class="ml">Revised Date</div><div class="mv">'
+      + '<div id="rev-disp-'+idx+'" onclick="openRevEdit('+idx+')" style="display:flex;align-items:center;gap:6px;cursor:pointer">'
+      + '<span id="rev-val-'+idx+'" style="font-weight:600">'+esc(curRev||'—')+'</span>'
+      + '<span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:1px 7px;border-radius:4px;border:1px solid #e9d5ff;font-weight:600">✎ Edit</span>'
+      + '</div>'
+      + '<div id="rev-edit-'+idx+'" style="display:none;margin-top:8px;background:#faf9ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">'
+      + '<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">New Date</div>'
+      + '<input type="date" id="rev-date-'+idx+'" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;font-family:Inter,sans-serif;width:100%;box-sizing:border-box;outline:none;color:#111827;background:#fff"></div>'
+      + '<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">Reason for revision</div>'
+      + '<input type="text" id="rev-reason-'+idx+'" placeholder="e.g. Contractor delay, design change…" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;font-family:Inter,sans-serif;width:100%;box-sizing:border-box;outline:none;color:#111827;background:#fff"></div>'
+      + '<div style="display:flex;gap:6px">'
+      + '<button onclick="confirmRevEdit('+idx+')" style="flex:1;background:#7c3aed;color:#fff;border:none;border-radius:6px;padding:7px 10px;font-size:12px;font-weight:700;cursor:pointer">Save</button>'
+      + '<button onclick="cancelRevEdit('+idx+')" style="flex:1;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer">Cancel</button>'
+      + '</div></div>'
+      + '</div></div>';
   }
 
   // Planned: admin-only
@@ -2763,20 +2774,52 @@ function renderMetaField(l, v, idx, r) {
 }
 
 
-function saveRevisedDate(idx, newDate) {
+function openRevEdit(idx) {
+  var r = allData[idx]; if (!r) return;
+  var panel = document.getElementById('rev-edit-' + idx);
+  var disp  = document.getElementById('rev-disp-'  + idx);
+  if (!panel) return;
+  var curRev = r['Revised Completion'] || '';
+  var dateInp = document.getElementById('rev-date-' + idx);
+  if (dateInp && curRev) {
+    var d = pd(curRev);
+    if (d) dateInp.value = d.toISOString().split('T')[0];
+  }
+  var reasonInp = document.getElementById('rev-reason-' + idx);
+  if (reasonInp) reasonInp.value = '';
+  if (disp) disp.style.display = 'none';
+  panel.style.display = '';
+  if (dateInp) setTimeout(function(){ dateInp.showPicker && dateInp.showPicker(); }, 50);
+}
+
+function cancelRevEdit(idx) {
+  var panel = document.getElementById('rev-edit-' + idx);
+  var disp  = document.getElementById('rev-disp-'  + idx);
+  if (panel) panel.style.display = 'none';
+  if (disp)  disp.style.display  = '';
+}
+
+function confirmRevEdit(idx) {
+  var dateInp   = document.getElementById('rev-date-'   + idx);
+  var reasonInp = document.getElementById('rev-reason-' + idx);
+  if (!dateInp || !dateInp.value) { toast('Pick a date first', 'err'); return; }
+  var d = new Date(dateInp.value + 'T00:00:00');
+  var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var newDateStr = d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear();
+  var reason = reasonInp ? reasonInp.value.trim() : '';
+  saveRevisedDate(idx, newDateStr, reason);
+  cancelRevEdit(idx);
+}
+
+function saveRevisedDate(idx, newDate, reason) {
   var r = allData[idx]; if (!r) return;
   var siteName = r['Site Name'] || '';
   var oldDate = r['Revised Completion'] || '';
   newDate = (newDate || '').trim();
   if (!newDate || newDate === oldDate) return;
-  // Require reason for delay
-  var reason = prompt('Reason for revising date' + (oldDate ? ' from ' + oldDate : '') + ' to ' + newDate + ':');
-  if (reason === null) {
-    var inp = document.getElementById('rev-inp-' + idx);
-    if (inp) inp.value = oldDate;
-    return;
-  }
-  reason = reason.trim() || 'Date revised';
+  reason = (reason || '').trim() || 'Date revised';
+  var valEl = document.getElementById('rev-val-' + idx);
+  if (valEl) valEl.textContent = newDate;
   var today = new Date();
   var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
   var dateStr = today.getDate() + ' ' + MONS[today.getMonth()] + ' ' + today.getFullYear();
