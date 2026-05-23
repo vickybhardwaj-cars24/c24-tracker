@@ -6149,9 +6149,25 @@ function renderAdminTab() {
     + '</div>'
     + '</div>'
     // Audit log
-    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px">'
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">'
     + '<div style="font-size:13px;font-weight:700;margin-bottom:12px">📋 Recent Edit History</div>'
     + '<div id="audit-list"><div style="color:var(--muted);font-size:12px">Loading…</div></div>'
+    + '</div>'
+    // Drive folder manager
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    + '<div style="font-size:13px;font-weight:700">📁 Drive Folder Links</div>'
+    + '<button onclick="addDriveRow()" style="padding:5px 12px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:11px;font-weight:600;cursor:pointer">+ Add Site</button>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:10px">Map each site name to its Google Drive folder URL. Changes apply instantly for everyone.</div>'
+    + '<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px" id="drive-map-tbl">'
+    + '<thead><tr style="background:var(--surface);border-bottom:2px solid var(--border)">'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Site Name</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Google Drive Folder URL</th>'
+    + '<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Actions</th>'
+    + '</tr></thead>'
+    + '<tbody id="drive-map-body">' + buildDriveMapRows() + '</tbody>'
+    + '</table></div>'
     + '</div>'
     + '</div>';
   loadTeamList();
@@ -6176,8 +6192,11 @@ async function doInviteTeamMember() {
     });
     var data = await r.json();
     if (!r.ok) throw new Error(data.msg || data.message || 'Invite failed');
-    // Pre-set role in profiles (upsert when they sign up via trigger)
-    // Store pending role in a temp table or just note it for manual update
+    var newUserId = data.id;
+    // Pre-set role + name in profiles if user row already created
+    if (newUserId && __sbClient) {
+      await __sbClient.from('profiles').upsert({ id: newUserId, email: email, full_name: name, role: role }, { onConflict: 'id' });
+    }
     showInvMsg('✓ Invite sent to ' + email + '! They will get an email to set their password.', 'ok');
     document.getElementById('inv-name').value = '';
     document.getElementById('inv-email').value = '';
@@ -6187,6 +6206,56 @@ async function doInviteTeamMember() {
     showInvMsg(e.message || 'Failed to send invite.', 'err');
   }
   btn.disabled = false; btn.textContent = '📧 Send Invite';
+}
+
+// ── Drive Map Management ─────────────────────────────────────────
+var _driveMapEdits = {}; // session overrides: site → url
+
+function buildDriveMapRows() {
+  var merged = Object.assign({}, DRIVE_MAP, _driveMapEdits);
+  var sites = Object.keys(merged).sort();
+  if (!sites.length) return '<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--muted);font-size:12px">No sites mapped yet.</td></tr>';
+  return sites.map(function(site) {
+    var url = merged[site] || '';
+    var isRoot = url === 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
+    return '<tr style="border-bottom:1px solid var(--border)">'
+      + '<td style="padding:5px 8px"><span style="font-size:12px;font-weight:500">' + esc(site) + '</span>'
+      + (isRoot ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;margin-left:5px;font-weight:600">No folder set</span>' : '') + '</td>'
+      + '<td style="padding:5px 8px">'
+      + '<input type="text" value="' + esc(url) + '" data-site="' + esc(site) + '" class="drive-url-inp" placeholder="https://drive.google.com/drive/folders/..." '
+      + 'style="width:100%;padding:4px 7px;border:1px solid var(--border2);border-radius:5px;font-size:11px;font-family:Inter,sans-serif;outline:none" '
+      + 'oninput="_driveMapEdits[this.dataset.site]=this.value" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'\'">'
+      + '</td>'
+      + '<td style="padding:5px 8px;text-align:center;white-space:nowrap">'
+      + (url ? '<a href="' + url + '" target="_blank" style="font-size:10px;color:#2563eb;margin-right:6px">📂 Open</a>' : '')
+      + '<button onclick="saveDriveRow(\'' + esc(site).replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
+      + '</td>'
+      + '</tr>';
+  }).join('');
+}
+
+function addDriveRow() {
+  var site = prompt('Enter the exact site name (must match Site Name column):');
+  if (!site || !site.trim()) return;
+  site = site.trim();
+  _driveMapEdits[site] = _driveMapEdits[site] || '';
+  document.getElementById('drive-map-body').innerHTML = buildDriveMapRows();
+}
+
+function saveDriveRow(site) {
+  var inp = document.querySelector('.drive-url-inp[data-site="' + site + '"]');
+  var url = inp ? inp.value.trim() : '';
+  if (!url) { toast('Enter a Drive URL first', 'err'); return; }
+  if (!url.startsWith('https://drive.google.com')) { toast('Must be a Google Drive URL', 'err'); return; }
+  DRIVE_MAP[site] = url;
+  _driveMapEdits[site] = url;
+  // Persist to Supabase sites table if site exists
+  if (__sbClient) {
+    __sbClient.from('sites').update({ drive_folder_url: url }).eq('site_name', site)
+      .then(function() {}).catch(function() {});
+  }
+  toast('✓ Drive link saved for ' + site, 'ok');
+  document.getElementById('drive-map-body').innerHTML = buildDriveMapRows();
 }
 
 function showInvMsg(text, type) {
