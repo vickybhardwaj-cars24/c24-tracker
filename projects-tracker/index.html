@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.32</title>
+<title>Cars24 Projects Tracker v4.33</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1154,12 +1154,20 @@ async function uploadSitePhoto(file, siteName, siteId, caption) {
     var fileName = safeSite + '_' + Date.now() + '.jpg';
     var r2Key = 'photos/' + safeSite + '/' + dateStr + '/' + fileName;
 
-    // Upload to Supabase Storage (bucket: site-photos)
-    if (!__sbClient) throw new Error('Supabase not connected');
-    var storeRes = await __sbClient.storage.from('site-photos').upload(r2Key, compressed.blob, {
-      contentType: 'image/jpeg', upsert: false
+    // Upload to Cloudflare R2 via Worker
+    var workerBase = WORKER_URL.replace(/\/+$/, '');
+    var uploadResp = await fetch(workerBase + '/photo-upload', {
+      method: 'POST',
+      headers: {
+        'Authorization': workerAuthHeader(),
+        'X-Site-Name': safeSite,
+        'X-Photo-Date': dateStr,
+        'X-File-Name': fileName,
+        'Content-Type': 'image/jpeg'
+      },
+      body: compressed.blob
     });
-    if (storeRes.error) throw new Error(storeRes.error.message || 'Storage upload failed');
+    if (!uploadResp.ok) { var errJ = await uploadResp.json().catch(function(){return {};}); throw new Error(errJ.error || 'Upload failed: HTTP ' + uploadResp.status); }
 
     // Record metadata in Supabase
     if (__sbClient) {
@@ -1194,9 +1202,9 @@ async function getSitePhotos(siteName) {
 }
 
 async function getPhotoUrl(storagePath) {
-  if (!storagePath || !__sbClient) return null;
-  var res = await __sbClient.storage.from('site-photos').createSignedUrl(storagePath, 3600);
-  return res.data && res.data.signedUrl ? res.data.signedUrl : null;
+  if (!storagePath) return null;
+  var workerBase = WORKER_URL.replace(/\/+$/, '');
+  return workerBase + '/photos/' + encodeURIComponent(storagePath);
 }
 
 // ── Photo section for modal ──────────────────────────────────────
