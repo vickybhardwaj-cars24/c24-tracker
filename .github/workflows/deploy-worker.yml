@@ -1,0 +1,20 @@
+name: Deploy Cloudflare Worker
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'worker.js'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy worker.js to Cloudflare
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to Cloudflare Workers
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: deploy worker.js --name c24-tracker --compatibility-date 2024-01-01

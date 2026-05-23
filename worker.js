@@ -509,8 +509,7 @@ export default {
 // Headers: Authorization: Basic ..., X-Site-Name, X-Photo-Date, X-File-Name
 // Body: raw JPEG blob (already compressed client-side)
 async function handlePhotoUpload(request, env) {
-  const creds = parseBasicAuth(request);
-  if (!creds || !checkAuth(env, creds.user, creds.pass)) {
+  if (!await checkAnyAuth(request, env)) {
     return json(401, { success: false, error: 'Unauthorized' });
   }
   const siteName  = (request.headers.get('X-Site-Name')  || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
