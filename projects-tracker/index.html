@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.21</title>
+<title>Cars24 Projects Tracker v4.22</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -803,7 +803,7 @@ function onSbLoginSuccess() {
   if (!__originLoaded) {
     setTimeout(function() {
       Promise.all([
-        C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
+        workerFetchText(WORKER_URL + TOOL_PATH + '.csv'),
         loadHOTPUpdates(),
         loadSchedData()
       ]).then(function(results) {
@@ -850,6 +850,18 @@ function workerAuthHeader() {
 // Returns true if user is authenticated to upload (either Supabase or Basic)
 function canUpload() {
   return !!(window.__sbUploadToken || (__auth && __auth.username));
+}
+
+// Authenticated GET from Cloudflare Worker — uses Bearer JWT or Basic auth
+function workerFetchText(url, opts) {
+  var headers = {};
+  var ah = workerAuthHeader();
+  if (ah) headers['Authorization'] = ah;
+  return fetch(url, Object.assign({ cache: 'no-store', headers: headers }, opts || {}))
+    .then(function(r) {
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return r.text();
+    });
 }
 
 function applyRoleBasedView() {
@@ -5870,7 +5882,7 @@ function emailLogBadge(siteName, emailType){
 (function loadFromOrigin(){
   if (location.protocol === 'file:') return;
   Promise.all([
-    C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', {cache: 'no-store'}),
+    workerFetchText(WORKER_URL + TOOL_PATH + '.csv'),
     loadEmailLog(),
     loadHOTPUpdates(),
     loadSchedData(),
@@ -5903,7 +5915,7 @@ function emailLogBadge(siteName, emailType){
 // Same flat-CSV format as the in-page handleSnagUpload accepts.
 function loadSnagFromOrigin(){
   if (location.protocol === 'file:') return Promise.resolve();
-  return C24Uploader.fetchText(WORKER_URL + SNAG_TOOL_PATH + '.csv', {cache: 'no-store'})
+  return workerFetchText(WORKER_URL + SNAG_TOOL_PATH + '.csv')
     .then(function(text){
       var parsed = parseSnagCSV(text);
       var sites = Object.keys(parsed);
@@ -6053,7 +6065,7 @@ loadTicketsFromPF();
 // Fetch the canonical tickets dataset from R2 via the Worker (CSV fallback).
 function loadTicketsFromOrigin(){
   if (location.protocol === 'file:') return Promise.resolve();
-  return C24Uploader.fetchText(WORKER_URL + TICKET_TOOL_PATH + '.csv', {cache: 'no-store'})
+  return workerFetchText(WORKER_URL + TICKET_TOOL_PATH + '.csv')
     .then(function(text){
       var rows = parseTicketCSV(text);
       if (rows && rows.length){
@@ -6191,7 +6203,7 @@ function loadAttendanceFromPF() {
 
 function loadAttendanceFromOrigin() {
   if (location.protocol === 'file:') return Promise.resolve();
-  return C24Uploader.fetchText(WORKER_URL + ATTENDANCE_TOOL_PATH + '.csv', {cache: 'no-store'})
+  return workerFetchText(WORKER_URL + ATTENDANCE_TOOL_PATH + '.csv')
     .then(function(text) {
       var rows = parseAttendanceCSV(text);
       if (rows && rows.length) {
