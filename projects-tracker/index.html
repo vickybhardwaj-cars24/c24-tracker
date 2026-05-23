@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.51</title>
+<title>Cars24 Projects Tracker v4.53</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -29,7 +29,7 @@ html,body{height:100%;overflow:hidden}
 body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);font-size:13px;line-height:1.5;display:flex;flex-direction:column}
 header{background:var(--white);border-bottom:1px solid var(--border);padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;z-index:200;box-shadow:var(--sh);flex-shrink:0}
 .logo{display:flex;align-items:center;gap:10px}
-.logo img{height:34px;border-radius:6px;display:block}
+.logo img{height:34px;width:auto;object-fit:contain;display:block}
 .logo h1{font-size:14px;font-weight:700}.logo p{font-size:11px;color:var(--muted)}
 .hdr-r{display:flex;gap:7px;align-items:center;flex-wrap:wrap}
 .btn{display:inline-flex;align-items:center;gap:4px;padding:6px 13px;border-radius:6px;font-size:12px;font-weight:500;cursor:pointer;border:none;font-family:'Inter',sans-serif;transition:all .15s;line-height:1.4}
@@ -551,8 +551,9 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:20px 22px 16px">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
-          <div style="font-size:16px;font-weight:700;color:#fff;margin-bottom:3px">🔐 CARS24 Tracker Login</div>
-          <div style="font-size:11px;color:rgba(255,255,255,.75)" id="login-subtitle">Sign in with your work email</div>
+          <img src="/src/logo_white.webp" alt="CARS24" style="height:20px;width:auto;object-fit:contain;display:block;margin-bottom:8px">
+          <div style="font-size:14px;font-weight:700;color:#fff;margin-bottom:2px">Projects Tracker</div>
+          <div style="font-size:11px;color:rgba(255,255,255,.72)" id="login-subtitle">Sign in with your work email</div>
         </div>
         <button onclick="closeLoginModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
       </div>
@@ -2578,7 +2579,45 @@ async function renderVendorRatings(){
     html+='<div style="padding:20px;text-align:center;color:var(--muted);font-size:12px;margin-bottom:20px">No ratings yet. Rate UAT-completed sites below.</div>';
   }
 
-  // Rating form: UAT-done sites not yet rated
+  // CSV vendor ratings section — visible to all without login
+  var csvVrMap={};
+  allData.forEach(function(row){
+    var vn=(row['Vendor']||'').trim();
+    var vr=parseInt(row['Vendor Rating']||'0');
+    if(vn&&vr>=1&&vr<=5){
+      if(!csvVrMap[vn]) csvVrMap[vn]={sum:0,cnt:0,sites:[]};
+      csvVrMap[vn].sum+=vr; csvVrMap[vn].cnt++;
+      csvVrMap[vn].sites.push({site:row['Site Name']||'',rating:vr});
+    }
+  });
+  var csvSorted=Object.entries(csvVrMap).sort(function(a,b){ return b[1].sum/b[1].cnt - a[1].sum/a[1].cnt; });
+  if(csvSorted.length){
+    html+='<div style="font-size:13px;font-weight:700;margin-bottom:10px">📄 CSV Vendor Ratings</div>';
+    html+='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:20px">';
+    csvSorted.forEach(function(entry,i){
+      var v=entry[0],d=entry[1];
+      var avg=d.sum/d.cnt;
+      html+='<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:14px">'
+        +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">'
+        +'<div style="width:24px;height:24px;border-radius:50%;background:#6b7280;color:#fff;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700">'+(i+1)+'</div>'
+        +'<div style="font-weight:700;font-size:13px;flex:1">'+esc(v)+'</div>'
+        +'<span style="font-size:12px;font-weight:700;color:'+vrClr(avg)+'">'+vrStars(avg)+' '+avg.toFixed(1)+'/5</span>'
+        +'</div>'
+        +'<div style="height:5px;background:var(--surface);border-radius:3px;margin-bottom:8px;overflow:hidden"><div style="height:100%;width:'+(avg/5*100).toFixed(0)+'%;background:'+vrClr(avg)+';border-radius:3px"></div></div>'
+        +'<div style="font-size:10px;color:var(--muted)">'+d.cnt+' site'+(d.cnt>1?'s':'')+' · from CSV</div>'
+        +'<div style="margin-top:8px">';
+      d.sites.forEach(function(s){
+        html+='<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 0;border-top:1px solid var(--border);font-size:11px">'
+          +'<span>'+esc(s.site)+'</span>'
+          +'<span style="color:'+vrClr(s.rating)+';font-weight:600">'+vrStars(s.rating)+' '+s.rating+'/5</span>'
+          +'</div>';
+      });
+      html+='</div></div>';
+    });
+    html+='</div>';
+  }
+
+  // Rating form: UAT-done sites not yet rated — login required
   if(__sbUser){
     var toRate=uatSites.filter(function(r){ return !ratedKeys.has(((r['Site Name']||'')+'|'+(r['Vendor']||'')).trim()); });
     if(toRate.length){
