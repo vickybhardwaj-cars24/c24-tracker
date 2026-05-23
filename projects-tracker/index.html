@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.15</title>
+<title>Cars24 Projects Tracker v4.16</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -6272,13 +6272,32 @@ async function checkSystemStatus() {
   }
   el.innerHTML = chip('Supabase', !!__sbUser, __sbUser ? __sbUser.email : 'not signed in')
     + chip('Role', true, __sbRole)
-    + '<div id="worker-status-chip" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:#fffbeb;color:#92400e;border:1px solid #fcd34d;border-radius:6px;font-size:11px;font-weight:600">⏳ Checking Worker…</div>';
+    + '<div id="worker-status-chip" style="display:inline-flex;align-items:center;gap:5px;padding:5px 10px;background:#fffbeb;color:#92400e;border:1px solid #fcd34d;border-radius:6px;font-size:11px;font-weight:600">⏳ Checking Worker…</div>'
+    + '<div id="worker-auth-chip"></div>';
   // Test Worker connectivity
   try {
     var r = await fetch(WORKER_URL + 'hotp-updates.csv', { method: 'HEAD', cache: 'no-store' });
-    document.getElementById('worker-status-chip').outerHTML = chip('Worker', r.ok || r.status === 404, r.ok ? 'connected' : 'status '+r.status);
+    var workerOk = r.ok || r.status === 404 || r.status === 304;
+    document.getElementById('worker-status-chip').outerHTML = chip('Worker', workerOk, workerOk ? 'connected' : 'HTTP '+r.status);
   } catch(e) {
     document.getElementById('worker-status-chip').outerHTML = chip('Worker', false, 'unreachable');
+  }
+  // Test Worker accepts Supabase JWT (verify endpoint)
+  if (__sbUser) {
+    var authEl = document.getElementById('worker-auth-chip');
+    if (authEl) {
+      try {
+        var tok = __sbUser.access_token || (__sbClient && __sbClient.auth && (await __sbClient.auth.getSession()).data.session && (await __sbClient.auth.getSession()).data.session.access_token);
+        var vr = await fetch(WORKER_URL.replace(/\/+$/, '') + '/verify', {
+          method: 'POST',
+          headers: { 'Authorization': 'Bearer ' + tok }
+        });
+        var vj = await vr.json().catch(function(){ return {}; });
+        authEl.outerHTML = chip('Worker Auth', vr.status === 200 && vj.success, vr.status === 200 ? 'JWT accepted ✓' : 'HTTP '+vr.status+' — redeploy needed');
+      } catch(e) {
+        authEl.outerHTML = chip('Worker Auth', false, 'could not test');
+      }
+    }
   }
 }
 
@@ -6299,12 +6318,18 @@ async function doCreateUser() {
     if (r2.error) throw r2.error;
     var data = r2.data && r2.data.user;
     if (!data) throw new Error('User creation returned no data. Check Supabase Auth settings.');
+    // If session is null, Supabase is waiting for email confirmation — tell user to fix settings
+    if (!r2.data.session) {
+      showInvMsg('⚠️ Supabase sent a confirmation email to ' + email + '.\n\nTo skip email confirmation:\n1. Go to supabase.com → your project\n2. Authentication → Providers → Email\n3. Turn OFF "Confirm email"\n\nThen delete this user and try again.', 'err');
+      btn.disabled = false; btn.textContent = '✅ Create Account';
+      return;
+    }
     var newId = data && data.id;
     // Set profile with role
     if (newId && __sbClient) {
       await __sbClient.from('profiles').upsert({ id: newId, email: email, full_name: name, role: role }, { onConflict: 'id' });
     }
-    showInvMsg('✅ Account created for ' + name + '!\n\nShare these login details:\nURL: https://c24-projects.vercel.app/projects-tracker/\nEmail: ' + email + '\nPassword: ' + pass + '\n\nThey can change their password after first login.', 'ok');
+    showInvMsg('✅ Account created for ' + name + '!\n\nShare these login details:\nURL: https://c24-projects.vercel.app/projects-tracker/\nEmail: ' + email + '\nPassword: ' + pass + '\n\nThey can log in immediately on any device.', 'ok');
     document.getElementById('inv-name').value = '';
     document.getElementById('inv-email').value = '';
     document.getElementById('inv-pass').value = '';
