@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.37</title>
+<title>Cars24 Projects Tracker v4.38</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1948,6 +1948,29 @@ function fmtRevHistory(r){
   }).join('\n');
 }
 
+async function saveRevisionToSupabase(siteName, fromDate, toDate, reason) {
+  if (!__sbClient || !__sbUser) return;
+  __sbClient.from('revision_history').insert({
+    site_name: siteName,
+    changed_on: new Date().toISOString().split('T')[0],
+    revised_from: fromDate || null,
+    revised_to: toDate,
+    reason: reason || null,
+    changed_by: __sbUser.id,
+    changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+  }).catch(function(e){ console.warn('revision_history insert failed:', e); });
+}
+
+async function loadRevisionHistoryFromSupabase(siteName) {
+  if (!__sbClient) return [];
+  var r = await __sbClient.from('revision_history')
+    .select('changed_on,revised_from,revised_to,reason,changed_by_name,created_at')
+    .eq('site_name', siteName)
+    .order('created_at', { ascending: true })
+    .catch(function(){ return { error: true, data: [] }; });
+  if (r.error || !r.data) return [];
+  return r.data;
+}
 
 function committedDate(r){
   // Always use Revised Completion as the committed date
@@ -2764,6 +2787,7 @@ function saveRevisedDate(idx, newDate) {
   allData[idx]['Reason for Delay'] = newReason;
   saveSiteFieldToSupabase(siteName, 'Revised Completion', oldDate, newDate);
   saveSiteFieldToSupabase(siteName, 'Reason for Delay', existingReason, newReason);
+  saveRevisionToSupabase(siteName, oldDate, newDate, reason);
   renderKPIs(); applyFilters(); buildKpiPanel();
   toast('✓ Revised date updated for ' + siteName, 'ok');
 }
@@ -2964,7 +2988,7 @@ function openModal(idx){
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
     </div>
-    ${(()=>{const rh=getRevHistory(r);if(!rh.length) return "";return `<div style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px">`+`<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>`+rh.map((h,i)=>`<div style="font-size:12px;padding:2px 0">${i+1}. First logged <b>${h.col}</b> &rarr; Revised to <b>${h.dateStr}</b></div>`).join("")+"</div>";})()}
+    <div id="rev-hist-sec-${idx}" style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;display:none"></div>
     ${llScopeHtml}
     ${llHtml}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
@@ -2986,6 +3010,35 @@ function openModal(idx){
       <div id="const-materials-${idx}" style="display:none"></div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
+  // Load revision history (CSV + Supabase live edits) async
+  (async function(capturedIdx, capturedR) {
+    var csvHits = getRevHistory(capturedR);
+    var sbRevs = await loadRevisionHistoryFromSupabase(capturedR['Site Name'] || '');
+    var el = document.getElementById('rev-hist-sec-' + capturedIdx);
+    if (!el) return;
+    if (!csvHits.length && !sbRevs.length) return;
+    var MONS2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    var html = '<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>';
+    var num = 0;
+    csvHits.forEach(function(h) {
+      num++;
+      html += '<div style="font-size:12px;padding:2px 0">' + num + '. <span style="font-size:10px;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:3px;font-weight:700">CSV</span> First logged <b>' + esc(h.col) + '</b> &rarr; Revised to <b>' + esc(h.dateStr) + '</b></div>';
+    });
+    sbRevs.forEach(function(sb) {
+      num++;
+      var dStr = (sb.changed_on || (sb.created_at || '').substring(0, 10));
+      var d2 = new Date(dStr + 'T00:00:00');
+      var dateLabel = d2.getDate() + ' ' + MONS2[d2.getMonth()] + ' ' + d2.getFullYear();
+      var line = num + '. <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-weight:700">LIVE</span> Changed on <b>' + esc(dateLabel) + '</b>';
+      if (sb.revised_from) line += ' from <span style="color:#6b7280">' + esc(sb.revised_from) + '</span>';
+      line += ' &rarr; <b>' + esc(sb.revised_to) + '</b>';
+      if (sb.reason) line += ' <span style="color:#6b7280;font-size:11px">(' + esc(sb.reason) + ')</span>';
+      if (sb.changed_by_name) line += ' <span style="color:#9ca3af;font-size:10px">by ' + esc(sb.changed_by_name) + '</span>';
+      html += '<div style="font-size:12px;padding:2px 0">' + line + '</div>';
+    });
+    el.innerHTML = html;
+    el.style.display = '';
+  })(idx, r);
   // Load photos async after modal opens
   var photoContainer = document.getElementById('photo-sec-'+idx);
   if (photoContainer) {
