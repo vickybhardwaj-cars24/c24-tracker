@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.19</title>
+<title>Cars24 Projects Tracker v4.20</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -6188,7 +6188,10 @@ loadAttendanceFromPF();
 // ═══════════════════════════════════════════════════════════════
 function renderAdminTab() {
   var el = document.getElementById('adminv'); if (!el) return;
-  if (__sbRole !== 'admin') { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Admin access only.</div>'; return; }
+  if (__sbRole !== 'admin') { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">Admin access only. Signed in as: ' + __sbRole + '</div>'; return; }
+  try { _renderAdminTabInner(el); } catch(e) { el.innerHTML = '<div style="padding:20px;color:#dc2626;font-size:12px">Admin panel error: ' + (e.message||e) + '</div>'; console.error('renderAdminTab error:', e); }
+}
+function _renderAdminTabInner(el) {
   el.innerHTML = '<div style="max-width:900px;margin:0 auto">'
     + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">⚙ Admin Panel</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Manage team logins, view edit history, control access</div>'
