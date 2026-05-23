@@ -80,6 +80,37 @@ function checkAuth(env, username, password) {
   return okUser && okPass;
 }
 
+// Accept either Basic auth (existing) or a Supabase Bearer JWT.
+// Supabase JWTs are verified by checking they decode to a valid payload
+// issued by our project (iss matches) and are not expired.
+async function checkAnyAuth(request, env) {
+  const h = request.headers.get('Authorization') || '';
+
+  // Basic auth — existing flow unchanged
+  if (h.startsWith('Basic ')) {
+    const auth = parseBasicAuth(request);
+    return auth && checkAuth(env, auth.user, auth.pass);
+  }
+
+  // Bearer — Supabase JWT
+  if (h.startsWith('Bearer ')) {
+    const token = h.slice(7).trim();
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return false;
+      const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+      // Must be from our Supabase project and not expired
+      if (!payload.iss || !payload.iss.includes('fnvylizldarvqejsfkbn')) return false;
+      if (!payload.exp || Date.now() / 1000 > payload.exp) return false;
+      // Must be a real user (not anon)
+      if (payload.is_anonymous === true) return false;
+      return true;
+    } catch (_) { return false; }
+  }
+
+  return false;
+}
+
 function isValidToolPath(env, tp) {
   if (!tp || typeof tp !== 'string') return false;
   if (!/^[a-z0-9][a-z0-9-]{0,40}$/.test(tp)) return false;
@@ -167,8 +198,7 @@ async function handleGet(request, env) {
 // Authenticated raw-body upload. The body is treated as opaque bytes and stored
 // in R2 with contentEncoding=gzip so subsequent GETs serve the proper header.
 async function handleUpload(request, env) {
-  const auth = parseBasicAuth(request);
-  if (!auth || !checkAuth(env, auth.user, auth.pass)) {
+  if (!await checkAnyAuth(request, env)) {
     return json(401, { success: false, error: 'Invalid credentials' });
   }
   const tool = request.headers.get('X-Tool-Path') || '';
@@ -196,8 +226,7 @@ async function handleUpload(request, env) {
 }
 
 async function handleVerify(request, env) {
-  const auth = parseBasicAuth(request);
-  if (!auth || !checkAuth(env, auth.user, auth.pass)) {
+  if (!await checkAnyAuth(request, env)) {
     return json(401, { success: false, error: 'Invalid credentials' });
   }
   return json(200, { success: true });

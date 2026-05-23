@@ -115,6 +115,7 @@
   }
 
   function basicAuthHeader(auth){
+    if (auth && auth._sbToken) return 'Bearer ' + auth._sbToken;
     return 'Basic ' + btoa(auth.username + ':' + auth.password);
   }
 
@@ -139,7 +140,7 @@
       if (typeof csvText !== 'string' || !csvText.length) return reject(new Error('csvText is required'));
       if (!workerUrl) return reject(new Error('workerUrl is required'));
       if (!toolPath)  return reject(new Error('toolPath is required'));
-      if (!auth || !auth.username || !auth.password) return reject(new Error('auth is required'));
+      if (!auth || (!auth._sbToken && (!auth.username || !auth.password))) return reject(new Error('auth is required'));
 
       // Ensure trailing slash isn't doubled when we append /upload.
       var base = workerUrl.replace(/\/+$/, '');
@@ -195,7 +196,7 @@
     var workerUrl = opts.workerUrl;
     var auth      = opts.auth;
     if (!workerUrl) return Promise.reject(new Error('workerUrl is required'));
-    if (!auth || !auth.username || !auth.password) return Promise.reject(new Error('auth is required'));
+    if (!auth || (!auth._sbToken && (!auth.username || !auth.password))) return Promise.reject(new Error('auth is required'));
     var base = workerUrl.replace(/\/+$/, '');
     return fetch(base + '/verify', {
       method: 'POST',

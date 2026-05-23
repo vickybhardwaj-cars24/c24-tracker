@@ -781,7 +781,38 @@ function onSbLoginSuccess() {
   document.getElementById('ticket-local-lbl').style.display = 'none';
   document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
   applyRoleBasedView();
+  // Auto-wire Cloudflare Worker uploads using Supabase JWT token
+  _wireWorkerWithSbToken();
   toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
+}
+
+function _wireWorkerWithSbToken() {
+  if (!__sbClient) return;
+  // refreshSession ensures we always have a valid (non-expired) token
+  __sbClient.auth.getSession().then(function(r) {
+    if (!r.data || !r.data.session) return;
+    var token = r.data.session.access_token;
+    if (!token) return;
+    __auth = { _sbToken: token };
+    _patchUploaderForSb();
+  });
+}
+
+function _patchUploaderForSb() {
+  window.__sbUploadToken = __auth && __auth._sbToken;
+}
+
+// Returns the correct Authorization header value for Worker requests.
+// Uses Supabase Bearer token when available, falls back to Basic auth.
+function workerAuthHeader() {
+  if (window.__sbUploadToken) return 'Bearer ' + window.__sbUploadToken;
+  if (__auth && __auth.username) return 'Basic ' + btoa(__auth.username + ':' + (__auth.password || ''));
+  return null;
+}
+
+// Returns true if user is authenticated to upload (either Supabase or Basic)
+function canUpload() {
+  return !!(window.__sbUploadToken || (__auth && __auth.username));
 }
 
 function applyRoleBasedView() {
@@ -953,8 +984,7 @@ async function compressImage(file, maxWidthPx, qualityPct) {
 
 async function uploadSitePhoto(file, siteName, siteId, caption) {
   if (!__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
-  var authState = C24Uploader ? C24Uploader.getAuth() : null;
-  if (!authState || !authState.username) { toast('Login with username/password first to enable photo uploads', 'err'); return null; }
+  if (!canUpload()) { toast('Please log in first to enable photo uploads', 'err'); return null; }
   try {
     var compressed = await compressImage(file, 1200, 0.72);
     var dateStr = new Date().toISOString().split('T')[0];
@@ -967,7 +997,7 @@ async function uploadSitePhoto(file, siteName, siteId, caption) {
     var uploadResp = await fetch(workerBase + '/photo-upload', {
       method: 'POST',
       headers: {
-        'Authorization': 'Basic ' + btoa(authState.username + ':' + authState.password),
+        'Authorization': workerAuthHeader(),
         'X-Site-Name': safeSite,
         'X-Photo-Date': dateStr,
         'X-File-Name': fileName,
@@ -3996,7 +4026,7 @@ function deleteLLPO(siteName,poIdx){
 // Upload from within the site modal — appends a new PO block or replaces same PO
 function handleLLUpload(event,siteName){
   var file=event.target.files[0]; if(!file) return;
-  if(!__auth){toast('Please log in first to upload schedule','err');event.target.value='';return;}
+  if(!canUpload()){toast('Please log in first to upload schedule','err');event.target.value='';return;}
   var reader=new FileReader();
   reader.onload=function(e){
     var parsed=parseLLScheduleCSV(e.target.result,file.name);
@@ -4028,7 +4058,7 @@ function handleLLUpload(event,siteName){
 function handleLLBulkUpload(event){
   var files=Array.from(event.target.files);
   if(!files.length) return;
-  if(!__auth){toast('Please log in first','err');event.target.value='';return;}
+  if(!canUpload()){toast('Please log in first','err');event.target.value='';return;}
   var siteNames=allData.map(function(r){return (r['Site Name']||'').trim();}).filter(Boolean);
   var rows3=files.map(function(f,fi){
     var poMatch=f.name.match(/Schedule_PO([A-Z0-9]+)\.csv/i);
@@ -4166,7 +4196,7 @@ function deleteLLScopeTask(siteName,taskIdx){
 
 function handleLLScopeUpload(event,siteName){
   var file=event.target.files[0]; if(!file) return;
-  if(!__auth){toast('Please log in first','err');event.target.value='';return;}
+  if(!canUpload()){toast('Please log in first','err');event.target.value='';return;}
   var reader=new FileReader();
   reader.onload=function(e){
     var parsed=parseLLScopeCSV(e.target.result);
@@ -6455,7 +6485,7 @@ function doLogout(){
 function handleLiveCSV(event){
   var file = event.target.files[0];
   if (!file) return;
-  if (!__auth) { toast('Please log in first', 'err'); event.target.value=''; return; }
+  if (!canUpload()) { toast('Please log in first', 'err'); event.target.value=''; return; }
   var lbl = document.getElementById('live-upload-lbl');
   var originalText = lbl.textContent;
   lbl.textContent = '⟳ Uploading...';
@@ -6501,7 +6531,7 @@ function handleLiveCSV(event){
 function handleLiveSnagCSV(event){
   var file = event.target.files[0];
   if (!file) return;
-  if (!__auth) { toast('Please log in first', 'err'); event.target.value=''; return; }
+  if (!canUpload()) { toast('Please log in first', 'err'); event.target.value=''; return; }
   var lbl = document.getElementById('snag-live-lbl');
   var originalText = lbl.textContent;
   lbl.textContent = '⟳ Uploading snag...';
@@ -6551,7 +6581,7 @@ function handleLiveSnagCSV(event){
 function handleLiveTicketCSV(event){
   var file = event.target.files[0];
   if (!file) return;
-  if (!__auth) { toast('Please log in first', 'err'); event.target.value=''; return; }
+  if (!canUpload()) { toast('Please log in first', 'err'); event.target.value=''; return; }
   var lbl = document.getElementById('ticket-live-lbl');
   var originalText = lbl.textContent;
   lbl.textContent = '⟳ Uploading tickets...';
