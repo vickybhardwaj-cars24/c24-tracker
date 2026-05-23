@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.46</title>
+<title>Cars24 Projects Tracker v4.47</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -709,6 +709,7 @@ var LL_SCOPE_DATA = {}; // Landlord scope: { siteName: [ {task, expectedDate, do
 const META_COLS = ['S.No.','BU','Site Name','Zone','Owner','Vendor','Vendor Rating','Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE','Planned Completion','Revised Completion'];
 let DATE_COLS = ['7 Apr','8 Apr','9 Apr','10 Apr','11 Apr','12 Apr','13 Apr','14 Apr','15 Apr','16 Apr','17 Apr','18 Apr','19 Apr','20 Apr','21 Apr','22 Apr','23 Apr','24 Apr','25 Apr','26 Apr','27 Apr','28 Apr','29 Apr','30 Apr','1 May','2 May','3 May','4 May','5 May','6 May','7 May','8 May'];
 let allData = [], filteredData = [], sortCol = '', sortDir = 1;
+var __rawCSVData = null; // snapshot of allData right after CSV parse, before any Supabase overrides
 const TICKET_CLOSED = new Set(); // session-only closed ticket IDs
 const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra'];
 const UAT_WARN_DAYS = 15; // days after SAT before warning
@@ -868,6 +869,7 @@ function onSbLoginSuccess() {
       if (parsed && parsed.length) {
         __originLoaded = true;
         allData = parsed.filter(function(r){ return (r['Site Name']||'').trim(); });
+        __rawCSVData = allData.map(function(r){ return Object.assign({}, r); });
         filteredData = [...allData];
         applyHOTPUpdates();
         var c = document.getElementById('cchip');
@@ -1172,18 +1174,26 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
   };
   var col = colMap[fieldName];
   if (col) {
+    var DATE_DB_COLS = ['sat_date','uat_date','planned_completion','revised_completion','kickoff_date','work_start_date','po_date'];
+    var valueToSave = newValue;
+    if (DATE_DB_COLS.includes(col)) {
+      var dParsed = pd(newValue);
+      valueToSave = (dParsed && !isNaN(dParsed)) ? dParsed.toISOString().split('T')[0] : null;
+    }
     var upsertRow = { site_name: siteName, updated_at: new Date().toISOString() };
     if (fieldName === 'Site Name') { upsertRow.site_name = newValue; }
-    else { upsertRow[col] = newValue; }
+    else { upsertRow[col] = valueToSave; }
+    console.log('saveSiteFieldToSupabase:', siteName, col, '=', valueToSave);
     var sr = await __sbClient.from('sites').upsert(
       upsertRow,
       { onConflict: 'site_name', ignoreDuplicates: false }
     );
     if (sr.error) {
-      console.error('saveSiteFieldToSupabase upsert error:', sr.error);
+      console.error('saveSiteFieldToSupabase error:', sr.error);
       toast('Field save failed: ' + (sr.error.message || sr.error.code || JSON.stringify(sr.error)), 'err');
       return;
     }
+    console.log('saveSiteFieldToSupabase: saved OK');
   }
   __sbClient.from('audit_log').insert({
     site_name: siteName,
@@ -1931,23 +1941,25 @@ function sortBy(col){
 // ═══════════════════════════════════════════════════════════════
 
 function getRevHistory(r){
-  // Scan DATE_COLS for "Revised date : <date>" entries
-  // Deduplicate: same revised-to date = one revision, keep first occurrence
+  // Scan DATE_COLS for "Revised date : <date>" entries.
+  // Always scan the raw CSV snapshot so Supabase daily-update overrides
+  // don't erase revision patterns that existed in the original CSV.
+  var siteName = (r['Site Name']||'').trim();
+  var src = r;
+  if (__rawCSVData) {
+    var raw = __rawCSVData.find(function(d){ return (d['Site Name']||'').trim() === siteName; });
+    if (raw) src = raw;
+  }
   var hits=[];
   var seen={};
   var rx=/revised\s+date\s*:\s*(\d{1,2}(?:st|nd|rd|th)?\s+(?:Jan(?:uary)?|Feb(?:ruary)?|Mar(?:ch)?|Apr(?:il)?|May|Jun(?:e)?|Jul(?:y)?|Aug(?:ust)?|Sep(?:tember)?|Oct(?:ober)?|Nov(?:ember)?|Dec(?:ember)?)(?:\s+\d{4})?)/gi;
   DATE_COLS.forEach(function(col){
-    var txt=(r[col]||'').trim(); if(!txt) return;
+    var txt=(src[col]||'').trim(); if(!txt) return;
     var m; rx.lastIndex=0;
     while((m=rx.exec(txt))!==null){
       var dateStr=m[1].trim().replace(/\b(st|nd|rd|th)\b/gi,'').trim();
-      // Normalise: "5 May" and "5th May" both become "5 May"
       var key=dateStr.toLowerCase();
-      if(!seen[key]){
-        seen[key]=true;
-        hits.push({col:col,dateStr:dateStr,key:key});
-      }
-      // If same date seen again, skip — already logged earliest occurrence
+      if(!seen[key]){ seen[key]=true; hits.push({col:col,dateStr:dateStr,key:key}); }
     }
   });
   return hits;
@@ -6290,6 +6302,7 @@ initSupabase();
       if (parsed && parsed.length) {
         __originLoaded = true;
         allData = parsed.filter(function(r){ return (r['Site Name']||'').trim(); });
+        __rawCSVData = allData.map(function(r){ return Object.assign({}, r); });
         filteredData = [...allData];
         applyHOTPUpdates();
         var c = document.getElementById('cchip');
