@@ -2,8 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
 <title>C24 Expansion Hub</title>
+<meta name="theme-color" content="#4736FE">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="C24 Hub">
+<link rel="apple-touch-icon" href="/cars24-round-icon.png">
+<link rel="manifest" href="/manifest.json">
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <script>
@@ -183,18 +190,65 @@
   .contact a:hover{color:var(--primary);background:rgba(var(--primary-rgb),.10)}
   .contact a svg{width:16px;height:16px}
   .contact-name{font-size:11px;font-weight:600;color:var(--muted);padding:0 4px 0 2px;white-space:nowrap}
+  /* ── Tablet ──────────────────────────────────── */
+  @media (max-width:768px){
+    header{padding:16px 20px}
+    main{padding:32px 20px 80px}
+    footer{padding:18px 20px}
+    .hero h2{font-size:26px}
+    .grid{grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+  }
+
+  /* ── Mobile ──────────────────────────────────── */
   @media (max-width:560px){
-    header{padding:14px 16px}
-    main{padding:28px 16px 40px}
-    .hero h2{font-size:22px}
-    .hero p{font-size:13px}
-    footer{padding:16px 16px;font-size:10px}
-    .contact{right:10px;bottom:10px}
+    header{
+      padding:12px 16px;
+      /* safe area insets for notched phones */
+      padding-top:max(12px,env(safe-area-inset-top));
+      padding-left:max(16px,env(safe-area-inset-left));
+      padding-right:max(16px,env(safe-area-inset-right));
+    }
+    main{
+      padding:24px 16px 100px;
+      padding-left:max(16px,env(safe-area-inset-left));
+      padding-right:max(16px,env(safe-area-inset-right));
+    }
+    footer{
+      padding:14px 16px;
+      padding-bottom:max(14px,env(safe-area-inset-bottom));
+      font-size:10px;
+      flex-direction:column;gap:4px;text-align:center;
+    }
     .meta{display:none}
     .brand-divider{display:none}
     .brand p{display:none}
     .brand h1{font-size:14px}
-    .grid{grid-template-columns:1fr}
+    .brand-logo-chip{padding:6px 10px}
+    .brand-logo{height:18px}
+    .hero{margin-bottom:28px}
+    .hero h2{font-size:22px}
+    .hero p{font-size:13px;line-height:1.6}
+    .grid{
+      grid-template-columns:1fr;
+      gap:12px;
+    }
+    .card{
+      padding:18px 18px 16px;
+      /* make entire card a comfortable touch target */
+      min-height:96px;
+    }
+    .card-icon{
+      width:34px;height:34px;font-size:16px;
+      margin-bottom:10px;
+    }
+    .card-title{font-size:15px}
+    .card-desc{font-size:12px;margin-bottom:12px}
+    .card-foot{font-size:10px}
+    .section-title{font-size:10px;margin-bottom:12px}
+    .contact{
+      right:max(10px,env(safe-area-inset-right));
+      bottom:max(10px,env(safe-area-inset-bottom));
+    }
   }
 </style>
 </head>
@@ -294,6 +348,12 @@
     document.documentElement.dataset.theme = next;
     try { localStorage.setItem('c24-theme', next); } catch (_) {}
   });
+
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', function() {
+      navigator.serviceWorker.register('/sw.js').catch(function(){});
+    });
+  }
 </script>
 </body>
 </html>
