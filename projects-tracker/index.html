@@ -6012,6 +6012,8 @@ function emailLogBadge(siteName, emailType){
 
 // Fetch the canonical dataset from same origin (GitHub-backed CSV).
 // This is the only source of truth — there is no embedded fallback dataset.
+initSupabase();
+
 (function loadFromOrigin(){
   if (location.protocol === 'file:') return;
   Promise.all([
