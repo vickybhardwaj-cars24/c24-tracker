@@ -32,7 +32,10 @@ self.addEventListener('fetch', e => {
   if (e.request.mode === 'navigate' || url.pathname.endsWith('.html') || url.pathname.endsWith('/')) {
     e.respondWith(
       fetch(e.request).then(res => {
-        if (res.ok) caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+        if (res.ok) {
+          const resClone = res.clone(); // clone synchronously before browser consumes res
+          caches.open(CACHE).then(c => c.put(e.request, resClone));
+        }
         return res;
       }).catch(() => caches.match(e.request))
     );
@@ -43,7 +46,8 @@ self.addEventListener('fetch', e => {
   e.respondWith(
     caches.match(e.request).then(cached => cached || fetch(e.request).then(res => {
       if (res.ok && e.request.method === 'GET') {
-        caches.open(CACHE).then(c => c.put(e.request, res.clone()));
+        const resClone = res.clone(); // clone synchronously before returning
+        caches.open(CACHE).then(c => c.put(e.request, resClone));
       }
       return res;
     }))
