@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.13</title>
+<title>Cars24 Projects Tracker v4.15</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -948,6 +948,20 @@ async function saveUpdateToSupabase(siteId, siteName, updateText) {
 
 async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
   if (!__sbClient || !__sbUser) return;
+  // Map UI label → Supabase column name
+  var colMap = {
+    'Status': 'status', 'Owner': 'owner', 'Vendor': 'vendor',
+    'Vendor Rating': 'vendor_rating', 'Percentage Completion': 'percentage_completion',
+    'SAT Date': 'sat_date', 'UAT DATE': 'uat_date', 'Planned Completion': 'planned_completion',
+    'Revised Completion': 'revised_completion', 'Kickoff Date': 'kickoff_date',
+    'Work Start Date': 'work_start_date', 'PO Date': 'po_date', 'Zone': 'zone',
+    'BU': 'bu', 'Reason for Delay': 'reason_for_delay'
+  };
+  var col = colMap[fieldName];
+  if (col) {
+    __sbClient.from('sites').update({ [col]: newValue, updated_at: new Date().toISOString() })
+      .eq('site_name', siteName);
+  }
   __sbClient.from('audit_log').insert({
     site_name: siteName,
     field_name: fieldName,
@@ -2488,11 +2502,13 @@ function saveU(d,idx){
   // Persist manual edit
   const sn=(allData[idx]['Site Name']||'').trim();
   if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=v; saveHOTPUpdates(); }
+  // Also persist to Supabase site_updates
+  if (__sbUser && sn) saveUpdateToSupabase(null, sn, '['+d+'] '+v);
   const t=document.getElementById(`utxt-${k}-${idx}`);
   if(t){t.textContent=v;t.style.display='block';}
   const e2=document.getElementById(`ued-${k}-${idx}`);
   if(e2) e2.style.display='none';
-  toast('Saved','ok');
+  toast('Saved' + (__sbUser ? ' & tracked ✓' : ''), 'ok');
   applyFilters();
 }
 function addU(idx){
@@ -5632,6 +5648,36 @@ function applyHOTPUpdates(){
   });
 }
 
+// Load site_updates from Supabase and apply as override layer on top of CSV + HOTP_UPDATES.
+// Each row: { site_name, update_date, update_text } where update_text is "[DD Mon] text".
+// We parse the date prefix and apply to the matching site row.
+function loadSupabaseUpdates(){
+  if(!__sbClient) return Promise.resolve();
+  return __sbClient.from('site_updates')
+    .select('site_name,update_date,update_text,update_by_name')
+    .order('created_at',{ascending:true})
+    .then(function(res){
+      if(res.error || !res.data) return;
+      res.data.forEach(function(upd){
+        var sn=(upd.site_name||'').trim();
+        var text=upd.update_text||'';
+        // Parse "[DD Mon] text" format
+        var m=text.match(/^\[([^\]]+)\]\s*([\s\S]*)/);
+        if(!m) return;
+        var col=m[1].trim(); var val=m[2].trim();
+        // Find matching row
+        var row=allData.find(function(r){ return (r['Site Name']||'').trim()===sn; });
+        if(!row) return;
+        if(!DATE_COLS.includes(col)) DATE_COLS.push(col);
+        row[col]=val;
+        // Also keep HOTP_UPDATES in sync so saveHOTPUpdates doesn't overwrite
+        HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{};
+        HOTP_UPDATES[sn][col]=val;
+      });
+    })
+    .catch(function(e){ console.warn('loadSupabaseUpdates failed:',e); });
+}
+
 function loadSchedData(){
   if(location.protocol==='file:') return Promise.resolve();
   return fetch(WORKER_URL+SCHED_TOOL+'-mappings.json',{cache:'no-store'})
@@ -5796,11 +5842,13 @@ function emailLogBadge(siteName, emailType){
         allData = parsed.filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
         applyHOTPUpdates();
-        buildFilters();
-        renderKPIs();
-        renderAll();
         var c = document.getElementById('cchip');
         if (c) c.textContent = allData.length + ' sites';
+        loadSupabaseUpdates().then(function(){
+          buildFilters();
+          renderKPIs();
+          renderAll();
+        });
       } else {
         toast('No data in projects-tracker.csv — upload a CSV to populate.', 'err');
       }
