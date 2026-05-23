@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.49</title>
+<title>Cars24 Projects Tracker v4.50</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1128,10 +1128,10 @@ async function syncAllSitesToSupabase() {
 // ── Load field overrides from Supabase → merge into allData ─────
 async function loadSupabaseSiteFields() {
   if (!__sbClient) return;
-  var r = await __sbClient.from('site_field_overrides')
-    .select('site_name,field_name,field_value')
-    .catch(function(){ return { error: true }; });
-  if (r.error || !r.data || !r.data.length) return;
+  var r;
+  try { r = await __sbClient.from('site_field_overrides').select('site_name,field_name,field_value'); }
+  catch(e) { console.warn('loadSupabaseSiteFields select error:', e); return; }
+  if (!r || r.error || !r.data || !r.data.length) return;
   try {
     r.data.forEach(function(sfo) {
       var sn = (sfo.site_name||'').trim();
@@ -1964,12 +1964,10 @@ async function saveRevisionToSupabase(siteName, fromDate, toDate, reason) {
 
 async function loadRevisionHistoryFromSupabase(siteName) {
   if (!__sbClient) return [];
-  var r = await __sbClient.from('revision_history')
-    .select('changed_on,revised_from,revised_to,reason,changed_by_name,created_at')
-    .eq('site_name', siteName)
-    .order('created_at', { ascending: true })
-    .catch(function(){ return { error: true, data: [] }; });
-  if (r.error || !r.data) return [];
+  var r;
+  try { r = await __sbClient.from('revision_history').select('changed_on,revised_from,revised_to,reason,changed_by_name,created_at').eq('site_name', siteName).order('created_at', { ascending: true }); }
+  catch(e) { return []; }
+  if (!r || r.error || !r.data) return [];
   return r.data;
 }
 
@@ -6085,31 +6083,25 @@ function applyHOTPUpdates(){
 // Load site_updates from Supabase and apply as override layer on top of CSV + HOTP_UPDATES.
 // Each row: { site_name, update_date, update_text } where update_text is "[DD Mon] text".
 // We parse the date prefix and apply to the matching site row.
-function loadSupabaseUpdates(){
-  if(!__sbClient) return Promise.resolve();
-  return __sbClient.from('site_updates')
-    .select('site_name,update_date,update_text,update_by_name')
-    .order('created_at',{ascending:true})
-    .then(function(res){
-      if(res.error || !res.data) return;
-      res.data.forEach(function(upd){
-        var sn=(upd.site_name||'').trim();
-        var text=upd.update_text||'';
-        // Parse "[DD Mon] text" format
-        var m=text.match(/^\[([^\]]+)\]\s*([\s\S]*)/);
-        if(!m) return;
-        var col=m[1].trim(); var val=m[2].trim();
-        // Find matching row
-        var row=allData.find(function(r){ return (r['Site Name']||'').trim()===sn; });
-        if(!row) return;
-        if(!DATE_COLS.includes(col)) DATE_COLS.push(col);
-        row[col]=val;
-        // Also keep HOTP_UPDATES in sync so saveHOTPUpdates doesn't overwrite
-        HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{};
-        HOTP_UPDATES[sn][col]=val;
-      });
-    })
-    .catch(function(e){ console.warn('loadSupabaseUpdates failed:',e); });
+async function loadSupabaseUpdates(){
+  if(!__sbClient) return;
+  var res;
+  try { res = await __sbClient.from('site_updates').select('site_name,update_date,update_text,update_by_name').order('created_at',{ascending:true}); }
+  catch(e){ console.warn('loadSupabaseUpdates failed:',e); return; }
+  if(!res || res.error || !res.data) return;
+  res.data.forEach(function(upd){
+    var sn=(upd.site_name||'').trim();
+    var text=upd.update_text||'';
+    var m=text.match(/^\[([^\]]+)\]\s*([\s\S]*)/);
+    if(!m) return;
+    var col=m[1].trim(); var val=m[2].trim();
+    var row=allData.find(function(r){ return (r['Site Name']||'').trim()===sn; });
+    if(!row) return;
+    if(!DATE_COLS.includes(col)) DATE_COLS.push(col);
+    row[col]=val;
+    HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{};
+    HOTP_UPDATES[sn][col]=val;
+  });
 }
 
 function loadSchedData(){
