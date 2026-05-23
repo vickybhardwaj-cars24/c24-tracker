@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.44</title>
+<title>Cars24 Projects Tracker v4.45</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1054,26 +1054,29 @@ function doLegacyLogin() {
 
 // ── Supabase: save site update ──────────────────────────────────
 async function saveUpdateToSupabase(siteId, siteName, updateText) {
-  if (!__sbClient || !__sbUser) return false;
-  // site_id is nullable — we save by site_name since CSV data isn't in sites table yet
+  if (!__sbClient || !__sbUser) { console.warn('saveUpdateToSupabase: no client or user'); return false; }
+  var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
   var r = await __sbClient.from('site_updates').insert({
-    site_id: siteId || null,
+    site_id: null,
     site_name: siteName || null,
     update_date: new Date().toISOString().split('T')[0],
     update_text: updateText,
-    update_by: __sbUser.id,
-    update_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
+    update_by: null,
+    update_by_name: byName
   });
-  if (!r.error) {
-    __sbClient.from('audit_log').insert({
-      site_name: siteName,
-      field_name: 'daily_update',
-      new_value: updateText.substring(0, 500),
-      changed_by: __sbUser.id,
-      changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-    });
+  if (r.error) {
+    console.error('saveUpdateToSupabase error:', r.error);
+    toast('Supabase save failed: ' + (r.error.message || r.error.code || JSON.stringify(r.error)), 'err');
+    return false;
   }
-  return !r.error;
+  __sbClient.from('audit_log').insert({
+    site_name: siteName,
+    field_name: 'daily_update',
+    new_value: updateText.substring(0, 500),
+    changed_by: null,
+    changed_by_name: byName
+  }).catch(function(){});
+  return true;
 }
 
 // ── Bulk sync all CSV rows → Supabase sites table ───────────────
@@ -1181,9 +1184,9 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
     field_name: fieldName,
     old_value: String(oldValue || ''),
     new_value: String(newValue || ''),
-    changed_by: __sbUser.id,
+    changed_by: null,
     changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-  });
+  }).catch(function(){});
 }
 
 // ── Photo Upload with Client-side Compression ───────────────────
@@ -1952,16 +1955,21 @@ function fmtRevHistory(r){
 }
 
 async function saveRevisionToSupabase(siteName, fromDate, toDate, reason) {
-  if (!__sbClient || !__sbUser) return;
-  __sbClient.from('revision_history').insert({
+  if (!__sbClient || !__sbUser) { console.warn('saveRevisionToSupabase: no client or user'); return; }
+  var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
+  var r = await __sbClient.from('revision_history').insert({
     site_name: siteName,
     changed_on: new Date().toISOString().split('T')[0],
     revised_from: fromDate || null,
     revised_to: toDate,
     reason: reason || null,
-    changed_by: __sbUser.id,
-    changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-  }).catch(function(e){ console.warn('revision_history insert failed:', e); });
+    changed_by: null,
+    changed_by_name: byName
+  });
+  if (r.error) {
+    console.error('saveRevisionToSupabase error:', r.error);
+    toast('Revision save failed: ' + (r.error.message || r.error.code || JSON.stringify(r.error)), 'err');
+  }
 }
 
 async function loadRevisionHistoryFromSupabase(siteName) {
@@ -3237,9 +3245,9 @@ function openModal(idx){
       site_name: r['Site Name'],
       field_name: 'modal_opened',
       new_value: new Date().toISOString(),
-      changed_by: __sbUser.id,
+      changed_by: null,
       changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-    });
+    }).catch(function(){});
   }
 }
 
