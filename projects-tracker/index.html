@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.14</title>
+<title>Cars24 Projects Tracker v4.15</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -768,6 +768,8 @@ function loadSbProfile(userId) {
 function onSbLoginSuccess() {
   var email = __sbUser ? __sbUser.email : '';
   var name = (__sbProfile && __sbProfile.full_name) ? __sbProfile.full_name : email.split('@')[0];
+  // Auto-wire worker credentials so CSV upload works immediately after Supabase login
+  __auth = WORKER_AUTH;
   closeLoginModal();
   document.getElementById('login-btn').style.display = 'none';
   document.getElementById('logout-btn').style.display = '';
@@ -5324,6 +5326,8 @@ const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
 const TICKET_TOOL_PATH     = 'tickets';
 const ATTENDANCE_TOOL_PATH = 'attendance';
+// Worker Basic-auth credentials — used for CSV upload after Supabase login
+const WORKER_AUTH      = { username: 'vicky', password: 'vickycars24' };
 const EMAIL_LOG_KEY = '__email_log';
 const HOTP_UPDATES_TOOL = 'hotp-updates';
 const SCHED_TOOL = 'project-schedule';   // Cars24 scope of work (with POs)
