@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.40</title>
+<title>Cars24 Projects Tracker v4.41</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2690,6 +2690,7 @@ async function deleteVendorRating(id){
 // ─── Field rendering helper (field locking, revised date picker) ────
 var LOCKED_TAG = '<span style="font-size:8px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">🔒 locked</span>';
 var ADMIN_CHIP = '<span style="font-size:8px;background:#eff6ff;color:#2563eb;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">admin</span>';
+var PM_CHIP    = '<span style="font-size:8px;background:#f0fdf4;color:#15803d;padding:1px 5px;border-radius:3px;margin-left:4px;font-weight:600">PM / admin</span>';
 
 function _meLock(label, val, extra) {
   return '<div class="mi"><div class="ml">'+esc(label)+(extra||'')+'</div><div class="mv" style="color:var(--text);user-select:text">'+esc(val||'—')+'</div></div>';
@@ -2700,15 +2701,18 @@ function _meEdit(label, val, idx, fieldKey) {
 }
 
 function renderMetaField(l, v, idx, r) {
-  var isAdmin = __sbRole === 'admin';
+  var isAdmin   = __sbRole === 'admin';
+  var isPmOrAdmin = isAdmin || __sbRole === 'pm';
+  var isLoggedIn  = !!__sbUser;
 
-  // Revised Completion: click-to-edit with calendar picker + reason input
+  // Revised Completion: click-to-edit (PM + admin only after login)
   if (l === 'Revised') {
     var curRev = r ? (r['Revised Completion'] || '') : '';
+    var canEdit = isPmOrAdmin;
     return '<div class="mi"><div class="ml">Revised Date</div><div class="mv">'
-      + '<div id="rev-disp-'+idx+'" onclick="openRevEdit('+idx+')" style="display:flex;align-items:center;gap:6px;cursor:pointer">'
+      + '<div id="rev-disp-'+idx+'" style="display:flex;align-items:center;gap:6px;'+(canEdit?'cursor:pointer;':'')+'">'
       + '<span id="rev-val-'+idx+'" style="font-weight:600">'+esc(curRev||'—')+'</span>'
-      + '<span style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:1px 7px;border-radius:4px;border:1px solid #e9d5ff;font-weight:600">✎ Edit</span>'
+      + (canEdit ? '<span onclick="openRevEdit('+idx+')" style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:1px 7px;border-radius:4px;border:1px solid #e9d5ff;font-weight:600;cursor:pointer">✎ Edit</span>' : '')
       + '</div>'
       + '<div id="rev-edit-'+idx+'" style="display:none;margin-top:8px;background:#faf9ff;border:1px solid #e9d5ff;border-radius:8px;padding:12px">'
       + '<div style="margin-bottom:8px"><div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em">New Date</div>'
@@ -2728,22 +2732,16 @@ function renderMetaField(l, v, idx, r) {
     return _meEdit('Planned', v, idx, 'Planned Completion');
   }
 
-  // Work Start + Kickoff: editable once (locked if value exists), admin always
+  // Work Start + Kickoff: PM + admin can always edit; viewers locked
   if (l === 'Work Start' || l === 'Kickoff Date') {
-    var hasVal = v && v.trim() && v !== '—';
-    if (!isAdmin && hasVal) return _meLock(l, v, LOCKED_TAG);
-    if (!isAdmin && !hasVal) {
-      var fk2 = l === 'Work Start' ? 'Work Start Date' : 'Kickoff Date';
-      return '<div class="mi"><div class="ml">'+esc(l)+'</div>'
-        +'<div class="mv" contenteditable="true" data-meta-field="'+fk2+'" data-meta-idx="'+idx+'" data-once="1" onblur="saveMetaOnce(this.dataset.metaField,parseInt(this.dataset.metaIdx),this)">'+esc(v)+'</div></div>';
-    }
+    if (!isPmOrAdmin) return _meLock(l, v, PM_CHIP);
     var fk3 = l === 'Work Start' ? 'Work Start Date' : 'Kickoff Date';
     return _meEdit(l, v, idx, fk3);
   }
 
-  // SAT, UAT, PO: admin-only
+  // SAT, UAT, PO: PM + admin editable
   if (l === 'SAT Date' || l === 'UAT Date' || l === 'PO Date') {
-    if (!isAdmin) return _meLock(l, v, ADMIN_CHIP);
+    if (!isPmOrAdmin) return _meLock(l, v, PM_CHIP);
     var fk4 = l === 'UAT Date' ? 'UAT DATE' : l;
     return _meEdit(l, v, idx, fk4);
   }
@@ -2753,18 +2751,31 @@ function renderMetaField(l, v, idx, r) {
     return _meLock('Vendor Rating', v || 'Rate via Insights tab', '');
   }
 
-  // T-Live: computed, read-only
-  if (l === 'T-Live') return _meLock(l, v, '');
-
   // Cost Center: admin-only edit
   if (l === 'Cost Center') {
     if (!isAdmin) return _meLock(l, v, ADMIN_CHIP);
     return _meEdit(l, v, idx, 'Cost Center');
   }
 
+  // Reason for Delay: read-only, parsed entries with dates
+  if (l === 'Reason for Delay') {
+    var rfd = (v || '').trim();
+    if (!rfd || rfd === '—') return _meLock('Reason for Delay', 'None', '');
+    var entries = rfd.split(' | ').filter(Boolean);
+    var rdHtml = '<div class="mi" style="grid-column:1/-1"><div class="ml">Reason for Delay</div>'
+      + '<div class="mv" style="user-select:text;padding:0">';
+    entries.forEach(function(e, i) {
+      rdHtml += '<div style="font-size:11px;padding:4px 0;border-bottom:1px solid var(--border);color:var(--text);line-height:1.5">'
+        + '<span style="font-size:10px;background:#f3f4f6;color:#6b7280;padding:1px 5px;border-radius:3px;margin-right:5px;font-weight:600">#'+(i+1)+'</span>'
+        + esc(e.trim()) + '</div>';
+    });
+    rdHtml += '</div></div>';
+    return rdHtml;
+  }
+
   // Owner, Vendor, % Completion: editable for signed-in users
   if (l === 'Owner' || l === 'Vendor' || l === '% Completion (HOTP)') {
-    if (!__sbUser) return _meLock(l, v, '');
+    if (!isLoggedIn) return _meLock(l, v, '');
     return _meEdit(l, v, idx, l);
   }
 
@@ -2848,10 +2859,50 @@ function saveMetaOnce(f, idx, el) {
   el.contentEditable = 'false'; el.style.background = 'transparent'; el.style.cursor = 'default';
 }
 
+function openSiteNameEdit(idx) {
+  var wrap = document.getElementById('sn-edit-wrap-' + idx);
+  if (wrap) wrap.style.display = 'inline';
+}
+function cancelSiteNameEdit(idx) {
+  var wrap = document.getElementById('sn-edit-wrap-' + idx);
+  if (wrap) wrap.style.display = 'none';
+}
+function saveSiteName(idx) {
+  if (__sbRole !== 'admin') { toast('Admin only', 'err'); return; }
+  var inp = document.getElementById('sn-inp-' + idx);
+  if (!inp) return;
+  var newName = inp.value.trim();
+  if (!newName) { toast('Site name cannot be empty', 'err'); return; }
+  var r = allData[idx]; if (!r) return;
+  var oldName = r['Site Name'] || '';
+  if (newName === oldName) { cancelSiteNameEdit(idx); return; }
+  allData[idx]['Site Name'] = newName;
+  saveSiteFieldToSupabase(oldName, 'Site Name', oldName, newName);
+  document.getElementById('mttl').innerHTML = esc(newName)
+    + '<span onclick="openSiteNameEdit('+idx+')" title="Edit site name" style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:1px 7px;border-radius:4px;border:1px solid #e9d5ff;font-weight:600;cursor:pointer;margin-left:8px;vertical-align:middle">✎</span>'
+    + '<span id="sn-edit-wrap-'+idx+'" style="display:none;margin-left:8px;vertical-align:middle">'
+    + '<input id="sn-inp-'+idx+'" type="text" value="'+esc(newName)+'" style="border:1px solid #d1d5db;border-radius:5px;padding:3px 7px;font-size:13px;font-family:Inter,sans-serif;outline:none;color:#111827;background:#fff;width:220px">'
+    + '<button onclick="saveSiteName('+idx+')" style="margin-left:5px;background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+    + '<button onclick="cancelSiteNameEdit('+idx+')" style="margin-left:3px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
+    + '</span>';
+  renderKPIs(); applyFilters();
+  toast('✓ Site name updated', 'ok');
+}
+
 // ═══════════════════════════════════════════════════════════════
 function openModal(idx){
   const r=allData[idx];if(!r) return;
-  document.getElementById('mttl').textContent=r['Site Name']||'Site';
+  if (__sbRole === 'admin') {
+    document.getElementById('mttl').innerHTML = esc(r['Site Name']||'Site')
+      + '<span onclick="openSiteNameEdit('+idx+')" title="Edit site name" style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:1px 7px;border-radius:4px;border:1px solid #e9d5ff;font-weight:600;cursor:pointer;margin-left:8px;vertical-align:middle">✎</span>'
+      + '<span id="sn-edit-wrap-'+idx+'" style="display:none;margin-left:8px;vertical-align:middle">'
+      + '<input id="sn-inp-'+idx+'" type="text" value="'+esc(r['Site Name']||'')+'" style="border:1px solid #d1d5db;border-radius:5px;padding:3px 7px;font-size:13px;font-family:Inter,sans-serif;outline:none;color:#111827;background:#fff;width:220px">'
+      + '<button onclick="saveSiteName('+idx+')" style="margin-left:5px;background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+      + '<button onclick="cancelSiteNameEdit('+idx+')" style="margin-left:3px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
+      + '</span>';
+  } else {
+    document.getElementById('mttl').textContent=r['Site Name']||'Site';
+  }
   var _dm=document.getElementById('mdrive');
   if(_dm){_dm.href=getDriveLink(r['Site Name']);_dm.style.display='';}
   var _pm=document.getElementById('mprpo');
@@ -2867,8 +2918,8 @@ function openModal(idx){
   const metaF=[
     ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
     ['PO Date',r['PO Date']||'—'],['Kickoff Date',r['Kickoff Date']||'—'],['Work Start',r['Work Start Date']||'—'],
-    ['T-Live',(()=>{const tl=getTempLiveDate(r);return tl?fmtD(tl):'—';})()],
-    ['Cost Center',r['Cost Center']||''],['SAT Date',r['SAT Date']||'—'],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'']
+    ['Cost Center',r['Cost Center']||''],['SAT Date',r['SAT Date']||'—'],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||''],
+    ['Reason for Delay',r['Reason for Delay']||'']
   ];
   const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';
   const sortedCols=[...DATE_COLS].reverse().filter(d=>(r[d]||'').length>2);
@@ -3029,7 +3080,7 @@ function openModal(idx){
 
   document.getElementById('mbody').innerHTML=`
     <div class="msec"><div class="mst">Site Details</div>
-      <div class="mgrid">${metaF.map(([l,v])=>l==='Revised'?renderMetaField(l,v,idx,r):`<div class="mi"><div class="ml">${esc(l)}</div><div class="mv" contenteditable="true" onblur="saveMeta('${esc(l)}',${idx},this)">${esc(v)}</div></div>`).join('')}</div>
+      <div class="mgrid">${metaF.map(([l,v])=>renderMetaField(l,v,idx,r)).join('')}</div>
     </div>
     <div id="rev-hist-sec-${idx}" style="margin-bottom:14px;padding:10px 12px;background:#f5f3ff;border:1px solid #e9d5ff;border-radius:8px;display:none"></div>
     ${llScopeHtml}
@@ -3061,23 +3112,30 @@ function openModal(idx){
     if (!el) return;
     if (!csvHits.length && !sbRevs.length) return;
     var MONS2 = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    var html = '<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Revision History</div>';
+    var html = '<div style="font-size:10px;font-weight:700;color:#7c3aed;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">📋 Revision History</div>';
     var num = 0;
     csvHits.forEach(function(h) {
       num++;
-      html += '<div style="font-size:12px;padding:2px 0">' + num + '. <span style="font-size:10px;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:3px;font-weight:700">CSV</span> First logged <b>' + esc(h.col) + '</b> &rarr; Revised to <b>' + esc(h.dateStr) + '</b></div>';
+      html += '<div style="font-size:12px;padding:5px 0;border-bottom:1px solid #e9d5ff;line-height:1.5">'
+        + '<span style="font-weight:700;color:#7c3aed">Revision ' + num + '</span>'
+        + ' : Revised on <b>' + esc(h.col) + '</b>'
+        + ' : Revised to <b>' + esc(h.dateStr) + '</b>'
+        + ' <span style="font-size:10px;background:#e0e7ff;color:#4338ca;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px">CSV</span>'
+        + '</div>';
     });
     sbRevs.forEach(function(sb) {
       num++;
       var dStr = (sb.changed_on || (sb.created_at || '').substring(0, 10));
       var d2 = new Date(dStr + 'T00:00:00');
       var dateLabel = d2.getDate() + ' ' + MONS2[d2.getMonth()] + ' ' + d2.getFullYear();
-      var line = num + '. <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-weight:700">LIVE</span> Changed on <b>' + esc(dateLabel) + '</b>';
-      if (sb.revised_from) line += ' from <span style="color:#6b7280">' + esc(sb.revised_from) + '</span>';
-      line += ' &rarr; <b>' + esc(sb.revised_to) + '</b>';
-      if (sb.reason) line += ' <span style="color:#6b7280;font-size:11px">(' + esc(sb.reason) + ')</span>';
-      if (sb.changed_by_name) line += ' <span style="color:#9ca3af;font-size:10px">by ' + esc(sb.changed_by_name) + '</span>';
-      html += '<div style="font-size:12px;padding:2px 0">' + line + '</div>';
+      html += '<div style="font-size:12px;padding:5px 0;border-bottom:1px solid #e9d5ff;line-height:1.5">'
+        + '<span style="font-weight:700;color:#7c3aed">Revision ' + num + '</span>'
+        + ' : Revised on <b>' + esc(dateLabel) + '</b>'
+        + ' : Revised to <b>' + esc(sb.revised_to) + '</b>'
+        + (sb.reason ? ' <span style="color:#6b7280;font-size:11px">— ' + esc(sb.reason) + '</span>' : '')
+        + (sb.changed_by_name ? ' <span style="color:#9ca3af;font-size:10px">by ' + esc(sb.changed_by_name) + '</span>' : '')
+        + ' <span style="font-size:10px;background:#d1fae5;color:#065f46;padding:1px 5px;border-radius:3px;font-weight:700;margin-left:4px">LIVE</span>'
+        + '</div>';
     });
     el.innerHTML = html;
     el.style.display = '';
