@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.25</title>
+<title>Cars24 Projects Tracker v4.26</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -818,7 +818,7 @@ function onSbLoginSuccess() {
         applyHOTPUpdates();
         var c = document.getElementById('cchip');
         if (c) c.textContent = allData.length + ' sites';
-        loadSupabaseUpdates().then(function(){ buildFilters(); renderKPIs(); renderAll(); });
+        loadSupabaseSiteFields().then(function(){ return loadSupabaseUpdates(); }).then(function(){ buildFilters(); renderKPIs(); renderAll(); });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
       }
@@ -996,6 +996,84 @@ async function saveUpdateToSupabase(siteId, siteName, updateText) {
     });
   }
   return !r.error;
+}
+
+// ── Bulk sync all CSV rows → Supabase sites table ───────────────
+async function syncAllSitesToSupabase() {
+  if (!__sbClient || !__sbUser) { toast('Sign in first', 'err'); return; }
+  if (!allData || !allData.length) { toast('No data loaded yet', 'err'); return; }
+  var btn = document.getElementById('sb-sync-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Syncing…'; }
+  var colMap = {
+    'Status': 'status', 'Owner': 'owner', 'Vendor': 'vendor',
+    'Vendor Rating': 'vendor_rating', 'Percentage Completion': 'pct_completion',
+    'SAT Date': 'sat_date', 'UAT DATE': 'uat_date', 'Planned Completion': 'planned_completion',
+    'Revised Completion': 'revised_completion', 'Kickoff Date': 'kickoff_date',
+    'Work Start Date': 'work_start_date', 'PO Date': 'po_date', 'Zone': 'zone',
+    'BU': 'bu', 'Reason for Delay': 'reason_for_delay', 'S.No.': 'serial_no'
+  };
+  function toDate(v) {
+    if (!v || !v.trim()) return null;
+    var d = pd(v.trim());
+    return d ? d.toISOString().split('T')[0] : null;
+  }
+  var rows = allData.map(function(r, i) {
+    var row = { site_name: (r['Site Name']||'').trim(), serial_no: i+1, updated_at: new Date().toISOString() };
+    Object.keys(colMap).forEach(function(k) {
+      var col = colMap[k]; var v = r[k];
+      if (col === 'serial_no') { row[col] = parseInt(v)||i+1; return; }
+      if (col === 'pct_completion') { row[col] = parseInt(v)||0; return; }
+      if (['sat_date','uat_date','planned_completion','revised_completion','kickoff_date','work_start_date','po_date'].includes(col)) {
+        row[col] = toDate(v); return;
+      }
+      row[col] = v || null;
+    });
+    return row;
+  }).filter(function(r){ return r.site_name; });
+  var BATCH = 50; var errors = [];
+  for (var i = 0; i < rows.length; i += BATCH) {
+    var chunk = rows.slice(i, i+BATCH);
+    var r = await __sbClient.from('sites').upsert(chunk, { onConflict: 'site_name', ignoreDuplicates: false });
+    if (r.error) errors.push(r.error.message);
+    if (btn) btn.textContent = 'Syncing ' + Math.min(i+BATCH, rows.length) + '/' + rows.length + '…';
+  }
+  if (btn) { btn.disabled = false; btn.textContent = '☁ Sync CSV → Supabase'; }
+  if (errors.length) { toast('Sync done with errors: ' + errors[0], 'err'); }
+  else { toast('✓ ' + rows.length + ' sites synced to Supabase', 'ok'); }
+}
+
+// ── Load field overrides from Supabase → merge into allData ─────
+async function loadSupabaseSiteFields() {
+  if (!__sbClient) return;
+  var colMap = {
+    'status': 'Status', 'owner': 'Owner', 'vendor': 'Vendor',
+    'vendor_rating': 'Vendor Rating', 'pct_completion': 'Percentage Completion',
+    'sat_date': 'SAT Date', 'uat_date': 'UAT DATE', 'planned_completion': 'Planned Completion',
+    'revised_completion': 'Revised Completion', 'kickoff_date': 'Kickoff Date',
+    'work_start_date': 'Work Start Date', 'po_date': 'PO Date', 'zone': 'Zone',
+    'bu': 'BU', 'reason_for_delay': 'Reason for Delay'
+  };
+  var r = await __sbClient.from('sites').select('site_name,' + Object.keys(colMap).join(',')).catch(function(){ return { error: true }; });
+  if (r.error || !r.data || !r.data.length) return;
+  r.data.forEach(function(sb) {
+    var sn = (sb.site_name||'').trim();
+    var row = allData.find(function(d){ return (d['Site Name']||'').trim() === sn; });
+    if (!row) return;
+    Object.keys(colMap).forEach(function(col) {
+      if (sb[col] !== null && sb[col] !== undefined) {
+        var v = String(sb[col]);
+        // Format dates back to DD Mon YYYY for display
+        if (['sat_date','uat_date','planned_completion','revised_completion','kickoff_date','work_start_date','po_date'].includes(col)) {
+          if (v && v.match(/^\d{4}-\d{2}-\d{2}/)) {
+            var d = new Date(v + 'T00:00:00');
+            var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+            v = d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear();
+          }
+        }
+        if (v && v !== 'null') row[colMap[col]] = v;
+      }
+    });
+  });
 }
 
 async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
@@ -6235,6 +6313,16 @@ function _renderAdminTabInner(el) {
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Manage team logins, view edit history, control access</div>'
     // System status bar
     + '<div id="sys-status" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>'
+    // Data sync card
+    + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-size:13px;font-weight:700">☁ Supabase Data Sync</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Push all currently-loaded CSV rows into Supabase so team edits persist and are shared across devices. Run once after uploading a fresh CSV.</div>'
+    + '</div>'
+    + '<button id="sb-sync-btn" onclick="syncAllSitesToSupabase()" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">☁ Sync CSV → Supabase</button>'
+    + '</div>'
+    + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
     // Create user card (direct — no email needed)
     + '<div style="background:var(--white);border:1px solid var(--border);border-radius:10px;padding:16px">'
