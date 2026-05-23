@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.16</title>
+<title>Cars24 Projects Tracker v4.17</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -926,15 +926,16 @@ function doLegacyLogin() {
 // ── Supabase: save site update ──────────────────────────────────
 async function saveUpdateToSupabase(siteId, siteName, updateText) {
   if (!__sbClient || !__sbUser) return false;
+  // site_id is nullable — we save by site_name since CSV data isn't in sites table yet
   var r = await __sbClient.from('site_updates').insert({
     site_id: siteId || null,
+    site_name: siteName || null,
     update_date: new Date().toISOString().split('T')[0],
     update_text: updateText,
     update_by: __sbUser.id,
     update_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
   });
   if (!r.error) {
-    // Log audit
     __sbClient.from('audit_log').insert({
       site_name: siteName,
       field_name: 'daily_update',
@@ -959,8 +960,11 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
   };
   var col = colMap[fieldName];
   if (col) {
-    __sbClient.from('sites').update({ [col]: newValue, updated_at: new Date().toISOString() })
-      .eq('site_name', siteName);
+    // Upsert so the row is created if this site hasn't been written to Supabase yet
+    __sbClient.from('sites').upsert(
+      { site_name: siteName, [col]: newValue, updated_at: new Date().toISOString() },
+      { onConflict: 'site_name', ignoreDuplicates: false }
+    );
   }
   __sbClient.from('audit_log').insert({
     site_name: siteName,
