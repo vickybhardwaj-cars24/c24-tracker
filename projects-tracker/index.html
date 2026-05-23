@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.33</title>
+<title>Cars24 Projects Tracker v4.34</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1077,7 +1077,7 @@ async function loadSupabaseSiteFields() {
         // Format dates back to DD Mon YYYY for display
         if (['sat_date','uat_date','planned_completion','revised_completion','kickoff_date','work_start_date','po_date'].includes(col)) {
           if (v && v.match(/^\d{4}-\d{2}-\d{2}/)) {
-            var d = new Date(v + 'T00:00:00');
+            var d = new Date(v.substring(0,10) + 'T00:00:00');
             var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
             v = d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear();
           }
@@ -1784,7 +1784,7 @@ function renderTable(){
       '<td style="font-size:11px;white-space:nowrap">'+fmtRaw(r['SAT Date'])+'</td>',
       '<td style="font-size:11px;'+(isUatWarn?'color:#d97706;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['UAT DATE'])+'</td>',
       '<td style="font-size:11px;'+(isOv?'color:#dc2626;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['Planned Completion'])+'</td>',
-      (()=>{const rv=r['Revised Completion']||'';const pD2=pd(r['Planned Completion']),rD2=pd(rv);const slp=pD2&&rD2&&rD2>pD2?Math.round((rD2-pD2)/86400000):0;return '<td style="font-size:11px;white-space:nowrap;'+(slp?'color:#d97706;font-weight:600':'color:var(--muted)')+'">'+(rv?esc(rv)+(slp?' <span style="font-size:9px;background:#fffbeb;color:#d97706;padding:1px 4px;border-radius:3px">+'+slp+'d</span>':''):'<span style="color:#e5e7eb">—</span>')+'</td>';})(),
+      (()=>{const rv=r['Revised Completion']||'';const pD2=pd(r['Planned Completion']),rD2=pd(rv);const slp=pD2&&rD2&&rD2>pD2?Math.round((rD2-pD2)/86400000):0;return '<td style="font-size:11px;white-space:nowrap;'+(slp?'color:#d97706;font-weight:600':'color:var(--muted)')+'">'+(rv?fmtRaw(rv)+(slp?' <span style="font-size:9px;background:#fffbeb;color:#d97706;padding:1px 4px;border-radius:3px">+'+slp+'d</span>':''):'<span style="color:#e5e7eb">—</span>')+'</td>';})(),
       '<td class="td-upd" style="max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(upd)+'</td>',
     ];
     return '<tr class="'+rowCls+'" onclick="openModal('+idx+')">'+cells.filter((_,ci)=>!hidden.has(ci)).join('')+'</tr>';
