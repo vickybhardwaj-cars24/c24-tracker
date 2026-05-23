@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.48</title>
+<title>Cars24 Projects Tracker v4.49</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1071,13 +1071,13 @@ async function saveUpdateToSupabase(siteId, siteName, updateText) {
     toast('Supabase save failed: ' + (r.error.message || r.error.code || JSON.stringify(r.error)), 'err');
     return false;
   }
-  __sbClient.from('audit_log').insert({
+  Promise.resolve(__sbClient.from('audit_log').insert({
     site_name: siteName,
     field_name: 'daily_update',
     new_value: updateText.substring(0, 500),
     changed_by: null,
     changed_by_name: byName
-  }).catch(function(){});
+  })).catch(function(){});
   return true;
 }
 
@@ -1167,14 +1167,14 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
     return;
   }
   console.log('saveSiteField: OK ✓');
-  __sbClient.from('audit_log').insert({
+  Promise.resolve(__sbClient.from('audit_log').insert({
     site_name:        siteName,
     field_name:       fieldName,
     old_value:        String(oldValue || ''),
     new_value:        String(newValue || ''),
     changed_by:       null,
     changed_by_name:  byName
-  }).catch(function(){});
+  })).catch(function(){});
 }
 
 // ── Photo Upload with Client-side Compression ───────────────────
@@ -3231,13 +3231,13 @@ function openModal(idx){
   }
   // Log edit session to audit if logged in
   if (__sbUser && (r['Site Name'] || '')) {
-    __sbClient && __sbClient.from('audit_log').insert({
+    __sbClient && Promise.resolve(__sbClient.from('audit_log').insert({
       site_name: r['Site Name'],
       field_name: 'modal_opened',
       new_value: new Date().toISOString(),
       changed_by: null,
       changed_by_name: (__sbProfile && __sbProfile.full_name) || __sbUser.email
-    }).catch(function(){});
+    })).catch(function(){});
   }
 }
 
