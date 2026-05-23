@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.22</title>
+<title>Cars24 Projects Tracker v4.23</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -796,12 +796,10 @@ function onSbLoginSuccess() {
   document.getElementById('ticket-local-lbl').style.display = 'none';
   document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
   applyRoleBasedView();
-  // Auto-wire Cloudflare Worker uploads using Supabase JWT token
-  _wireWorkerWithSbToken();
-  toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
-  // If table is still blank (Worker auth was missing on first load), reload data now
-  if (!__originLoaded) {
-    setTimeout(function() {
+  // Wire Supabase JWT to Worker, then reload data if table is still blank
+  _wireWorkerWithSbToken().then(function() {
+    toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
+    if (!__originLoaded) {
       Promise.all([
         workerFetchText(WORKER_URL + TOOL_PATH + '.csv'),
         loadHOTPUpdates(),
@@ -817,21 +815,22 @@ function onSbLoginSuccess() {
           var c = document.getElementById('cchip');
           if (c) c.textContent = allData.length + ' sites';
           loadSupabaseUpdates().then(function(){ buildFilters(); renderKPIs(); renderAll(); });
+        } else {
+          toast('No data loaded — check Worker connection', 'err');
         }
-      }).catch(function(e){ console.warn('Post-login reload failed:', e); });
-    }, 500);
-  }
+      }).catch(function(e){ toast('Data load failed: ' + (e.message||e), 'err'); console.warn('Post-login reload failed:', e); });
+    }
+  });
 }
 
 function _wireWorkerWithSbToken() {
-  if (!__sbClient) return;
-  // refreshSession ensures we always have a valid (non-expired) token
-  __sbClient.auth.getSession().then(function(r) {
+  if (!__sbClient) return Promise.resolve();
+  return __sbClient.auth.getSession().then(function(r) {
     if (!r.data || !r.data.session) return;
     var token = r.data.session.access_token;
     if (!token) return;
     __auth = { _sbToken: token };
-    _patchUploaderForSb();
+    window.__sbUploadToken = token;
   });
 }
 
