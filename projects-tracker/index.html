@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.53</title>
+<title>Cars24 Projects Tracker v4.54</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -7012,17 +7012,26 @@ async function loadTeamList() {
   var el = document.getElementById('team-list'); if (!el || !__sbClient) return;
   var r = await __sbClient.from('profiles').select('*').order('created_at');
   if (r.error || !r.data || !r.data.length) { el.innerHTML = '<div style="color:var(--muted);font-size:12px">No team members yet.</div>'; return; }
-  var roleBg = { admin: '#eff6ff', pm: '#f0fdf4', viewer: '#f9fafb' };
-  var roleColor = { admin: '#2563eb', pm: '#16a34a', viewer: '#6b7280' };
   el.innerHTML = r.data.map(function(p) {
+    var cur = p.role || 'viewer';
     return '<div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)">'
       + '<div>'
       + '<div style="font-size:12px;font-weight:600">' + esc(p.full_name || p.email) + '</div>'
       + '<div style="font-size:10px;color:var(--muted)">' + esc(p.email) + '</div>'
       + '</div>'
-      + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:' + (roleBg[p.role]||'#f9fafb') + ';color:' + (roleColor[p.role]||'#6b7280') + '">' + (p.role || 'viewer') + '</span>'
+      + '<select onchange="changeTeamRole(\'' + esc(p.id) + '\',this.value)" style="font-size:10px;font-weight:700;padding:2px 6px;border-radius:10px;border:1px solid var(--border2);background:var(--bg);cursor:pointer;outline:none">'
+      + '<option value="admin"' + (cur==='admin'?' selected':'') + '>admin</option>'
+      + '<option value="pm"' + (cur==='pm'?' selected':'') + '>pm</option>'
+      + '<option value="viewer"' + (cur==='viewer'?' selected':'') + '>viewer</option>'
+      + '</select>'
       + '</div>';
   }).join('');
+}
+async function changeTeamRole(userId, newRole) {
+  if (!__sbClient) return;
+  var r = await __sbClient.from('profiles').update({ role: newRole }).eq('id', userId);
+  if (r.error) { toast('Failed to update role: ' + r.error.message, 'err'); loadTeamList(); return; }
+  toast('Role updated to ' + newRole, 'ok');
 }
 
 async function loadAuditLog() {
