@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.54</title>
+<title>Cars24 Projects Tracker v4.55</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3005,6 +3005,46 @@ function saveSiteName(idx) {
   toast('✓ Site name updated', 'ok');
 }
 
+function buildMstatHtml(r, idx, warnHtml) {
+  var statusOpts = ['WIP','SAT Done','UAT Done','Design','BOQ','BD','To Be Started','Additional WIP','PO Awaited','On Hold','Cancelled'];
+  var badgeHtml = '<span class="badge '+sCls(r.Status)+'">'+esc(r.Status||'—')+'</span>';
+  if (__sbRole !== 'admin') return badgeHtml + warnHtml;
+  var editBtn = '<span onclick="openStatusEdit('+idx+')" title="Edit status" style="font-size:10px;color:#0891b2;background:#f0f9ff;padding:1px 7px;border-radius:4px;border:1px solid #bae6fd;font-weight:600;cursor:pointer;margin-left:8px;vertical-align:middle">✎</span>';
+  var opts = statusOpts.map(function(s){return '<option value="'+esc(s)+'"'+(s===(r.Status||'')?'  selected':'')+'>'+esc(s)+'</option>';}).join('');
+  var dropdown = '<span id="stat-edit-wrap-'+idx+'" style="display:none;margin-left:8px;vertical-align:middle">'
+    +'<select id="stat-sel-'+idx+'" style="border:1px solid #d1d5db;border-radius:5px;padding:3px 7px;font-size:12px;font-family:Inter,sans-serif;outline:none;color:#111827;background:#fff">'+opts+'</select>'
+    +'<button onclick="saveStatusEdit('+idx+')" style="margin-left:5px;background:#0891b2;color:#fff;border:none;border-radius:5px;padding:4px 10px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+    +'<button onclick="cancelStatusEdit('+idx+')" style="margin-left:3px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
+    +'</span>';
+  return badgeHtml + editBtn + dropdown + warnHtml;
+}
+function openStatusEdit(idx) {
+  var w = document.getElementById('stat-edit-wrap-'+idx);
+  if (w) w.style.display = 'inline';
+}
+function cancelStatusEdit(idx) {
+  var w = document.getElementById('stat-edit-wrap-'+idx);
+  if (w) w.style.display = 'none';
+}
+function saveStatusEdit(idx) {
+  if (__sbRole !== 'admin') { toast('Admin only', 'err'); return; }
+  var sel = document.getElementById('stat-sel-'+idx);
+  if (!sel) return;
+  var newStatus = sel.value.trim();
+  var r = allData[idx]; if (!r) return;
+  var oldStatus = r['Status'] || '';
+  if (newStatus === oldStatus) { cancelStatusEdit(idx); return; }
+  allData[idx]['Status'] = newStatus;
+  saveSiteFieldToSupabase(r['Site Name']||'', 'Status', oldStatus, newStatus);
+  const today=new Date();today.setHours(0,0,0,0);
+  const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']);
+  const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
+  const warnHtml=satD&&!uatD&&uatGap>=UAT_WARN_DAYS?'<span class="uat-warn-tag" style="margin-left:6px">🔔 '+uatGap+'d since SAT — UAT overdue</span>':'';
+  document.getElementById('mstat').innerHTML = buildMstatHtml(allData[idx], idx, warnHtml);
+  renderKPIs(); applyFilters();
+  toast('✓ Status updated to '+newStatus, 'ok');
+}
+
 // ═══════════════════════════════════════════════════════════════
 function openModal(idx){
   const r=allData[idx];if(!r) return;
@@ -3029,7 +3069,7 @@ function openModal(idx){
   const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']);
   const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
   const warnHtml=satD&&!uatD&&uatGap>=UAT_WARN_DAYS?`<span class="uat-warn-tag" style="margin-left:6px">🔔 ${uatGap}d since SAT — UAT overdue</span>`:'';
-  document.getElementById('mstat').innerHTML=`<span class="badge ${sCls(r.Status)}">${esc(r.Status||'—')}</span>${warnHtml}`;
+  document.getElementById('mstat').innerHTML=buildMstatHtml(r, idx, warnHtml);
   const pctV=pct(r);
   const metaF=[
     ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
