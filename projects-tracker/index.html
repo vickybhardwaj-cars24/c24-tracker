@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.55</title>
+<title>Cars24 Projects Tracker v4.56</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3008,7 +3008,7 @@ function saveSiteName(idx) {
 function buildMstatHtml(r, idx, warnHtml) {
   var statusOpts = ['WIP','SAT Done','UAT Done','Design','BOQ','BD','To Be Started','Additional WIP','PO Awaited','On Hold','Cancelled'];
   var badgeHtml = '<span class="badge '+sCls(r.Status)+'">'+esc(r.Status||'—')+'</span>';
-  if (__sbRole !== 'admin') return badgeHtml + warnHtml;
+  if (__sbRole !== 'admin' && __sbRole !== 'pm') return badgeHtml + warnHtml;
   var editBtn = '<span onclick="openStatusEdit('+idx+')" title="Edit status" style="font-size:10px;color:#0891b2;background:#f0f9ff;padding:1px 7px;border-radius:4px;border:1px solid #bae6fd;font-weight:600;cursor:pointer;margin-left:8px;vertical-align:middle">✎</span>';
   var opts = statusOpts.map(function(s){return '<option value="'+esc(s)+'"'+(s===(r.Status||'')?'  selected':'')+'>'+esc(s)+'</option>';}).join('');
   var dropdown = '<span id="stat-edit-wrap-'+idx+'" style="display:none;margin-left:8px;vertical-align:middle">'
@@ -3027,7 +3027,7 @@ function cancelStatusEdit(idx) {
   if (w) w.style.display = 'none';
 }
 function saveStatusEdit(idx) {
-  if (__sbRole !== 'admin') { toast('Admin only', 'err'); return; }
+  if (__sbRole !== 'admin' && __sbRole !== 'pm') { toast('Admins and PMs only', 'err'); return; }
   var sel = document.getElementById('stat-sel-'+idx);
   if (!sel) return;
   var newStatus = sel.value.trim();
