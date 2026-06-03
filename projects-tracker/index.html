@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.56</title>
+<title>Cars24 Projects Tracker v4.58</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -712,6 +712,7 @@ let DATE_COLS = ['7 Apr','8 Apr','9 Apr','10 Apr','11 Apr','12 Apr','13 Apr','14
 let allData = [], filteredData = [], sortCol = '', sortDir = 1;
 var __rawCSVData = null; // snapshot of allData right after CSV parse, before any Supabase overrides
 const TICKET_CLOSED = new Set(); // session-only closed ticket IDs
+var PO_MAP = {}; // session-only PO numbers keyed by site name
 const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra'];
 const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
@@ -878,7 +879,7 @@ function onSbLoginSuccess() {
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
-          .then(function(){ buildFilters(); renderKPIs(); renderAll(); });
+          .then(function(){ buildFilters(); renderKPIs(); applyFilters(); });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
       }
@@ -3452,7 +3453,7 @@ function handleCSV(event){
       if(!parsed.length){toast('No data found','err');return;}
       allData=parsed.filter(function(r){return (r['Site Name']||'').trim();});filteredData=[...allData];
       applyHOTPUpdates();
-      buildFilters();renderKPIs();renderAll();
+      buildFilters();renderKPIs();applyFilters();
       stampCSV('hotp');
       var sv=document.getElementById('slackv');if(sv&&sv.style.display!=='none') renderSlackTab();
       toast('✓ Loaded '+allData.length+' sites','ok');
@@ -4464,27 +4465,47 @@ function hasProcurementPlan(r){
   return false;
 }
 
+function savePO(site, val){
+  val = val.trim();
+  PO_MAP[site] = val;
+  // Find the site row to get old value for audit log
+  var row = allData.find(function(r){ return (r['Site Name']||'').trim() === site; });
+  var oldVal = row ? (row['PO Number'] || '') : '';
+  if (row) row['PO Number'] = val;
+  saveSiteFieldToSupabase(site, 'PO Number', oldVal, val).catch(function(){});
+}
 function renderTaskTab(){
   var el=document.getElementById('taskv');
   if(!el) return;
-  // Group tasks by date → site
-  var byDate={};
+  // For each site, find its MOST RECENT date column that has a "Task:" entry
+  var latestBysite={};
   allData.forEach(function(r){
     if(!r['Site Name']) return;
-    DATE_COLS.forEach(function(col){
+    for(var ci=DATE_COLS.length-1;ci>=0;ci--){
+      var col=DATE_COLS[ci];
       var update=(r[col]||'').trim();
-      if(!update) return;
+      if(!update) continue;
       var m=update.match(/task\s*:\s*([\s\S]*)/i);
-      if(!m||!m[1].trim()) return;
-      var taskText=m[1].trim();
-      var items=taskText.split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
-      if(!items.length) return;
-      if(!byDate[col]) byDate[col]=[];
-      byDate[col].push({site:r['Site Name'],owner:(r['Owner']||''),items:items});
-    });
+      if(!m||!m[1].trim()) continue;
+      var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
+      if(!items.length) continue;
+      latestBysite[r['Site Name']]={col:col,site:r['Site Name'],owner:(r['Owner']||''),items:items};
+      break;
+    }
+  });
+  // Seed PO_MAP from allData (already populated by loadSupabaseSiteFields on page load)
+  allData.forEach(function(r){
+    var sn=(r['Site Name']||'').trim();
+    if(sn && r['PO Number'] && !PO_MAP[sn]) PO_MAP[sn]=r['PO Number'];
+  });
+  // Group by date column
+  var byDate={};
+  Object.values(latestBysite).forEach(function(entry){
+    if(!byDate[entry.col]) byDate[entry.col]=[];
+    byDate[entry.col].push(entry);
   });
   var dateCols=Object.keys(byDate).sort(function(a,b){
-    var da=DATE_COLS.indexOf(a),db=DATE_COLS.indexOf(b); return db-da; // latest first
+    var da=DATE_COLS.indexOf(a),db=DATE_COLS.indexOf(b); return db-da;
   });
   if(!dateCols.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No tasks found — add updates with "Task: ..." prefix.</div>';
@@ -4498,9 +4519,20 @@ function renderTaskTab(){
     html+='<div style="margin-bottom:16px">';
     html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border)">'+esc(col)+'</div>';
     byDate[col].forEach(function(entry){
+      var siteKey=entry.site.replace(/"/g,'&quot;');
+      var poVal=esc(PO_MAP[entry.site]||'');
       html+='<div style="margin-bottom:8px;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--primary)">';
-      html+='<div style="font-size:12px;font-weight:600;margin-bottom:4px">'+esc(entry.site)
-        +(entry.owner?' <span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(entry.owner)+'</span>':'')+'</div>';
+      html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
+      html+='<span style="font-size:12px;font-weight:600">'+esc(entry.site)+'</span>';
+      if(entry.owner) html+='<span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(entry.owner)+'</span>';
+      html+='<span style="margin-left:auto;display:flex;align-items:center;gap:4px">'
+        +'<span style="font-size:10px;color:var(--muted)">PO:</span>'
+        +'<input type="text" value="'+poVal+'" placeholder="Add PO#" '
+        +'onchange="savePO(\''+siteKey+'\',this.value)" '
+        +'style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);width:90px;outline:none" '
+        +'onclick="event.stopPropagation()">'
+        +'</span>';
+      html+='</div>';
       entry.items.forEach(function(item){
         html+='<div style="font-size:12px;color:var(--text);padding:1px 0">• '+esc(item)+'</div>';
       });
@@ -4563,7 +4595,7 @@ function syncSheets(){
         var rows=j.data.filter(function(r){return (r['Site Name']||'').trim();});
         if(rows.length){
           allData=rows; filteredData=[...allData];
-          buildFilters(); renderKPIs(); renderAll();
+          buildFilters(); renderKPIs(); applyFilters();
           toast('✓ HOTP: '+rows.length+' sites','ok');
         } else { toast('HOTP: no valid rows in response','err'); }
       } else { toast('HOTP: empty response — check Apps Script deployment','err'); }
@@ -4610,7 +4642,7 @@ function autoSync(){
         // GitHub-backed CSV is authoritative; HOTP is now best-effort backup only.
         if(rows.length && !__originLoaded){
           allData=rows; filteredData=[...allData];
-          buildFilters(); renderKPIs(); renderAll();
+          buildFilters(); renderKPIs(); applyFilters();
           var ts=new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
           var btn=document.getElementById('sync-btn');
           if(btn) btn.textContent='🔄 '+ts;
@@ -6356,7 +6388,7 @@ initSupabase();
           .then(function(){
             buildFilters();
             renderKPIs();
-            renderAll();
+            applyFilters();
           });
       } else {
         toast('No data in projects-tracker.csv — upload a CSV to populate.', 'err');
@@ -6985,7 +7017,7 @@ async function doAddNewProject() {
     var res = await __sbClient.from('sites').upsert({ site_name:name, bu:bu, zone:zone, owner:owner, vendor:vendor, planned_completion:toDate(planned), status:status, cost_center:cc||null, serial_no:allData.length, pct_completion:0, updated_at:new Date().toISOString() }, { onConflict:'site_name' });
     if (res.error) { npMsg('Created locally but Supabase error: '+(res.error.message||''), false); } else { npMsg('✅ Project "'+name+'" created!', true); }
   } else { npMsg('✅ Project "'+name+'" created locally (Supabase not connected).', true); }
-  buildFilters(); renderKPIs(); renderAll();
+  buildFilters(); renderKPIs(); applyFilters();
   ['np-name','np-bu','np-zone','np-owner','np-vendor','np-planned','np-cc'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
 }
 
@@ -7367,7 +7399,7 @@ function handleLiveCSV(event){
       try {
         allData = parseCSV(csvText).filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
-        buildFilters(); renderKPIs(); renderAll();
+        buildFilters(); renderKPIs(); applyFilters();
       } catch(_) {}
     })
     .catch(function(err){
