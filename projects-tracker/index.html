@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.57</title>
+<title>Cars24 Projects Tracker v4.58</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4466,7 +4466,13 @@ function hasProcurementPlan(r){
 }
 
 function savePO(site, val){
-  PO_MAP[site] = val.trim();
+  val = val.trim();
+  PO_MAP[site] = val;
+  // Find the site row to get old value for audit log
+  var row = allData.find(function(r){ return (r['Site Name']||'').trim() === site; });
+  var oldVal = row ? (row['PO Number'] || '') : '';
+  if (row) row['PO Number'] = val;
+  saveSiteFieldToSupabase(site, 'PO Number', oldVal, val).catch(function(){});
 }
 function renderTaskTab(){
   var el=document.getElementById('taskv');
@@ -4486,6 +4492,11 @@ function renderTaskTab(){
       latestBysite[r['Site Name']]={col:col,site:r['Site Name'],owner:(r['Owner']||''),items:items};
       break;
     }
+  });
+  // Seed PO_MAP from allData (already populated by loadSupabaseSiteFields on page load)
+  allData.forEach(function(r){
+    var sn=(r['Site Name']||'').trim();
+    if(sn && r['PO Number'] && !PO_MAP[sn]) PO_MAP[sn]=r['PO Number'];
   });
   // Group by date column
   var byDate={};
