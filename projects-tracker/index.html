@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.58</title>
+<title>Cars24 Projects Tracker v4.59</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4808,7 +4808,7 @@ function copyWarnEmail(){
 // SCHED_DATA[siteName] = array of { po, tasks:[{sno,task,vendor,startDate,endDate,done}] }
 // ═══════════════════════════════════════════════════════════
 function parseLLScheduleCSV(txt, filename){
-  var poMatch=(filename||'').match(/Schedule_PO([A-Z0-9]+)\.csv/i);
+  var poMatch=(filename||'').match(/Schedule_PO([A-Z0-9_]+)\.csv/i);
   var po=poMatch?poMatch[1]:'';
   var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
   if(lines.length<2) return {po:po,tasks:[]};
@@ -7025,11 +7025,21 @@ var _driveMapEdits = {}; // session overrides: site → url
 
 function buildDriveMapRows() {
   var merged = Object.assign({}, DRIVE_MAP, _driveMapEdits);
+  // Add any sites from allData that aren't already in merged
+  (allData||[]).forEach(function(r){ var sn=(r['Site Name']||'').trim(); if(sn && !(sn in merged)) merged[sn] = DRIVE_ROOT; });
   var sites = Object.keys(merged).sort();
   if (!sites.length) return '<tr><td colspan="3" style="padding:12px;text-align:center;color:var(--muted);font-size:12px">No sites mapped yet.</td></tr>';
+  // Sort: no-folder sites first, then alphabetical
+  sites.sort(function(a,b){
+    var aRoot = (merged[a]||'')=== DRIVE_ROOT || !(merged[a]||'');
+    var bRoot = (merged[b]||'')=== DRIVE_ROOT || !(merged[b]||'');
+    if(aRoot && !bRoot) return -1;
+    if(!aRoot && bRoot) return 1;
+    return a.localeCompare(b);
+  });
   return sites.map(function(site) {
     var url = merged[site] || '';
-    var isRoot = url === 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
+    var isRoot = url === DRIVE_ROOT || !url;
     return '<tr style="border-bottom:1px solid var(--border)">'
       + '<td style="padding:5px 8px"><span style="font-size:12px;font-weight:500">' + esc(site) + '</span>'
       + (isRoot ? '<span style="font-size:9px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:3px;margin-left:5px;font-weight:600">No folder set</span>' : '') + '</td>'
