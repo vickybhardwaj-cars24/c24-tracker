@@ -45,7 +45,7 @@
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Tool-Path, If-None-Match',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Tool-Path, If-None-Match, X-Site-Name, X-Photo-Date, X-File-Name',
   'Access-Control-Expose-Headers': 'ETag',
   'Access-Control-Max-Age': '86400',
 };
