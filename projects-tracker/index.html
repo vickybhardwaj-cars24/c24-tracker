@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.64</title>
+<title>Cars24 Projects Tracker v4.70</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4529,52 +4529,68 @@ function savePO(site, val){
 function renderTaskTab(){
   var el=document.getElementById('taskv');
   if(!el) return;
-  // Chronologically-ordered date columns (DATE_COLS is in arrival order, not date order,
-  // because dynamic updates get appended — so sort by the actual parsed date, newest first).
+  // Sort date columns newest-first
   var orderedCols=DATE_COLS.slice().sort(function(a,b){
     var da=pd(a),db=pd(b);
     if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
     return db-da;
   });
-  // For each site, find its MOST RECENT date column that has a "Task:" entry
-  var latestBysite={};
-  allData.forEach(function(r){
-    if(!r['Site Name']) return;
-    for(var ci=0;ci<orderedCols.length;ci++){
-      var col=orderedCols[ci];
-      var update=(r[col]||'').trim();
-      if(!update) continue;
-      var m=update.match(/task\s*:\s*([\s\S]*)/i);
-      if(!m||!m[1].trim()) continue;
-      var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
-      if(!items.length) continue;
-      latestBysite[r['Site Name']]={col:col,site:r['Site Name'],owner:(r['Owner']||''),items:items};
-      break;
-    }
-  });
-  // Single flat list, newest task first, so today's (latest) tasks always surface at top.
-  var entries=Object.values(latestBysite).sort(function(a,b){
-    var da=pd(a.col),db=pd(b.col);
-    if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
-    return db-da;
-  });
-  if(!entries.length){
+  // Collect the latest 4 date columns that have ANY Task: entry
+  var activeCols=[];
+  for(var ci=0;ci<orderedCols.length&&activeCols.length<4;ci++){
+    var col=orderedCols[ci];
+    var found=allData.some(function(r){
+      if(!r['Site Name']) return false;
+      return /task\s*:/i.test(r[col]||'');
+    });
+    if(found) activeCols.push(col);
+  }
+  if(!activeCols.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No tasks found — add updates with "Task: ..." prefix.</div>';
     return;
   }
+  // For each site pick its task from the most recent activeCols it appears in (each site once only)
+  var seenSites={};
+  var byPM={};
+  var pmOrder=[];
+  activeCols.forEach(function(col){
+    allData.forEach(function(r){
+      var site=(r['Site Name']||'').trim(); if(!site) return;
+      if(seenSites[site]) return; // already captured from a newer col
+      var upd=(r[col]||'').trim(); if(!upd) return;
+      var m=upd.match(/task\s*:\s*([\s\S]*)/i);
+      if(!m||!m[1].trim()) return;
+      var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
+      if(!items.length) return;
+      seenSites[site]=true;
+      var owner=(r['Owner']||'Unassigned').trim();
+      if(!byPM[owner]){byPM[owner]=[];pmOrder.push(owner);}
+      byPM[owner].push({site:site,col:col,items:items});
+    });
+  });
+  var totalSites=Object.values(byPM).reduce(function(s,a){return s+a.length;},0);
+  var dateRange=activeCols[activeCols.length-1]===activeCols[0]?activeCols[0]:activeCols[activeCols.length-1]+' – '+activeCols[0];
   var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
-    +'<div style="font-size:14px;font-weight:700">📋 Action Items <span style="font-size:11px;font-weight:400;color:var(--muted)">— '+entries.length+' sites, latest first</span></div>'
+    +'<div style="font-size:14px;font-weight:700">📋 Action Items'
+    +'<span style="font-size:11px;font-weight:400;color:var(--muted)"> — '+esc(dateRange)+' · '+totalSites+' sites</span></div>'
     +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
-  entries.forEach(function(entry){
-    html+='<div style="margin-bottom:8px;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--primary)">';
-    html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
-    html+='<span style="font-size:12px;font-weight:600">'+esc(entry.site)+'</span>';
-    if(entry.owner) html+='<span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(entry.owner)+'</span>';
-    html+='<span style="margin-left:auto;font-size:10px;font-weight:600;color:var(--primary);background:var(--surface-2);border-radius:4px;padding:2px 7px;white-space:nowrap">'+esc(entry.col)+'</span>';
-    html+='</div>';
-    entry.items.forEach(function(item){
-      html+='<div style="font-size:12px;color:var(--text);padding:1px 0">• '+esc(item)+'</div>';
+  pmOrder.forEach(function(owner){
+    var sites=byPM[owner];
+    // Most recent date among this PM's sites
+    var pmDate=sites.slice().sort(function(a,b){var da=pd(a.col),db=pd(b.col);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return db-da;})[0].col;
+    html+='<div style="margin-bottom:16px">';
+    html+='<div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px;padding:4px 8px;background:var(--surface-2);border-radius:4px;display:inline-flex;align-items:center;gap:8px">'
+      +esc(owner)
+      +'<span style="font-size:10px;font-weight:500;color:var(--muted);background:var(--bg);border-radius:3px;padding:1px 6px">'+esc(pmDate)+'</span>'
+      +'</div>';
+    sites.forEach(function(entry){
+      html+='<div style="margin-bottom:6px;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--primary)">';
+      html+='<div style="font-size:12px;font-weight:600;margin-bottom:4px">'+esc(entry.site)+'</div>';
+      entry.items.forEach(function(item){
+        html+='<div style="font-size:12px;color:var(--text);padding:1px 0">• '+esc(item)+'</div>';
+      });
+      html+='</div>';
     });
     html+='</div>';
   });
