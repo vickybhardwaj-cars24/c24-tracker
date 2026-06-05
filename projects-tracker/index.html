@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.70</title>
+<title>Cars24 Projects Tracker v4.72</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -515,8 +515,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <input type="file" id="att-inp" accept=".csv" style="display:none" onchange="handleAttendanceUpload(event)">
     <label class="btn btn-o" for="ticket-inp" id="ticket-local-lbl" style="font-size:11px;display:none">🎫 Upload Tickets (.csv)</label>
     <input type="file" id="ticket-inp" accept=".csv" style="display:none" onchange="handleTicketUpload(event)">
-    <label class="btn btn-o" for="ticket-live-inp" id="ticket-live-lbl" style="cursor:pointer;font-size:11px;display:none">🎫 Upload Tickets CSV (Live)</label>
-    <input type="file" id="ticket-live-inp" accept=".csv" style="display:none" onchange="handleLiveTicketCSV(event)">
     <label class="btn btn-o" for="snag-inp" id="snag-local-lbl" style="cursor:pointer;font-size:11px">📎 Upload Snag (.csv)</label>
     <input type="file" id="snag-inp" accept=".csv" style="display:none" onchange="handleSnagUpload(event)">
     <span id="csv-ts-snag" style="font-size:10px;color:var(--muted)"></span>
@@ -1772,7 +1770,7 @@ function renderKPIs(){
   const today=new Date(); today.setHours(0,0,0,0);
   const c=fn=>allData.filter(fn).length;
   const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
-  const warns=getUatWarnings().length;
+  const warns=getUatWarnings().filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]).length;
   const _in7=new Date(today); _in7.setDate(today.getDate()+7);
   const dueWeek=allData.filter(r=>{if((r['SAT Date']||'').trim())return false;const d=pd(r['Revised Completion'])||pd(r['Planned Completion']);return d&&d>=today&&d<=_in7;}).length;
   const cfg=[
@@ -2112,6 +2110,21 @@ function renderSatUat(){
     if(uatD) done++;
   });
 
+  // ── PO→SAT average time stats ───────────────────────────────────────────
+  var poSatByPM={}, poSatBySite=[];
+  allData.forEach(function(r){
+    var po=pd(r['PO Date']), sat=pd(r['SAT Date']);
+    if(!po||!sat) return;
+    var days=Math.round((sat-po)/86400000);
+    if(days<0||days>500) return;
+    var pm=(r['Owner']||'—').trim();
+    if(!poSatByPM[pm]) poSatByPM[pm]={sum:0,cnt:0};
+    poSatByPM[pm].sum+=days; poSatByPM[pm].cnt++;
+    poSatBySite.push({site:r['Site Name']||'—', pm:pm, days:days});
+  });
+  var pmAvgArr=Object.entries(poSatByPM).map(function([pm,d]){ return {pm:pm,avg:Math.round(d.sum/d.cnt),cnt:d.cnt}; }).sort(function(a,b){ return a.avg-b.avg; });
+  var overallPoSat=poSatBySite.length?Math.round(poSatBySite.reduce(function(s,x){ return s+x.days; },0)/poSatBySite.length):null;
+
   // ── Committed date helper ────────────────────────────────────────────────
 
 
@@ -2366,7 +2379,51 @@ function renderSatUat(){
     +'<div class="su-stat"><div class="su-sl">UAT This Week</div><div class="su-sv" style="color:#7c3aed">'+uatLW2+'</div><div class="su-ss">'+uatLLW2+' prev week</div></div>'
     +'<div class="su-stat"><div class="su-sl">UAT Pending</div><div class="su-sv" style="color:#d97706">'+pendArr.length+'</div><div class="su-ss">SAT done, UAT open</div></div>'
     +'<div class="su-stat"><div class="su-sl">UAT Done</div><div class="su-sv" style="color:#16a34a">'+doneArr.length+'</div><div class="su-ss">fully closed</div></div>'
+    +(overallPoSat!==null?'<div class="su-stat"><div class="su-sl">Avg PO→SAT</div><div class="su-sv" style="color:#2563eb">'+overallPoSat+'d</div><div class="su-ss">across '+poSatBySite.length+' sites</div></div>':'')
     +'</div>'
+    +(pmAvgArr.length?'<div style="background:var(--white);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:18px">'
+      +'<div style="font-size:13px;font-weight:700;margin-bottom:12px">📊 PO → SAT Duration Analysis</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px">'
+      +'<div>'
+      +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">By PM</div>'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<thead><tr style="border-bottom:1px solid var(--border)">'
+      +'<th style="text-align:left;padding:4px 6px;font-size:10px;color:var(--muted)">PM</th>'
+      +'<th style="text-align:center;padding:4px 6px;font-size:10px;color:var(--muted)">Avg Days</th>'
+      +'<th style="text-align:center;padding:4px 6px;font-size:10px;color:var(--muted)">Sites</th>'
+      +'</tr></thead><tbody>'
+      +pmAvgArr.map(function(d){
+        var clr=d.avg<=60?'#16a34a':d.avg<=90?'#ca8a04':'#dc2626';
+        return '<tr style="border-bottom:1px solid var(--border)">'
+          +'<td style="padding:4px 6px;font-weight:600">'+esc(d.pm)+'</td>'
+          +'<td style="padding:4px 6px;text-align:center;font-weight:700;color:'+clr+'">'+d.avg+'d</td>'
+          +'<td style="padding:4px 6px;text-align:center;color:var(--muted)">'+d.cnt+'</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table>'
+      +'</div>'
+      +'<div>'
+      +'<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">By Site (all completed)</div>'
+      +'<div style="max-height:220px;overflow-y:auto">'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+      +'<thead><tr style="border-bottom:1px solid var(--border)">'
+      +'<th style="text-align:left;padding:4px 6px;font-size:10px;color:var(--muted)">Site</th>'
+      +'<th style="text-align:left;padding:4px 6px;font-size:10px;color:var(--muted)">PM</th>'
+      +'<th style="text-align:center;padding:4px 6px;font-size:10px;color:var(--muted)">Days</th>'
+      +'</tr></thead><tbody>'
+      +poSatBySite.slice().sort(function(a,b){ return a.days-b.days; }).map(function(d){
+        var clr=d.days<=60?'#16a34a':d.days<=90?'#ca8a04':'#dc2626';
+        return '<tr style="border-bottom:1px solid var(--border)">'
+          +'<td style="padding:4px 6px">'+esc(d.site)+'</td>'
+          +'<td style="padding:4px 6px;color:var(--muted)">'+esc(d.pm)+'</td>'
+          +'<td style="padding:4px 6px;text-align:center;font-weight:700;color:'+clr+'">'+d.days+'d</td>'
+          +'</tr>';
+      }).join('')
+      +'</tbody></table>'
+      +'</div>'
+      +'</div>'
+      +'</div>'
+      +'</div>':'')
     +nwHtml+rcHtml+pendHtml+doneHtml);
   attachEmailTracking();
 }
@@ -2378,11 +2435,15 @@ function renderWarnings(container){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">✅ No UAT warnings — all SAT sites are within the 15-day window.</div>';
     return;
   }
-  const critical=warns.filter(w=>w._gap>30);
-  const high=warns.filter(w=>w._gap>15&&w._gap<=30);
+  const activeWarns=warns.filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]);
+  const exemptedWarns=warns.filter(w=>UAT_EXEMPTIONS[(w['Site Name']||'').trim()]);
+  const critical=activeWarns.filter(w=>w._gap>30);
+  const high=activeWarns.filter(w=>w._gap>15&&w._gap<=30);
   function wCard(r){
     const idx=allData.findIndex(x=>x['Site Name']===r['Site Name']);
     const isCrit=r._gap>30;
+    const isExempt=!!(UAT_EXEMPTIONS[(r['Site Name']||'').trim()]);
+    const exemptInfo=isExempt?UAT_EXEMPTIONS[(r['Site Name']||'').trim()]:null;
     const upd=getLatestUpdate(r).substring(0,200);
     const lastCol=getLatestUpdateDate(r)||'—';
     const satD=r['SAT Date']||'—';
@@ -2392,15 +2453,26 @@ function renderWarnings(container){
     const warnSubj='UAT Delay Warning — '+site+' ('+gap+' days post SAT)';
     const warnBody='Dear '+owner+',\n\nThis is a formal reminder that '+site+' completed SAT on '+satD+' and UAT has not been recorded after '+gap+' days, which exceeds the 15-day SLA.\n\nPlease initiate UAT immediately and share the UAT completion date at the earliest.\n\nAny further delay may result in a Show Cause Notice (SCN) as per CARS24 project compliance policy.\n\nRegards,\nVicky Bhardwaj\nHead of Projects, CARS24';
     const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(warnSubj)+'&body='+encodeURIComponent(warnBody);
-    const notifyBtn = '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" data-elog-site="'+esc(site)+'" data-elog-type="uat_warning" data-elog-refresh="warnings" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation()">📧 Send Warning Email to '+esc(owner)+'</a>'+emailLogBadge(site,'uat_warning');
-    return '<div class="warn-card'+(isCrit?'':' w-orange')+'" onclick="openModal('+idx+')">' +
+    const notifyBtn='<a href="'+gmailUrl+'" target="_blank" class="notify-btn" data-elog-site="'+esc(site)+'" data-elog-type="uat_warning" data-elog-refresh="warnings" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;'+(isExempt?'opacity:.45;pointer-events:none':'')+'" onclick="event.stopPropagation()">📧 Send Warning Email to '+esc(owner)+'</a>'+(isExempt?'':emailLogBadge(site,'uat_warning'));
+    const actionBtn=isExempt
+      ?'<button onclick="event.stopPropagation();removeUatExemption(\''+esc(site)+'\')" style="padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">↩ Remove Exemption</button>'
+      :'<button onclick="event.stopPropagation();exemptFromWarning(\''+esc(site)+'\')" style="padding:4px 10px;background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">🔕 Exempt</button>';
+    const exemptBanner=isExempt
+      ?'<div style="margin-bottom:8px;padding:6px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;display:flex;align-items:center;gap:8px;font-size:11px">'
+        +'<span style="background:#6b7280;color:#fff;padding:2px 7px;border-radius:4px;font-weight:700;font-size:10px">🔕 EXEMPTED</span>'
+        +'<span style="color:#374151;font-weight:600">'+esc(exemptInfo.reason)+'</span>'
+        +'<span style="color:var(--muted)">· '+esc(exemptInfo.by)+' · '+esc(exemptInfo.at)+'</span>'
+        +'</div>'
+      :'';
+    return '<div class="warn-card'+(isCrit&&!isExempt?'':' w-orange')+'"'+(isExempt?' style="opacity:.7"':'')+' onclick="openModal('+idx+')">' +
+      exemptBanner+
       '<div class="warn-card-top">' +
       '<div>' +
       '<div class="warn-card-name">'+esc(r['Site Name']||'—')+'</div>' +
       '<div class="warn-card-owner">Owner: <strong>'+esc(r.Owner||'—')+'</strong> · Vendor: '+esc(r.Vendor||'—')+'</div>' +
       '</div>' +
       '<div style="text-align:center;flex-shrink:0">' +
-      '<div class="warn-days" style="color:'+(isCrit?'#dc2626':'#d97706')+'">'+r._gap+'</div>' +
+      '<div class="warn-days" style="color:'+(isExempt?'#9ca3af':isCrit?'#dc2626':'#d97706')+'">'+r._gap+'</div>' +
       '<div class="warn-days-lbl">days since<br>SAT</div>' +
       '</div></div>' +
       '<div class="warn-meta">' +
@@ -2409,8 +2481,8 @@ function renderWarnings(container){
       '<span>Last update: <strong>'+lastCol+'</strong></span>' +
       '<span>% Done: <strong>'+(r['Percentage Completion']||'—')+'</strong></span>' +
       '</div>' +
-      (upd?'<div class="warn-msg'+(isCrit?'':' w-orange')+'">'+esc(upd)+'</div>':'') +
-      '<div style="display:flex;align-items:center;gap:8px;margin-top:8px">'+notifyBtn+'</div>' +
+      (upd?'<div class="warn-msg'+(isCrit&&!isExempt?'':' w-orange')+'">'+esc(upd)+'</div>':'') +
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">'+notifyBtn+actionBtn+'</div>' +
       '</div>';
   }
   el.innerHTML=`
@@ -2419,11 +2491,54 @@ function renderWarnings(container){
         <div class="warn-title">⚠ UAT Warning — Sites exceeding 15-day SAT cutoff</div>
         <div class="warn-sub">These sites completed SAT but UAT has not been recorded within the 15-day window. Notify the relevant PM immediately.</div>
       </div>
-      <div style="font-size:22px;font-weight:800;color:#dc2626">${warns.length} sites</div>
+      <div style="font-size:22px;font-weight:800;color:#dc2626">${activeWarns.length} active${exemptedWarns.length?' <span style="font-size:14px;color:#9ca3af;font-weight:500">(+'+exemptedWarns.length+' exempted)</span>':''}</div>
     </div>
     ${critical.length?`<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔴 Critical — Over 30 days (${critical.length})</div>${critical.map(wCard).join('')}</div>`:''}
-    ${high.length?`<div><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🟡 High — 15–30 days (${high.length})</div>${high.map(wCard).join('')}</div>`:''}`;
+    ${high.length?`<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🟡 High — 15–30 days (${high.length})</div>${high.map(wCard).join('')}</div>`:''}
+    ${exemptedWarns.length?`<div><div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔕 Exempted — not counted (${exemptedWarns.length})</div>${exemptedWarns.map(wCard).join('')}</div>`:''}`;
   attachEmailTracking();
+}
+
+function exemptFromWarning(siteName){
+  var reasons=['PM Changed','Dependency Delay','Other'];
+  var html='<div style="font-size:14px;font-weight:700;margin-bottom:12px">🔕 Exempt from UAT Warning</div>'
+    +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">Site: <strong>'+esc(siteName)+'</strong></div>'
+    +'<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:600;color:var(--muted)">Reason for exemption</label>'
+    +'<select id="exempt-reason-sel" style="width:100%;margin-top:6px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none">'
+    +reasons.map(function(r){ return '<option value="'+r+'">'+r+'</option>'; }).join('')
+    +'</select></div>'
+    +'<div style="margin-bottom:12px"><label style="font-size:11px;font-weight:600;color:var(--muted)">Notes (optional)</label>'
+    +'<textarea id="exempt-notes" placeholder="Additional context…" style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none;resize:vertical;min-height:50px;box-sizing:border-box"></textarea></div>'
+    +'<div style="display:flex;gap:8px">'
+    +'<button onclick="confirmExemption(\''+esc(siteName)+'\')" style="padding:8px 16px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer">Confirm Exemption</button>'
+    +'<button onclick="document.getElementById(\'overlay\').classList.remove(\'open\')" style="padding:8px 16px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:6px;font-size:12px;cursor:pointer">Cancel</button>'
+    +'</div>';
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('mttl').textContent='';
+  var dm=document.getElementById('mdrive'); if(dm) dm.style.display='none';
+  document.getElementById('mbody').innerHTML=html;
+}
+
+function confirmExemption(siteName){
+  var sel=document.getElementById('exempt-reason-sel');
+  var notes=(document.getElementById('exempt-notes')||{}).value||'';
+  var reason=sel?sel.value:'Other';
+  UAT_EXEMPTIONS[siteName]={reason:reason+(notes?' — '+notes:''),by:(__sbProfile&&__sbProfile.full_name)||'user',at:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
+  try { localStorage.setItem('uat_exemptions',JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
+  document.getElementById('overlay').classList.remove('open');
+  toast('⏭ '+siteName+' exempted from UAT warnings','ok');
+  renderWarnings();
+  var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
+  if(wb&&wc){ var n=getUatWarnings().filter(function(w){ return !UAT_EXEMPTIONS[(w['Site Name']||'').trim()]; }).length; wc.textContent=n; wb.style.display=n?'':'none'; }
+}
+
+function removeUatExemption(siteName){
+  delete UAT_EXEMPTIONS[siteName];
+  try { localStorage.setItem('uat_exemptions',JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
+  toast('✅ '+siteName+' restored to warning list','ok');
+  renderWarnings();
+  var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
+  if(wb&&wc){ var n=getUatWarnings().filter(function(w){ return !UAT_EXEMPTIONS[(w['Site Name']||'').trim()]; }).length; wc.textContent=n; wb.style.display=n?'':'none'; }
 }
 
 function markNotifiedByIdx(btn) {
@@ -2672,14 +2787,23 @@ async function renderVendorRatings(){
 
   // Rating form: UAT-done sites not yet rated — login required
   if(__sbUser){
-    var toRate=uatSites.filter(function(r){ return !ratedKeys.has(((r['Site Name']||'')+'|'+(r['Vendor']||'')).trim()); });
-    if(toRate.length){
-      html+='<div style="font-size:13px;font-weight:700;margin-bottom:10px">📝 Rate a Site</div>';
+    // Expand multi-vendor sites into individual site|vendor pairs
+    var toRatePairs=[];
+    uatSites.forEach(function(r){
+      var vendors=(r['Vendor']||'').split(',').map(function(v){ return v.trim(); }).filter(Boolean);
+      if(!vendors.length) vendors=[''];
+      vendors.forEach(function(vnd){
+        var key=(r['Site Name']||'')+'|'+vnd;
+        if(!ratedKeys.has(key.trim())) toRatePairs.push({site:r['Site Name']||'', vendor:vnd, row:r});
+      });
+    });
+    if(toRatePairs.length){
+      html+='<div style="font-size:13px;font-weight:700;margin-bottom:10px">📝 Rate a Vendor</div>';
       html+='<div style="background:var(--white);border:1px solid var(--border);border-radius:8px;padding:16px;margin-bottom:16px">'
-        +'<div style="margin-bottom:10px"><label style="font-size:11px;font-weight:600;color:var(--muted)">Select Site</label>'
+        +'<div style="margin-bottom:10px"><label style="font-size:11px;font-weight:600;color:var(--muted)">Select Site & Vendor</label>'
         +'<select id="vr-site-sel" style="width:100%;margin-top:4px;padding:7px 9px;border:1px solid var(--border2);border-radius:6px;font-size:12px;font-family:Inter,sans-serif;outline:none;background:var(--bg)" onchange="vrUpdateVendor()">'
-        +'<option value="">— choose site —</option>'
-        +toRate.map(function(r){ return '<option value="'+esc(r['Site Name'])+'">'+esc(r['Site Name'])+' ('+esc(r['Vendor']||'No vendor')+')</option>'; }).join('')
+        +'<option value="">— choose site & vendor —</option>'
+        +toRatePairs.map(function(p){ return '<option value="'+esc(p.site)+'||'+esc(p.vendor)+'">'+esc(p.site)+' — '+esc(p.vendor||'No vendor')+'</option>'; }).join('')
         +'</select></div>'
         +'<div style="font-size:11px;font-weight:600;color:var(--muted);margin-bottom:6px">Vendor: <span id="vr-vendor-lbl" style="color:var(--text)">—</span></div>'
         +'<div style="display:grid;grid-template-columns:1fr;gap:8px;margin-bottom:12px">'
@@ -2709,7 +2833,7 @@ async function renderVendorRatings(){
         +'<div id="vr-msg" style="display:none;font-size:11px;margin-top:8px;padding:7px 9px;border-radius:6px"></div>'
         +'</div>';
     } else {
-      html+='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted);background:var(--white);border:1px solid var(--border);border-radius:8px">All UAT-completed sites have been rated ✅</div>';
+      html+='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted);background:var(--white);border:1px solid var(--border);border-radius:8px">All UAT-completed vendors have been rated ✅</div>';
     }
   } else {
     html+='<div style="padding:16px;text-align:center;font-size:12px;color:var(--muted)">Sign in to rate vendors.</div>';
@@ -2720,10 +2844,10 @@ async function renderVendorRatings(){
 
 function vrUpdateVendor(){
   var sel=document.getElementById('vr-site-sel'); if(!sel) return;
-  var sn=sel.value; var lbl=document.getElementById('vr-vendor-lbl');
-  if(!sn||!lbl){if(lbl)lbl.textContent='—';return;}
-  var row=allData.find(function(r){ return r['Site Name']===sn; });
-  if(lbl) lbl.textContent=row?(row['Vendor']||'Not set'):'—';
+  var val=sel.value; var lbl=document.getElementById('vr-vendor-lbl');
+  if(!val||!lbl){if(lbl)lbl.textContent='—';return;}
+  var parts=val.split('||');
+  if(lbl) lbl.textContent=parts[1]||'—';
 }
 
 function vrSelectStar(key, val){
@@ -2747,10 +2871,13 @@ function vrCalcScore(){
 
 async function submitVendorRating(){
   if(!__sbClient||!__sbUser){ toast('Sign in first','err'); return; }
-  var sel=document.getElementById('vr-site-sel'); var sn=sel?sel.value:'';
-  if(!sn){ toast('Select a site','err'); return; }
+  var sel=document.getElementById('vr-site-sel'); var selVal=sel?sel.value:'';
+  if(!selVal){ toast('Select a site & vendor','err'); return; }
+  var selParts=selVal.split('||');
+  var sn=selParts[0]||'';
+  var vendor=selParts[1]||'';
+  if(!sn){ toast('Select a site & vendor','err'); return; }
   var row=allData.find(function(r){ return r['Site Name']===sn; });
-  var vendor=row?(row['Vendor']||''):'';
   var vals={};
   var allSet=true;
   VR_CRITERIA.forEach(function(cr){
@@ -3598,7 +3725,7 @@ function renderInsightKPIs(){
   // ── Project KPI counts ────────────────────────────────────────────────────
   const c2=fn=>allData.filter(fn).length;
   const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||'').trim();}).length;
-  const warns=getUatWarnings().length;
+  const warns=getUatWarnings().filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]).length;
   const active=allData.filter(r=>{const s=(r.Status||'').toLowerCase();return s.includes('wip')||s.includes('additional')||s.includes('to be start')||s==='design'||s==='boq';}).length;
   // SAT on time %
   const satDoneAll=allData.filter(r=>r['SAT Date']&&r['Planned Completion']);
@@ -4730,6 +4857,8 @@ function autoSync(){
 const DRIVE_MAP = {"C2B Gurgaon": "https://drive.google.com/drive/folders/1uSUjD-fTbVcayLYyUzunwSHtxJto-z9t", "Dombivali Barrier and Guard Room": "https://drive.google.com/drive/folders/1uMHOMJYpRNtC8mrUJxIbear5bl6CKG6l", "Vadodara": "https://drive.google.com/drive/folders/1nXwPjjNzkkZi2KqAOO3q0I2xs3-5JCOn", "Rohini C2B": "https://drive.google.com/drive/folders/1gfopRd0Of04NCuEcNCIjhhkrzMEb4QqW", "Chennai Open": "https://drive.google.com/drive/folders/1OhQUWyUq0P5cbsLgrpwifuu8CLx5YnLa", "Naroda HRC": "https://drive.google.com/drive/folders/1lvdG8AazvTfjZrr8z4GcxNyORA-WDtkS", "Naroda Upgrade": "https://drive.google.com/drive/folders/1WRi33YezFDfmKW-xdDFACj0Uc4dIe0oq", "Sapphire Parking Upgrade": "https://drive.google.com/drive/folders/1GBpF0sn65h1aVgfWvuIJfVBhY3vVpdA0", "Karnavati Revamp": "https://drive.google.com/drive/folders/1tRK4gzhXIloGC_m-R7XF9glNedhxkXGo", "Gurgaon Sector 18 Landscaping and HRC": "https://drive.google.com/drive/folders/12jAL3iNiJBN8l1N2y5o8r0cDy2CYs_ep", "Bhoruka upgrade": "https://drive.google.com/drive/folders/1RXuXsnHMANhghRe4qA6djpx4zdQiRPUx", "Rohini CEC": "https://drive.google.com/drive/folders/1rh2LmtGEMQ0n7Ym6owUrMOiPVjanUSoq", "Kochi VR": "https://drive.google.com/drive/folders/1eWwgWchKe1O6Qm20-STGmxUgfzHPIGI6", "Bangalore Fourdoor Studio": "https://drive.google.com/drive/folders/1DvzqhB5trRAzEuXUZ7G9qLZULTLMQ8kd", "Amanora Washroom": "https://drive.google.com/drive/folders/1-8TO36Co0llizjZQMfAg1GZqHu-ik6UL", "RCUBE CEC": "https://drive.google.com/drive/folders/1eQd4L7bYNZpNm6Z_S5GZGch66deCmVE3", "South Court Saket": "https://drive.google.com/drive/folders/17B3vbmGWH4vw0ndzt1R3XVmcu_XqcPFI", "Belapur": "https://drive.google.com/drive/folders/1tcX3j5XjyGWO4I-cflnNhPHojpTi1p4r", "Wave One Noida": "https://drive.google.com/drive/folders/1V8UStUNPgPHaGdTAiP-FdijU0VVCmRwc", "Jaipur Revamp": "https://drive.google.com/drive/folders/1uRfJrUVp0TXTsmbBXEJqO7K5Nr03pKX8", "PCMC Pavers": "https://drive.google.com/drive/folders/1YGR5_903gEeGibAlLlykcn2LmcUX0opG", "Jakkur Pavers and Arch Gate": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "Rohini Pavers": "https://drive.google.com/drive/folders/1yrtN2lAU-InP8YIrUsZR6OLgzPKMgctk", "Patna Upgrade": "https://drive.google.com/drive/folders/19O12McHmIGXEGhp_bt6xtYrtIYIjHw6j", "YRS VikasPuri": "https://drive.google.com/drive/folders/1ZgvpdhEW4F5A1dNM_RQRtPDbJtSq3qmK", "Astra C2B": "https://drive.google.com/drive/folders/1ABwhgO0iB80u6M7qN3Tc85zeLxMeo_Cd", "GT World mall": "https://drive.google.com/drive/folders/17CRpb_QbqHto8XicfEfyVqUIzBlIP-Ir", "Goregaon replacement": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Amanora Facade": "https://drive.google.com/drive/folders/1-8TO36Co0llizjZQMfAg1GZqHu-ik6UL", "Pune Katraj": "https://drive.google.com/drive/folders/1yAhjzAk5RxAM2pRY7fXUBZzglW7Q9YFA", "Awadh one Lucknow": "https://drive.google.com/drive/folders/17H4xFoGkVg916LmDIqlWYG6uk9Yp3z_y", "Jaipur C2B": "https://drive.google.com/drive/folders/1VzQ9Vwhdv0X0avDX3Wz9byXmWZu5W6Us", "Kormangala Tensile": "https://drive.google.com/drive/folders/1KbXIf5-L_VDMrMbNwsYSr2WnjjGWcv97", "Surat New CEC": "https://drive.google.com/drive/folders/150Sg_iZcmccEebCZKazwPaJrImOY1t5t", "Kompally Additional Pavers": "https://drive.google.com/drive/folders/1jgkQW7mTzBgx63huXjh2G95iVkjdxyn9", "Jakkur Detailing Bay {Customer Lounge}": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "Gaur Ops Area": "https://drive.google.com/drive/folders/1fAvH6buBYmOOMzGCkCdVG0qU0GE3TxQ1", "Kompally Delivery Area": "https://drive.google.com/drive/folders/1jgkQW7mTzBgx63huXjh2G95iVkjdxyn9", "Jakkur Studio Rectification": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "M3M Customer Lounge": "https://drive.google.com/drive/folders/10sMFfE2M_dhb-DdyoZawgOcaeOVzF_MZ", "Vizag Celest Mall": "https://drive.google.com/drive/folders/1UPx8dNaLYl3Dg3uhEWiZI_rrJgy4oKa0", "Kanpur": "https://drive.google.com/drive/folders/1Gq_ZcRZjGry94JjNAQzjUH2dmSh1jNvW", "Piyush Mahindra Tiling": "https://drive.google.com/drive/folders/1DtDtPA4Tc7sI6OXTuV4ytlUxN2bypIYZ", "Dombivali HRC": "https://drive.google.com/drive/folders/1xallpSGtgGfAzRsBYGhkLbI1w-haefSJ", "Andheri": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Karnal": "https://drive.google.com/drive/folders/12jAL3iNiJBN8l1N2y5o8r0cDy2CYs_ep", "Upal": "https://drive.google.com/drive/folders/1Chfe1wP8vn5aY6WlvIBQgeDvTcED4_c3", "Uppal": "https://drive.google.com/drive/folders/1Chfe1wP8vn5aY6WlvIBQgeDvTcED4_c3", "Office": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Jaipur HRC": "https://drive.google.com/drive/folders/1cgTClY0WP1ZJ7Tgc_xYBlEhtweDb8Spd", "Bhopal": "https://drive.google.com/drive/folders/1IVYwqjfnmr37ZQHposkEHJiJzxu2WtcJ", "Bajrang Wadi Rajkot": "https://drive.google.com/drive/folders/133fMN-3LMvukocGAHUkSh-rQ79nGAMg6", "Rajkot": "https://drive.google.com/drive/folders/133fMN-3LMvukocGAHUkSh-rQ79nGAMg6", "PCMC Security Cabin": "https://drive.google.com/drive/folders/1YGR5_903gEeGibAlLlykcn2LmcUX0opG", "Pune New Container": "https://drive.google.com/drive/folders/1ymzzgfKx6QBiKskEjpI4MMyGRW-gurUK", "Miyapur": "https://drive.google.com/drive/folders/1X16XN-DeILqYqYorSq6MKY0jubbTpXx8", "Ranchi": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Dehradun": "https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG", "Jakkur Detailing Bay & Washing Area": "https://drive.google.com/drive/folders/1bacYyNLmTVaJd4Swq76IGoAXhGW2i7iA", "PCMC HRC": "https://drive.google.com/drive/folders/1i385Rl_O1duw3NQ_FisypbPvisO5JxgK", "Naroda GS": "https://drive.google.com/drive/folders/1WRi33YezFDfmKW-xdDFACj0Uc4dIe0oq", "Naroda C2B": "https://drive.google.com/drive/folders/1mtIMv_mnjBg7b2U0-7SDeKIglORy7cRl", "Jaipur GS": "https://drive.google.com/drive/folders/1uRfJrUVp0TXTsmbBXEJqO7K5Nr03pKX8", "Rohini HRC": "https://drive.google.com/drive/folders/1yrtN2lAU-InP8YIrUsZR6OLgzPKMgctk", "Rohini GS": "https://drive.google.com/drive/folders/1rh2LmtGEMQ0n7Ym6owUrMOiPVjanUSoq", "Kandivali": "https://drive.google.com/drive/folders/1U7vk2aJLi4yMK4JiQtux8jal3-sYDGZ3", "M3M": "https://drive.google.com/drive/folders/1H1OsaAlB3gHhGBfAL2SF18JsDBXBwZgN", "GNB GHAZIABAD": "https://drive.google.com/drive/folders/1K_FMzJdmtRtsnYUgJF9h8a304Dw27Je6", "Avani Mall GS": "https://drive.google.com/drive/folders/1zwRF0KnrXTfn9gOCX4qb7jE0qb_Xdhg7", "Kochi HRC": "https://drive.google.com/drive/folders/1eWwgWchKe1O6Qm20-STGmxUgfzHPIGI6", "Dwarka Radission": "https://drive.google.com/drive/folders/1itAqy0rnjWgVaUMbGhoT9QoygZ0EL1WA", "Gaur City Noida": "https://drive.google.com/drive/folders/1KgjO6yaz1og8PHEXtwFTs8gMegh_UgPr", "Patna GS": "https://drive.google.com/drive/folders/19O12McHmIGXEGhp_bt6xtYrtIYIjHw6j", "YRS Vikaspuri": "https://drive.google.com/drive/folders/1ZgvpdhEW4F5A1dNM_RQRtPDbJtSq3qmK", "South Court": "https://drive.google.com/drive/folders/17B3vbmGWH4vw0ndzt1R3XVmcu_XqcPFI", "Gurgaon Sec 18": "https://drive.google.com/drive/folders/1VWsXqvY86eEh9tm4gM1XPEcxngr_Nw8U", "Kompally GS": "https://drive.google.com/drive/folders/1jgkQW7mTzBgx63huXjh2G95iVkjdxyn9", "Bhoruka Tech Park": "https://drive.google.com/drive/folders/1RXuXsnHMANhghRe4qA6djpx4zdQiRPUx"};
 var CC_MAP = {}; // site_name → cost_center code, loaded from Supabase
 var VR_CACHE = []; // vendor_ratings loaded from Supabase
+var UAT_EXEMPTIONS = {}; // site_name → {reason, by, at}
+try { UAT_EXEMPTIONS = JSON.parse(localStorage.getItem('uat_exemptions')||'{}'); } catch(e) {}
 
 const DRIVE_ROOT = 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
 function getDriveLink(s){return DRIVE_MAP[(s||'').trim()]||DRIVE_ROOT;}
