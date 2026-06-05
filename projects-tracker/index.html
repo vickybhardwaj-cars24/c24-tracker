@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.62</title>
+<title>Cars24 Projects Tracker v4.63</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4529,12 +4529,19 @@ function savePO(site, val){
 function renderTaskTab(){
   var el=document.getElementById('taskv');
   if(!el) return;
+  // Chronologically-ordered date columns (DATE_COLS is in arrival order, not date order,
+  // because dynamic updates get appended — so sort by the actual parsed date, newest first).
+  var orderedCols=DATE_COLS.slice().sort(function(a,b){
+    var da=pd(a),db=pd(b);
+    if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
+    return db-da;
+  });
   // For each site, find its MOST RECENT date column that has a "Task:" entry
   var latestBysite={};
   allData.forEach(function(r){
     if(!r['Site Name']) return;
-    for(var ci=DATE_COLS.length-1;ci>=0;ci--){
-      var col=DATE_COLS[ci];
+    for(var ci=0;ci<orderedCols.length;ci++){
+      var col=orderedCols[ci];
       var update=(r[col]||'').trim();
       if(!update) continue;
       var m=update.match(/task\s*:\s*([\s\S]*)/i);
@@ -4557,7 +4564,9 @@ function renderTaskTab(){
     byDate[entry.col].push(entry);
   });
   var dateCols=Object.keys(byDate).sort(function(a,b){
-    var da=DATE_COLS.indexOf(a),db=DATE_COLS.indexOf(b); return db-da;
+    var da=pd(a),db=pd(b);
+    if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
+    return db-da;
   });
   if(!dateCols.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No tasks found — add updates with "Task: ..." prefix.</div>';
@@ -4595,13 +4604,18 @@ function renderTaskTab(){
   el.innerHTML=html;
 }
 function copyTasksForSlack(){
+  var orderedCols=DATE_COLS.slice().sort(function(a,b){
+    var da=pd(a),db=pd(b);
+    if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
+    return db-da;
+  });
   var byPM={};
   allData.forEach(function(r){
     if(!r['Site Name']) return;
     var owner=(r['Owner']||'').trim(); if(!owner) return;
     var siteItems=[];
-    for(var ci=DATE_COLS.length-1;ci>=0;ci--){
-      var upd=(r[DATE_COLS[ci]]||'').trim(); if(!upd) continue;
+    for(var ci=0;ci<orderedCols.length;ci++){
+      var upd=(r[orderedCols[ci]]||'').trim(); if(!upd) continue;
       var m=upd.match(/task\s*:\s*([\s\S]*)/i);
       if(m&&m[1].trim()){
         var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
