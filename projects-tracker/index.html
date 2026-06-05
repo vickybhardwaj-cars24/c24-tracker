@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.71</title>
+<title>Cars24 Projects Tracker v4.72</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1589,7 +1589,6 @@ function getUatWarnings(){
     const satD=pd(r['SAT Date']);
     const uatD=pd(r['UAT DATE']);
     if(!satD||uatD) return false;
-    if(UAT_EXEMPTIONS[(r['Site Name']||'').trim()]) return false;
     const gap=Math.round((today-satD)/86400000);
     return gap>=UAT_WARN_DAYS;
   }).map(r=>{
@@ -1771,7 +1770,7 @@ function renderKPIs(){
   const today=new Date(); today.setHours(0,0,0,0);
   const c=fn=>allData.filter(fn).length;
   const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
-  const warns=getUatWarnings().length;
+  const warns=getUatWarnings().filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]).length;
   const _in7=new Date(today); _in7.setDate(today.getDate()+7);
   const dueWeek=allData.filter(r=>{if((r['SAT Date']||'').trim())return false;const d=pd(r['Revised Completion'])||pd(r['Planned Completion']);return d&&d>=today&&d<=_in7;}).length;
   const cfg=[
@@ -2436,11 +2435,15 @@ function renderWarnings(container){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">✅ No UAT warnings — all SAT sites are within the 15-day window.</div>';
     return;
   }
-  const critical=warns.filter(w=>w._gap>30);
-  const high=warns.filter(w=>w._gap>15&&w._gap<=30);
+  const activeWarns=warns.filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]);
+  const exemptedWarns=warns.filter(w=>UAT_EXEMPTIONS[(w['Site Name']||'').trim()]);
+  const critical=activeWarns.filter(w=>w._gap>30);
+  const high=activeWarns.filter(w=>w._gap>15&&w._gap<=30);
   function wCard(r){
     const idx=allData.findIndex(x=>x['Site Name']===r['Site Name']);
     const isCrit=r._gap>30;
+    const isExempt=!!(UAT_EXEMPTIONS[(r['Site Name']||'').trim()]);
+    const exemptInfo=isExempt?UAT_EXEMPTIONS[(r['Site Name']||'').trim()]:null;
     const upd=getLatestUpdate(r).substring(0,200);
     const lastCol=getLatestUpdateDate(r)||'—';
     const satD=r['SAT Date']||'—';
@@ -2450,15 +2453,26 @@ function renderWarnings(container){
     const warnSubj='UAT Delay Warning — '+site+' ('+gap+' days post SAT)';
     const warnBody='Dear '+owner+',\n\nThis is a formal reminder that '+site+' completed SAT on '+satD+' and UAT has not been recorded after '+gap+' days, which exceeds the 15-day SLA.\n\nPlease initiate UAT immediately and share the UAT completion date at the earliest.\n\nAny further delay may result in a Show Cause Notice (SCN) as per CARS24 project compliance policy.\n\nRegards,\nVicky Bhardwaj\nHead of Projects, CARS24';
     const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(warnSubj)+'&body='+encodeURIComponent(warnBody);
-    const notifyBtn = '<a href="'+gmailUrl+'" target="_blank" class="notify-btn" data-elog-site="'+esc(site)+'" data-elog-type="uat_warning" data-elog-refresh="warnings" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px" onclick="event.stopPropagation()">📧 Send Warning Email to '+esc(owner)+'</a>'+emailLogBadge(site,'uat_warning');
-    return '<div class="warn-card'+(isCrit?'':' w-orange')+'" onclick="openModal('+idx+')">' +
+    const notifyBtn='<a href="'+gmailUrl+'" target="_blank" class="notify-btn" data-elog-site="'+esc(site)+'" data-elog-type="uat_warning" data-elog-refresh="warnings" style="text-decoration:none;display:inline-flex;align-items:center;gap:5px;'+(isExempt?'opacity:.45;pointer-events:none':'')+'" onclick="event.stopPropagation()">📧 Send Warning Email to '+esc(owner)+'</a>'+(isExempt?'':emailLogBadge(site,'uat_warning'));
+    const actionBtn=isExempt
+      ?'<button onclick="event.stopPropagation();removeUatExemption(\''+esc(site)+'\')" style="padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">↩ Remove Exemption</button>'
+      :'<button onclick="event.stopPropagation();exemptFromWarning(\''+esc(site)+'\')" style="padding:4px 10px;background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">🔕 Exempt</button>';
+    const exemptBanner=isExempt
+      ?'<div style="margin-bottom:8px;padding:6px 10px;background:#f3f4f6;border:1px solid #e5e7eb;border-radius:6px;display:flex;align-items:center;gap:8px;font-size:11px">'
+        +'<span style="background:#6b7280;color:#fff;padding:2px 7px;border-radius:4px;font-weight:700;font-size:10px">🔕 EXEMPTED</span>'
+        +'<span style="color:#374151;font-weight:600">'+esc(exemptInfo.reason)+'</span>'
+        +'<span style="color:var(--muted)">· '+esc(exemptInfo.by)+' · '+esc(exemptInfo.at)+'</span>'
+        +'</div>'
+      :'';
+    return '<div class="warn-card'+(isCrit&&!isExempt?'':' w-orange')+'"'+(isExempt?' style="opacity:.7"':'')+' onclick="openModal('+idx+')">' +
+      exemptBanner+
       '<div class="warn-card-top">' +
       '<div>' +
       '<div class="warn-card-name">'+esc(r['Site Name']||'—')+'</div>' +
       '<div class="warn-card-owner">Owner: <strong>'+esc(r.Owner||'—')+'</strong> · Vendor: '+esc(r.Vendor||'—')+'</div>' +
       '</div>' +
       '<div style="text-align:center;flex-shrink:0">' +
-      '<div class="warn-days" style="color:'+(isCrit?'#dc2626':'#d97706')+'">'+r._gap+'</div>' +
+      '<div class="warn-days" style="color:'+(isExempt?'#9ca3af':isCrit?'#dc2626':'#d97706')+'">'+r._gap+'</div>' +
       '<div class="warn-days-lbl">days since<br>SAT</div>' +
       '</div></div>' +
       '<div class="warn-meta">' +
@@ -2467,10 +2481,8 @@ function renderWarnings(container){
       '<span>Last update: <strong>'+lastCol+'</strong></span>' +
       '<span>% Done: <strong>'+(r['Percentage Completion']||'—')+'</strong></span>' +
       '</div>' +
-      (upd?'<div class="warn-msg'+(isCrit?'':' w-orange')+'">'+esc(upd)+'</div>':'') +
-      '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">'+notifyBtn
-      +'<button onclick="event.stopPropagation();exemptFromWarning(\''+esc(site)+'\')" style="padding:4px 10px;background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:5px;font-size:11px;font-weight:600;cursor:pointer">🔕 Exempt</button>'
-      +'</div>' +
+      (upd?'<div class="warn-msg'+(isCrit&&!isExempt?'':' w-orange')+'">'+esc(upd)+'</div>':'') +
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap">'+notifyBtn+actionBtn+'</div>' +
       '</div>';
   }
   el.innerHTML=`
@@ -2479,10 +2491,11 @@ function renderWarnings(container){
         <div class="warn-title">⚠ UAT Warning — Sites exceeding 15-day SAT cutoff</div>
         <div class="warn-sub">These sites completed SAT but UAT has not been recorded within the 15-day window. Notify the relevant PM immediately.</div>
       </div>
-      <div style="font-size:22px;font-weight:800;color:#dc2626">${warns.length} sites</div>
+      <div style="font-size:22px;font-weight:800;color:#dc2626">${activeWarns.length} active${exemptedWarns.length?' <span style="font-size:14px;color:#9ca3af;font-weight:500">(+'+exemptedWarns.length+' exempted)</span>':''}</div>
     </div>
     ${critical.length?`<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔴 Critical — Over 30 days (${critical.length})</div>${critical.map(wCard).join('')}</div>`:''}
-    ${high.length?`<div><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🟡 High — 15–30 days (${high.length})</div>${high.map(wCard).join('')}</div>`:''}`;
+    ${high.length?`<div style="margin-bottom:6px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🟡 High — 15–30 days (${high.length})</div>${high.map(wCard).join('')}</div>`:''}
+    ${exemptedWarns.length?`<div><div style="font-size:11px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px">🔕 Exempted — not counted (${exemptedWarns.length})</div>${exemptedWarns.map(wCard).join('')}</div>`:''}`;
   attachEmailTracking();
 }
 
@@ -2516,7 +2529,7 @@ function confirmExemption(siteName){
   toast('⏭ '+siteName+' exempted from UAT warnings','ok');
   renderWarnings();
   var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
-  if(wb&&wc){ var n=getUatWarnings().length; wc.textContent=n; wb.style.display=n?'':'none'; }
+  if(wb&&wc){ var n=getUatWarnings().filter(function(w){ return !UAT_EXEMPTIONS[(w['Site Name']||'').trim()]; }).length; wc.textContent=n; wb.style.display=n?'':'none'; }
 }
 
 function removeUatExemption(siteName){
@@ -2525,7 +2538,7 @@ function removeUatExemption(siteName){
   toast('✅ '+siteName+' restored to warning list','ok');
   renderWarnings();
   var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
-  if(wb&&wc){ var n=getUatWarnings().length; wc.textContent=n; wb.style.display=n?'':'none'; }
+  if(wb&&wc){ var n=getUatWarnings().filter(function(w){ return !UAT_EXEMPTIONS[(w['Site Name']||'').trim()]; }).length; wc.textContent=n; wb.style.display=n?'':'none'; }
 }
 
 function markNotifiedByIdx(btn) {
@@ -3712,7 +3725,7 @@ function renderInsightKPIs(){
   // ── Project KPI counts ────────────────────────────────────────────────────
   const c2=fn=>allData.filter(fn).length;
   const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||'').trim();}).length;
-  const warns=getUatWarnings().length;
+  const warns=getUatWarnings().filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]).length;
   const active=allData.filter(r=>{const s=(r.Status||'').toLowerCase();return s.includes('wip')||s.includes('additional')||s.includes('to be start')||s==='design'||s==='boq';}).length;
   // SAT on time %
   const satDoneAll=allData.filter(r=>r['SAT Date']&&r['Planned Completion']);
