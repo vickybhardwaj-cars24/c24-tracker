@@ -494,6 +494,7 @@ export default {
       if (path === '/verify')        return handleVerify(request, env);
       if (path === '/mappings')      return handleMappings(request, env);
       if (path === '/photo-upload')  return handlePhotoUpload(request, env);
+      if (path === '/photo-delete')  return handlePhotoDelete(request, env);
       if (path === '/')              return handlePostLegacy(request, env);
 
       return json(404, { success: false, error: 'Unknown POST endpoint' });
@@ -518,6 +519,19 @@ async function handlePhotoUpload(request, env) {
   if (body.byteLength > 5 * 1024 * 1024) return json(413, { success: false, error: 'File too large (max 5MB after compression)' });
   await env.BUCKET.put(key, body, { httpMetadata: { contentType: 'image/jpeg' } });
   return json(200, { success: true, key, size_kb: Math.round(body.byteLength / 1024) });
+}
+
+// ── Photo delete: POST /photo-delete ────────────────────────────
+async function handlePhotoDelete(request, env) {
+  if (!await checkAnyAuth(request, env)) {
+    return json(401, { success: false, error: 'Unauthorized' });
+  }
+  let body;
+  try { body = await request.json(); } catch(_) { return json(400, { success: false, error: 'Invalid JSON' }); }
+  const key = (body && body.key) ? String(body.key) : '';
+  if (!key || !key.startsWith('photos/')) return json(400, { success: false, error: 'Invalid key' });
+  await env.BUCKET.delete(key);
+  return json(200, { success: true });
 }
 
 // ── Photo get: GET /photos/<key> ────────────────────────────────
