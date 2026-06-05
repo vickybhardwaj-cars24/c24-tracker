@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.72</title>
+<title>Cars24 Projects Tracker v4.73</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3503,6 +3503,8 @@ function saveMeta(f,idx,el){
   const fieldMap={'Planned':'Planned Completion','SAT Date':'SAT Date','UAT Date':'UAT DATE','PO Date':'PO Date','Work Start':'Work Start Date','Kickoff Date':'Kickoff Date','Cost Center':'Cost Center'};
   const dataKey=fieldMap[f]||f;
   const oldV = allData[idx][dataKey] || '';
+  // Guard: if field was cleared, restore original value and skip save
+  if (!v || v === '—') { el.textContent = oldV || '—'; return; }
   allData[idx][dataKey]=v;
   if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
     allData[idx]['Percentage Completion']=v.replace('%','').trim();
