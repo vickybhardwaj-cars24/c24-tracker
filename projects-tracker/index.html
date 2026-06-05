@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.69</title>
+<title>Cars24 Projects Tracker v4.70</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4577,14 +4577,16 @@ function renderTaskTab(){
     +'</div>';
   pmOrder.forEach(function(owner){
     var sites=byPM[owner];
+    // Most recent date among this PM's sites
+    var pmDate=sites.slice().sort(function(a,b){var da=pd(a.col),db=pd(b.col);if(!da&&!db)return 0;if(!da)return 1;if(!db)return -1;return db-da;})[0].col;
     html+='<div style="margin-bottom:16px">';
-    html+='<div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px;padding:4px 8px;background:var(--surface-2);border-radius:4px;display:inline-block">'+esc(owner)+'</div>';
+    html+='<div style="font-size:12px;font-weight:700;color:var(--primary);margin-bottom:6px;padding:4px 8px;background:var(--surface-2);border-radius:4px;display:inline-flex;align-items:center;gap:8px">'
+      +esc(owner)
+      +'<span style="font-size:10px;font-weight:500;color:var(--muted);background:var(--bg);border-radius:3px;padding:1px 6px">'+esc(pmDate)+'</span>'
+      +'</div>';
     sites.forEach(function(entry){
       html+='<div style="margin-bottom:6px;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--primary)">';
-      html+='<div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">';
-      html+='<span style="font-size:12px;font-weight:600">'+esc(entry.site)+'</span>';
-      html+='<span style="font-size:10px;font-weight:600;color:var(--primary);background:var(--surface-2);border-radius:4px;padding:2px 7px;white-space:nowrap">'+esc(entry.col)+'</span>';
-      html+='</div>';
+      html+='<div style="font-size:12px;font-weight:600;margin-bottom:4px">'+esc(entry.site)+'</div>';
       entry.items.forEach(function(item){
         html+='<div style="font-size:12px;color:var(--text);padding:1px 0">• '+esc(item)+'</div>';
       });
