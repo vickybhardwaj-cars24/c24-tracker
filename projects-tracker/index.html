@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.59</title>
+<title>Cars24 Projects Tracker v4.61</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1207,7 +1207,9 @@ async function uploadSitePhoto(file, siteName, siteId, caption) {
   if (!__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
   if (!canUpload()) { toast('Please log in first to enable photo uploads', 'err'); return null; }
   try {
-    var compressed = await compressImage(file, 1200, 0.72);
+    var originalKb = Math.round(file.size / 1024);
+    var compressed = await compressImage(file, 1600, 0.65);
+    toast('Compressed: ' + originalKb + 'KB → ' + compressed.sizeKb + 'KB', 'info');
     var dateStr = new Date().toISOString().split('T')[0];
     var safeSite = (siteName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
     var fileName = safeSite + '_' + Date.now() + '.jpg';
@@ -1296,10 +1298,11 @@ async function renderPhotoSection(siteName, siteId, container) {
       html += '<div style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">' + dateKey + '</div>';
       html += '<div style="display:flex;flex-wrap:wrap;gap:8px">';
       byDate[dateKey].forEach(function(p) {
-        html += '<div style="position:relative;cursor:pointer" data-path="'+esc(p.storage_path)+'" onclick="viewPhoto(this)">'
-          + '<div style="width:80px;height:80px;background:var(--surface);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden">'
+        html += '<div style="position:relative" data-path="'+esc(p.storage_path)+'">'
+          + '<div style="width:80px;height:80px;background:var(--surface);border-radius:6px;border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;overflow:hidden;cursor:pointer" onclick="viewPhoto(this.parentElement)">'
           + '<img data-path="'+esc(p.storage_path)+'" style="width:80px;height:80px;object-fit:cover;border-radius:6px" onerror="this.style.display=\'none\'">'
           + '</div>'
+          + (__sbUser ? '<button onclick="deletePhoto(\''+esc(p.id)+'\',\''+esc(p.storage_path)+'\',this)" title="Delete photo" style="position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;background:rgba(220,38,38,.85);border:none;color:#fff;font-size:10px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>' : '')
           + (p.caption ? '<div style="font-size:9px;color:var(--muted);text-align:center;max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(p.caption)+'</div>' : '')
           + '</div>';
       });
@@ -1319,7 +1322,7 @@ async function renderPhotoSection(siteName, siteId, container) {
 async function handlePhotoUpload(event, siteName, siteId, refreshContainer) {
   var files = Array.from(event.target.files);
   if (!files.length) return;
-  toast('Compressing & uploading ' + files.length + ' photo(s)…', '');
+  toast('Compressing & uploading ' + files.length + ' photo(s)…', 'info');
   var uploaded = 0;
   for (var i = 0; i < files.length; i++) {
     var path = await uploadSitePhoto(files[i], siteName, siteId, '');
@@ -1329,6 +1332,32 @@ async function handlePhotoUpload(event, siteName, siteId, refreshContainer) {
   if (uploaded > 0) {
     toast('✓ ' + uploaded + ' photo(s) uploaded', 'ok');
     if (refreshContainer) renderPhotoSection(siteName, siteId, refreshContainer);
+  }
+}
+
+async function deletePhoto(photoId, storagePath, btnEl) {
+  if (!__sbUser) { toast('Sign in to delete photos', 'err'); return; }
+  if (!confirm('Delete this photo? This cannot be undone.')) return;
+  btnEl.disabled = true;
+  try {
+    // Delete from Supabase
+    if (__sbClient) {
+      await __sbClient.from('site_photos').delete().eq('id', photoId);
+    }
+    // Delete from R2 via worker
+    var workerBase = WORKER_URL.replace(/\/+$/, '');
+    await fetch(workerBase + '/photo-delete', {
+      method: 'POST',
+      headers: { 'Authorization': workerAuthHeader(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ key: storagePath })
+    });
+    // Remove tile from UI
+    var tile = btnEl.closest('[data-path]');
+    if (tile) tile.remove();
+    toast('Photo deleted', 'ok');
+  } catch(e) {
+    toast('Delete failed: ' + (e.message || e), 'err');
+    btnEl.disabled = false;
   }
 }
 
