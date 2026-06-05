@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.63</title>
+<title>Cars24 Projects Tracker v4.64</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4552,52 +4552,29 @@ function renderTaskTab(){
       break;
     }
   });
-  // Seed PO_MAP from allData (already populated by loadSupabaseSiteFields on page load)
-  allData.forEach(function(r){
-    var sn=(r['Site Name']||'').trim();
-    if(sn && r['PO Number'] && !PO_MAP[sn]) PO_MAP[sn]=r['PO Number'];
-  });
-  // Group by date column
-  var byDate={};
-  Object.values(latestBysite).forEach(function(entry){
-    if(!byDate[entry.col]) byDate[entry.col]=[];
-    byDate[entry.col].push(entry);
-  });
-  var dateCols=Object.keys(byDate).sort(function(a,b){
-    var da=pd(a),db=pd(b);
+  // Single flat list, newest task first, so today's (latest) tasks always surface at top.
+  var entries=Object.values(latestBysite).sort(function(a,b){
+    var da=pd(a.col),db=pd(b.col);
     if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
     return db-da;
   });
-  if(!dateCols.length){
+  if(!entries.length){
     el.innerHTML='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No tasks found — add updates with "Task: ..." prefix.</div>';
     return;
   }
   var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
-    +'<div style="font-size:14px;font-weight:700">📋 Action Items</div>'
+    +'<div style="font-size:14px;font-weight:700">📋 Action Items <span style="font-size:11px;font-weight:400;color:var(--muted)">— '+entries.length+' sites, latest first</span></div>'
     +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
-  dateCols.forEach(function(col){
-    html+='<div style="margin-bottom:16px">';
-    html+='<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;margin-bottom:6px;padding:4px 0;border-bottom:1px solid var(--border)">'+esc(col)+'</div>';
-    byDate[col].forEach(function(entry){
-      var siteKey=entry.site.replace(/"/g,'&quot;');
-      var poVal=esc(PO_MAP[entry.site]||'');
-      html+='<div style="margin-bottom:8px;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--primary)">';
-      html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
-      html+='<span style="font-size:12px;font-weight:600">'+esc(entry.site)+'</span>';
-      if(entry.owner) html+='<span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(entry.owner)+'</span>';
-      html+='<span style="margin-left:auto;display:flex;align-items:center;gap:4px">'
-        +'<span style="font-size:10px;color:var(--muted)">PO:</span>'
-        +'<input type="text" value="'+poVal+'" placeholder="Add PO#" '
-        +'onchange="savePO(\''+siteKey+'\',this.value)" '
-        +'style="font-size:10px;padding:2px 6px;border-radius:4px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);width:90px;outline:none" '
-        +'onclick="event.stopPropagation()">'
-        +'</span>';
-      html+='</div>';
-      entry.items.forEach(function(item){
-        html+='<div style="font-size:12px;color:var(--text);padding:1px 0">• '+esc(item)+'</div>';
-      });
-      html+='</div>';
+  entries.forEach(function(entry){
+    html+='<div style="margin-bottom:8px;padding:8px 10px;background:var(--surface);border-radius:6px;border-left:3px solid var(--primary)">';
+    html+='<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">';
+    html+='<span style="font-size:12px;font-weight:600">'+esc(entry.site)+'</span>';
+    if(entry.owner) html+='<span style="font-size:10px;color:var(--muted);font-weight:400">— '+esc(entry.owner)+'</span>';
+    html+='<span style="margin-left:auto;font-size:10px;font-weight:600;color:var(--primary);background:var(--surface-2);border-radius:4px;padding:2px 7px;white-space:nowrap">'+esc(entry.col)+'</span>';
+    html+='</div>';
+    entry.items.forEach(function(item){
+      html+='<div style="font-size:12px;color:var(--text);padding:1px 0">• '+esc(item)+'</div>';
     });
     html+='</div>';
   });
