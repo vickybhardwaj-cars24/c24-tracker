@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.59</title>
+<title>Cars24 Projects Tracker v4.60</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1207,7 +1207,9 @@ async function uploadSitePhoto(file, siteName, siteId, caption) {
   if (!__sbUser) { toast('Sign in first to upload photos', 'err'); return null; }
   if (!canUpload()) { toast('Please log in first to enable photo uploads', 'err'); return null; }
   try {
-    var compressed = await compressImage(file, 1200, 0.72);
+    var originalKb = Math.round(file.size / 1024);
+    var compressed = await compressImage(file, 1600, 0.65);
+    toast('Compressed: ' + originalKb + 'KB → ' + compressed.sizeKb + 'KB', 'info');
     var dateStr = new Date().toISOString().split('T')[0];
     var safeSite = (siteName || 'unknown').replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
     var fileName = safeSite + '_' + Date.now() + '.jpg';
@@ -1319,7 +1321,7 @@ async function renderPhotoSection(siteName, siteId, container) {
 async function handlePhotoUpload(event, siteName, siteId, refreshContainer) {
   var files = Array.from(event.target.files);
   if (!files.length) return;
-  toast('Compressing & uploading ' + files.length + ' photo(s)…', '');
+  toast('Compressing & uploading ' + files.length + ' photo(s)…', 'info');
   var uploaded = 0;
   for (var i = 0; i < files.length; i++) {
     var path = await uploadSitePhoto(files[i], siteName, siteId, '');
