@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.61</title>
+<title>Cars24 Projects Tracker v4.62</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -670,7 +670,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <div style="font-size:11px;color:var(--muted)">Click a row to filter table by PM</div>
   </div>
   <table class="pm-tbl"><thead><tr>
-    <th>PM</th><th>Sites</th><th>WIP</th><th>SAT</th><th>UAT</th><th>Overdue</th><th>Stale</th><th>Avg%</th><th>Blkrs</th><th>⏱ OTD</th><th>🔒 UAT%</th><th>🔧 Snag</th><th>Health</th>
+    <th>PM</th><th>Sites</th><th>WIP</th><th>SAT</th><th>UAT</th><th>Overdue</th><th>Stale</th><th>Avg%</th><th>📈 WoW Δ</th><th>Blkrs</th><th>⏱ OTD</th><th>🔒 UAT%</th><th>🔧 Snag</th><th>Health</th>
   </tr></thead><tbody id="pm-scorecard-body"></tbody></table>
 </div>
 <div id="tickv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
@@ -879,7 +879,7 @@ function onSbLoginSuccess() {
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
-          .then(function(){ buildFilters(); renderKPIs(); applyFilters(); });
+          .then(function(){ buildFilters(); renderKPIs(); applyFilters(); try{var _sk='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _sv={};allData.forEach(function(r){if(r['Site Name'])_sv[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_sk,JSON.stringify(_sv));}catch(_){} });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
       }
@@ -1722,6 +1722,24 @@ function kpiFlt(val){
     document.querySelectorAll('.kpi').forEach(k=>{if(k.dataset.val===val) k.classList.add('active');});
     setView('tv',document.querySelector('.vtab'));
     return;
+  } else if(val==='__due__'){
+    document.getElementById('search').value='';
+    all.forEach(c=>c.checked=true);
+    const caD=document.getElementById('chk-all');
+    if(caD) caD.checked=true;
+    updateStatusLbl();
+    const todayD=new Date(); todayD.setHours(0,0,0,0);
+    const in7D=new Date(todayD); in7D.setDate(todayD.getDate()+7);
+    filteredData=allData.filter(r=>{
+      if((r['SAT Date']||'').trim()) return false;
+      const d=pd(r['Revised Completion'])||pd(r['Planned Completion']);
+      return d&&d>=todayD&&d<=in7D;
+    });
+    document.getElementById('cchip').textContent=filteredData.length+' of '+allData.length+' sites';
+    renderAll();
+    document.querySelectorAll('.kpi').forEach(k=>{if(k.dataset.val===val) k.classList.add('active');});
+    setView('tv',document.querySelector('.vtab'));
+    return;
   } else {
     all.forEach(c=>c.checked=false);
     const opt=all.find(c=>c.value===val||c.value.toLowerCase()===val.toLowerCase());
@@ -1755,6 +1773,8 @@ function renderKPIs(){
   const c=fn=>allData.filter(fn).length;
   const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
   const warns=getUatWarnings().length;
+  const _in7=new Date(today); _in7.setDate(today.getDate()+7);
+  const dueWeek=allData.filter(r=>{if((r['SAT Date']||'').trim())return false;const d=pd(r['Revised Completion'])||pd(r['Planned Completion']);return d&&d>=today&&d<=_in7;}).length;
   const cfg=[
     {l:'Total',  v:allData.length, s:'all sites',   color:'#1a1d23', val:''},
     {l:'Active', v:allData.filter(r=>{const s=(r.Status||'').toLowerCase();return s.includes('wip')||s.includes('additional')||s.includes('to be start')||s==='design'||s==='boq';}).length, s:'team updating', color:'#0891b2', val:'__active__'},
@@ -1766,6 +1786,7 @@ function renderKPIs(){
     {l:'BD Stage',v:c(r=>r.Status?.toLowerCase()==='bd'), s:'biz dev', color:'#7c3aed', val:'BD'},
     {l:'⚠ Overdue',v:ov, s:'past planned', color:'#dc2626', val:'__ov__'},
     {l:'🔔 UAT Warn',v:warns, s:'≥15d since SAT', color:warns>0?'#dc2626':'#16a34a', val:'__warn__'},
+    {l:'⚡ Due 7d',v:dueWeek, s:'SAT milestone', color:dueWeek>0?'#2563eb':'#16a34a', val:'__due__'},
   ];
   document.getElementById('kpi-bar').innerHTML=cfg.map(k=>
     `<div class="kpi" data-val="${k.val}" onclick="${k.val==='__warn__'?`setView('inv',document.querySelectorAll('.vtab')[3]);setTimeout(()=>showInvTab('warn',document.querySelectorAll('.inv-tab')[3]),50)`:`kpiFlt('${k.val}')`}">
@@ -1901,6 +1922,8 @@ function renderTable(){
     const revD2=pd(r['Revised Completion']);const effPlan=revD2||planD;
     const isOv=effPlan&&effPlan<today&&!(r['SAT Date']||'').trim();
     const ovDays=isOv?Math.round((today-(revD2||planD))/86400000):0;
+    const daysToSAT=(!satD&&effPlan)?Math.round((effPlan-today)/86400000):null;
+    const nearMilestone=daysToSAT!==null&&daysToSAT>=0&&daysToSAT<=7;
     const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
     const isUatWarn=satD&&!uatD&&uatGap>=UAT_WARN_DAYS;
     const rowCls=isOv?'ov-row':isUatWarn?'warn-row':'';
@@ -1922,7 +1945,7 @@ function renderTable(){
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+fmtRaw(r['Work Start Date'])+'</td>',
       '<td style="font-size:11px;white-space:nowrap">'+fmtRaw(r['SAT Date'])+'</td>',
       '<td style="font-size:11px;'+(isUatWarn?'color:#d97706;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['UAT DATE'])+'</td>',
-      '<td style="font-size:11px;'+(isOv?'color:#dc2626;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['Planned Completion'])+'</td>',
+      '<td style="font-size:11px;'+(isOv?'color:#dc2626;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['Planned Completion'])+(nearMilestone?'<span style="font-size:9px;background:#eff6ff;color:#2563eb;padding:1px 4px;border-radius:3px;font-weight:700;margin-left:3px">⚡'+daysToSAT+'d</span>':'')+'</td>',
       (()=>{const rv=r['Revised Completion']||'';const pD2=pd(r['Planned Completion']),rD2=pd(rv);const slp=pD2&&rD2&&rD2>pD2?Math.round((rD2-pD2)/86400000):0;return '<td style="font-size:11px;white-space:nowrap;'+(slp?'color:#d97706;font-weight:600':'color:var(--muted)')+'">'+(rv?fmtRaw(rv)+(slp?' <span style="font-size:9px;background:#fffbeb;color:#d97706;padding:1px 4px;border-radius:3px">+'+slp+'d</span>':''):'<span style="color:#e5e7eb">—</span>')+'</td>';})(),
       '<td class="td-upd" style="max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(upd)+'</td>',
     ];
@@ -4727,10 +4750,17 @@ function staleTag(row){
 function renderPMScorecard(){
   var el=document.getElementById('pm-scorecard-body'); if(!el) return;
   var hdr=document.querySelector('#pmsv thead tr');
+  // Load week-on-week snapshot (5–10 days ago)
+  var _wowSnap=null;
+  try{
+    var _todayStr=new Date().toISOString().slice(0,10);
+    for(var _d=5;_d<=10;_d++){var _dd=new Date();_dd.setDate(_dd.getDate()-_d);var _dk='c24_pct_snap_'+_dd.toISOString().slice(0,10);var _dv=localStorage.getItem(_dk);if(_dv){_wowSnap=JSON.parse(_dv);break;}}
+  }catch(_){}
   if(hdr) hdr.innerHTML='<th>PM</th><th title="Total active sites">Sites</th><th>WIP</th><th>SAT</th><th>UAT</th>'
     +'<th style="color:#dc2626" title="Past planned/revised completion date">Overdue</th>'
     +'<th style="color:#d97706" title="No update in 5+ days">Stale</th>'
     +'<th>Avg%</th>'
+    +'<th title="Week-on-week avg % change (requires snapshot from 5-10 days ago)">📈 WoW Δ</th>'
     +'<th title="Sites with active blockers">Blkrs</th>'
     +'<th title="On-time delivery score: UAT done before planned date">⏱ OTD</th>'
     +'<th title="UAT closure rate: UAT done / SAT done">🔒 UAT%</th>'
@@ -4768,6 +4798,14 @@ function renderPMScorecard(){
     var otdPct=d.uat>0?Math.round((d.onTime/d.uat)*100):'-';
     var uatRate=d.sat>0?Math.round((d.uat/d.sat)*100):'-';
     var avgSnag=d.snagSites>0?Math.round(d.snagPts/d.snagSites):'-';
+    // WoW delta: compare current avg% to snapshot avg%
+    var wowDelta='-';
+    if(_wowSnap){
+      var pmSites2=allData.filter(function(r){return (r['Owner']||'').trim()===o&&r['Site Name'];});
+      var snapSum=0,snapCt=0;
+      pmSites2.forEach(function(r){var sv=_wowSnap[r['Site Name']];if(sv!==undefined){snapSum+=sv;snapCt++;}});
+      if(snapCt>0){var snapAvg=Math.round(snapSum/snapCt);wowDelta=avg-snapAvg;}
+    }
     // KRA health: weighted
     var health=d.overdue>2||d.stale>3?'🔴':d.overdue>0||d.stale>1?'🟡':'🟢';
     var hbg=d.overdue>2||d.stale>3?'#fef2f2':d.overdue>0||d.stale>1?'#fffbeb':'#f0fdf4';
@@ -4780,6 +4818,7 @@ function renderPMScorecard(){
       +'<td style="text-align:center;color:'+(d.overdue?'#dc2626':'#16a34a')+';font-weight:700">'+d.overdue+'</td>'
       +'<td style="text-align:center;color:'+(d.stale?'#d97706':'#16a34a')+'">'+d.stale+'</td>'
       +'<td style="text-align:center">'+avg+'%</td>'
+      +'<td style="text-align:center;font-weight:700;color:'+(wowDelta==='-'?'var(--muted)':wowDelta>0?'#16a34a':wowDelta<0?'#dc2626':'var(--muted)')+'">'+(wowDelta==='-'?'—':wowDelta>0?'+'+wowDelta+'%':wowDelta+'%')+'</td>'
       +'<td style="text-align:center">'+d.blockers+'</td>'
       +'<td style="text-align:center;font-weight:700;color:'+(otdPct!=='-'&&otdPct>=70?'#16a34a':'#d97706')+'">'+(otdPct!=='-'?otdPct+'%':'-')+'</td>'
       +'<td style="text-align:center;font-weight:700;color:'+(uatRate!=='-'&&uatRate>=70?'#16a34a':'#d97706')+'">'+(uatRate!=='-'?uatRate+'%':'-')+'</td>'
@@ -4787,7 +4826,7 @@ function renderPMScorecard(){
       +'<td style="text-align:center;font-size:16px;background:'+hbg+'">'+health+'</td>'
       +'</tr>';
   }).join('');
-  el.innerHTML=pmRows||'<tr><td colspan="13" style="text-align:center;color:var(--muted);padding:20px">No data — upload a CSV first.</td></tr>';
+  el.innerHTML=pmRows||'<tr><td colspan="14" style="text-align:center;color:var(--muted);padding:20px">No data — upload a CSV first.</td></tr>';
   el.parentNode.querySelectorAll('tr.pm-row').forEach(function(tr){
     tr.addEventListener('click',function(){
       var o=this.getAttribute('data-owner');
@@ -5468,14 +5507,11 @@ function showTicketDetail(id){
   document.getElementById('mbody').innerHTML=html+pfBtn;
 }
 
-function generateTicketSlack(){
-  if(!TICKET_DATA.length){toast('No ticket data loaded','err');return;}
+function buildTicketSlackLines(){
   function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return row[names[i]]||'';}return '';}
   var today=new Date();
   var dateStr=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
   var lines=['*🎫 Project Open Tickets Summary — '+dateStr+'*',''];
-
-  // Group by site
   var bySite={};
   TICKET_DATA.forEach(function(r){
     var store=col(r,['Store','store']);
@@ -5483,19 +5519,13 @@ function generateTicketSlack(){
     if(!bySite[site]) bySite[site]=[];
     bySite[site].push(r);
   });
-
-  // Stats header
   var total=TICKET_DATA.length;
   var urgent=TICKET_DATA.filter(function(r){return col(r,['Priority']).toLowerCase()==='urgent';}).length;
   var over30=TICKET_DATA.filter(function(r){return parseInt(col(r,['TAT','Open Since Days','Open Since'])||0)>30;}).length;
   var unassigned=TICKET_DATA.filter(function(r){var a=col(r,['Assigned To']);return !a||a.toLowerCase()==='unassigned';}).length;
   lines.push('📊 *'+total+' open* · 🚨 '+urgent+' urgent · ⏰ '+over30+' over 30d · ❓ '+unassigned+' unassigned','');
-
-  // Per site
   Object.keys(bySite).sort().forEach(function(site){
     var tickets=bySite[site];
-    var urgents=tickets.filter(function(r){return col(r,['Priority']).toLowerCase()==='urgent';});
-    var highs=tickets.filter(function(r){return col(r,['Priority']).toLowerCase()==='high';});
     lines.push('*📍 '+site+'* ('+tickets.length+' tickets)');
     tickets.slice(0,5).forEach(function(r){
       var pri=col(r,['Priority']);
@@ -5509,9 +5539,13 @@ function generateTicketSlack(){
     if(tickets.length>5) lines.push('  _...and '+(tickets.length-5)+' more_');
     lines.push('');
   });
-
   lines.push('_Full details: CARS24 Projects Tracker_');
-  document.getElementById('slack-preview').textContent=lines.join('\n');
+  return lines.join('\n');
+}
+
+function generateTicketSlack(){
+  if(!TICKET_DATA.length){toast('No ticket data loaded','err');return;}
+  document.getElementById('slack-preview').textContent=buildTicketSlackLines();
   document.getElementById('slack-modal').style.display='flex';
 }
 
@@ -5796,6 +5830,7 @@ function renderSlackTab(subTab){
   var nav='<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSlackTab(\'crossfunc\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='crossfunc'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Cross-Functional</button>'
     +'<button onclick="renderSlackTab(\'pmupdate\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='pmupdate'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">PM Update</button>'
+    +'<button onclick="renderSlackTab(\'tickets\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='tickets'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">🎫 Tickets</button>'
     +'</div>';
   if(subTab==='crossfunc'){
     var bt={'IT':[],'Design':[],'Commercial':[],'HEM':[],'BD':[],'Other':[]};
@@ -5849,6 +5884,19 @@ function renderSlackTab(subTab){
     el.innerHTML=nav+'<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
       +'<button class="btn btn-p btn-sm" onclick="copyToClipboard(\'cf-prev\')">Copy for Slack</button></div>'
       +'<pre id="cf-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(lines.join('\n'))+'</pre>';
+    return;
+  }
+  if(subTab==='tickets'){
+    var tsAge='';
+    if(window.__ticketsLoadedAt){var ageMins=Math.round((Date.now()-window.__ticketsLoadedAt)/60000);tsAge=ageMins<=1?'just now':ageMins+'m ago';}
+    var tickLines=TICKET_DATA.length?buildTicketSlackLines():'No ticket data loaded — click Refresh to fetch live.';
+    el.innerHTML=nav
+      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">'
+      +'<button class="btn btn-o btn-sm" onclick="(function(){var b=event.target;b.textContent=\'⟳ Refreshing…\';b.disabled=true;var url=pfTicketsUrl();pfFetch(url).then(function(t){var rows=parsePFPayload(t);TICKET_DATA=rows;window.__ticketsLoadedAt=Date.now();renderSlackTab(\'tickets\');toast(\'✓ \'+rows.length+\' tickets loaded\',\'ok\');}).catch(function(e){toast(\'Refresh failed: \'+(e.message||e),\'err\');b.textContent=\'🔄 Refresh\';b.disabled=false;});})()" style="white-space:nowrap">🔄 Refresh Tickets</button>'
+      +(tsAge?'<span style="font-size:11px;color:var(--muted)">Last updated: '+tsAge+'</span>':'<span style="font-size:11px;color:var(--muted)">Showing cached data</span>')
+      +(TICKET_DATA.length?'<button class="btn btn-p btn-sm" onclick="copyToClipboard(\'tick-prev\')" style="margin-left:auto">Copy for Slack</button>':'')
+      +'</div>'
+      +'<pre id="tick-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(tickLines)+'</pre>';
     return;
   }
   var owners=[];
@@ -6535,6 +6583,7 @@ function syncTicketsFromPF() {
     .then(function(text) {
       var rows = parsePFPayload(text);
       TICKET_DATA = rows;
+      window.__ticketsLoadedAt = Date.now();
       var ts = document.getElementById('csv-ts-tickets');
       if (ts) ts.textContent = '';
       stampCSV('tickets');
@@ -6570,6 +6619,7 @@ function loadTicketsFromPF() {
     .then(function(text) {
       var rows = parsePFPayload(text);
       TICKET_DATA = rows;
+      window.__ticketsLoadedAt = Date.now();
       stampCSV('tickets');
       var el = document.getElementById('tickv');
       if (el && el.style.display !== 'none') renderTicketTab();
@@ -7439,6 +7489,7 @@ function handleLiveCSV(event){
         allData = parseCSV(csvText).filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
         buildFilters(); renderKPIs(); applyFilters();
+        try{var _snapKey='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _snap={};allData.forEach(function(r){if(r['Site Name'])_snap[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_snapKey,JSON.stringify(_snap));}catch(_s){}
       } catch(_) {}
     })
     .catch(function(err){
