@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.73</title>
+<title>Cars24 Projects Tracker v4.74</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4664,9 +4664,9 @@ function renderTaskTab(){
     if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
     return db-da;
   });
-  // Collect the latest 4 date columns that have ANY Task: entry
+  // Collect only the single most recent date column that has ANY Task: entry
   var activeCols=[];
-  for(var ci=0;ci<orderedCols.length&&activeCols.length<4;ci++){
+  for(var ci=0;ci<orderedCols.length&&activeCols.length<1;ci++){
     var col=orderedCols[ci];
     var found=allData.some(function(r){
       if(!r['Site Name']) return false;
