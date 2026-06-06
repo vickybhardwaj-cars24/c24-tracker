@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.74</title>
+<title>Cars24 Projects Tracker v4.76</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -701,6 +701,8 @@ let TICKET_DATA = [];
 let ATTENDANCE_DATA = [];
 var SCHED_DATA = {}; // Cars24 scope: { siteName: [ {po, tasks:[{sno,task,vendor,startDate,endDate,done}]} ] }
 var LL_SCOPE_DATA = {}; // Landlord scope: { siteName: [ {task, expectedDate, done} ] }
+var PROCURE_DATA = {}; // Procurement plan: { siteName: [{sno,item,orderDate,deliveryDate,dependency,ordered,delivered}] }
+try { PROCURE_DATA = JSON.parse(localStorage.getItem('procure_data')||'{}'); } catch(e) {}
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -2338,12 +2340,15 @@ function renderSatUat(){
       var cd=pd(u.r['Revised Completion'])||pd(u.r['Planned Completion']);
       var cdStr=cd?cd.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'--';
       var fc=u.hasRev?'#dc2626':'#ea580c';
-      return '<tr style="border-bottom:1px solid var(--border)">'  
+      var sn=(u.r['Site Name']||'').trim();
+      var hemTotal=getHemDelayTotal(sn);
+      var hemBadge=hemTotal>0?'<span style="margin-left:6px;font-size:10px;background:#fef3c7;color:#92400e;padding:1px 6px;border-radius:4px;border:1px solid #fde68a;font-weight:700">⏳ HEM '+hemTotal+'d</span>':'';
+      return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'--')+'</td>'
         +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'--')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+cdStr+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-size:11px">'+esc(u.r['Status']||'--')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;font-size:11px;font-weight:700;color:'+fc+'">'+u.label+'</td>'
+        +'<td style="padding:6px 10px;text-align:center;font-size:11px;font-weight:700;color:'+fc+'">'+u.label+hemBadge+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>';
   }
@@ -2367,7 +2372,73 @@ function renderSatUat(){
         +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>':'';
-  el.innerHTML=_snav+_ndH+_sdH+_dH+_wH+_oH+(
+
+  // ── Priority Sites: SAT/UAT due this week ──────────────────────
+  var _today7=new Date();_today7.setHours(0,0,0,0);
+  var _d7=new Date(_today7.getTime()+7*86400000);
+  var prioritySites=[];
+  allData.forEach(function(r,i){
+    var st=(r['Status']||'').toLowerCase();
+    if(st.includes('hold')||st.includes('cancel')) return;
+    var satD2=pd(r['SAT Date']),uatD2=pd(r['UAT DATE']);
+    if(uatD2) return; // fully done
+    if(!satD2){
+      // SAT pending — check if committed date is within next 7 days
+      var cd2=committedDate(r);
+      if(cd2&&cd2>=_today7&&cd2<=_d7){
+        prioritySites.push({r:r,idx3:i,type:'SAT',deadline:cd2,daysLeft:Math.round((cd2-_today7)/86400000)});
+      }
+    } else {
+      // SAT done, UAT pending — check if UAT target (SAT+10d) is within next 7 days
+      var uatTarget2=new Date(satD2.getTime()+10*86400000);
+      if(uatTarget2>=_today7&&uatTarget2<=_d7){
+        prioritySites.push({r:r,idx3:i,type:'UAT',deadline:uatTarget2,daysLeft:Math.round((uatTarget2-_today7)/86400000)});
+      }
+    }
+  });
+  var _prH='';
+  if(prioritySites.length){
+    var M3=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    _prH='<div style="margin-bottom:16px;background:#fff8f0;border:2px solid #f97316;border-radius:10px;overflow:hidden">'
+      +'<div style="background:#f97316;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">'
+      +'<div style="color:#fff;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em">🔥 Priority This Week — Handover Due ('+prioritySites.length+')</div>'
+      +'<div style="color:rgba(255,255,255,.8);font-size:10px">SAT or UAT deadline within 7 days</div>'
+      +'</div>'
+      +'<div style="padding:0 0 4px">'
+      +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#fff1e6">'
+      +'<th style="padding:7px 10px;text-align:left;font-size:10px;color:#9a3412;font-weight:700">Site</th>'
+      +'<th style="padding:7px 10px;text-align:left;font-size:10px;color:#9a3412;font-weight:700">PM</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">Type</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">Deadline</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">Days Left</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">PO Date</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">Kickoff</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">Work Start</th>'
+      +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#9a3412;font-weight:700">Action</th>'
+      +'</tr></thead><tbody>'
+      +prioritySites.map(function(ps){
+        var dl=ps.deadline;
+        var dlStr=dl.getDate()+' '+M3[dl.getMonth()];
+        var dColor=ps.daysLeft<=2?'#dc2626':ps.daysLeft<=4?'#d97706':'#16a34a';
+        var typeBg=ps.type==='SAT'?'background:#dcfce7;color:#15803d':'background:#ede9fe;color:#7c3aed';
+        return '<tr style="border-bottom:1px solid #fed7aa">'
+          +'<td style="padding:7px 10px;font-weight:700;cursor:pointer" onclick="openModal('+ps.idx3+')">'+esc(ps.r['Site Name']||'—')+'</td>'
+          +'<td style="padding:7px 10px">'+esc(ps.r['Owner']||'—')+'</td>'
+          +'<td style="padding:7px 10px;text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;'+typeBg+'">'+ps.type+'</span></td>'
+          +'<td style="padding:7px 10px;text-align:center;font-weight:700">'+dlStr+'</td>'
+          +'<td style="padding:7px 10px;text-align:center;font-weight:800;color:'+dColor+'">'+ps.daysLeft+'d</td>'
+          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+esc(ps.r['PO Date']||'—')+'</td>'
+          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+esc(ps.r['Kickoff Date']||'—')+'</td>'
+          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+esc(ps.r['Work Start Date']||'—')+'</td>'
+          +'<td style="padding:7px 10px;text-align:center">'
+          +'<a href="'+handoverUrgencyMail(ps.r)+'" target="_blank" onclick="event.stopPropagation()" '
+          +'style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;text-decoration:none;background:#f97316;color:#fff;white-space:nowrap">📨 Handover Email</a>'
+          +'</td></tr>';
+      }).join('')
+      +'</tbody></table></div></div>';
+  }
+
+  el.innerHTML=_prH+_snav+_ndH+_sdH+_dH+_wH+_oH+(
     (satCommHtml||uatCommHtml
       ? '<div style="margin-bottom:20px;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:12px">'
         +'<div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">📧 Communication Required <span style="font-size:10px;font-weight:400;color:var(--muted)">Email HEM + Design team — fills To: field manually</span></div>'
@@ -3225,6 +3296,288 @@ function saveStatusEdit(idx) {
   toast('✓ Status updated to '+newStatus, 'ok');
 }
 
+// ── Procurement Plan helpers ─────────────────────────────────────
+function saveProcureData(){ try{localStorage.setItem('procure_data',JSON.stringify(PROCURE_DATA));}catch(e){} }
+
+function parseProcurementCSV(text){
+  var lines=text.split('\n').map(function(l){return l.trim();}).filter(function(l){return l;});
+  if(!lines.length) return [];
+  var start=0;
+  if(/s\.?\s*no/i.test(lines[0].split(',')[0])) start=1;
+  return lines.slice(start).map(function(line){
+    var cols=line.split(',').map(function(c){return c.trim();});
+    return {sno:cols[0]||'',item:cols[1]||'',orderDate:cols[2]||'',deliveryDate:cols[3]||'',dependency:cols[4]||'',ordered:false,delivered:false};
+  }).filter(function(x){return x.item;});
+}
+
+function handleProcureUpload(event,siteName,idx){
+  var file=event.target.files[0]; if(!file) return;
+  var reader=new FileReader();
+  reader.onload=function(e){
+    var items=parseProcurementCSV(e.target.result);
+    if(!items.length){toast('No items found in CSV','warn');return;}
+    if(!PROCURE_DATA[siteName]) PROCURE_DATA[siteName]=[];
+    var existing=PROCURE_DATA[siteName];
+    items.forEach(function(ni){
+      var ex=existing.find(function(x){return x.item.trim().toLowerCase()===ni.item.trim().toLowerCase();});
+      if(ex){ex.sno=ni.sno;ex.orderDate=ni.orderDate;ex.deliveryDate=ni.deliveryDate;ex.dependency=ni.dependency;}
+      else existing.push(ni);
+    });
+    saveProcureData();
+    toast('Procurement plan: '+items.length+' items loaded','ok');
+    refreshProcureSection(idx);
+  };
+  reader.readAsText(file);
+}
+
+function toggleProcureStatus(siteName,itemIdx,field,idx){
+  var items=PROCURE_DATA[siteName]; if(!items||!items[itemIdx]) return;
+  items[itemIdx][field]=!items[itemIdx][field];
+  if(field==='delivered'&&items[itemIdx].delivered) items[itemIdx].ordered=true;
+  saveProcureData();
+  refreshProcureSection(idx);
+}
+
+function deleteProcureItem(siteName,itemIdx,idx){
+  var items=PROCURE_DATA[siteName]; if(!items) return;
+  items.splice(itemIdx,1);
+  saveProcureData();
+  refreshProcureSection(idx);
+}
+
+function renderProcureSection(r,idx){
+  var siteName=(r['Site Name']||'').trim();
+  var siteNameEsc=siteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var items=PROCURE_DATA[siteName]||[];
+  var today=new Date();today.setHours(0,0,0,0);
+  var total=items.length,ordered=0,delivered=0,overdue=0;
+  items.forEach(function(it){
+    if(it.ordered) ordered++;
+    if(it.delivered) delivered++;
+    if(!it.delivered&&it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) overdue++;}
+  });
+  var uploadId='procure-inp-'+idx;
+  var uploadBtn='<label class="btn btn-o btn-sm" for="'+uploadId+'" style="cursor:pointer;font-size:11px">+ Upload CSV</label>'
+    +'<input type="file" id="'+uploadId+'" accept=".csv" style="display:none" onchange="handleProcureUpload(event,\''+siteNameEsc+'\','+idx+')">';
+  var statsHtml='';
+  if(total){
+    var pctDel=Math.round(delivered/total*100);
+    var barColor=pctDel===100?'#16a34a':pctDel>=50?'#2563eb':'#f59e0b';
+    statsHtml='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">'
+      +'<div style="background:#f0f7ff;border:1px solid #c7d7f0;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
+      +'<div style="font-size:18px;font-weight:800;color:#1e3a5f">'+total+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Total</div></div>'
+      +'<div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
+      +'<div style="font-size:18px;font-weight:800;color:#15803d">'+ordered+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Ordered</div></div>'
+      +'<div style="background:#ede9fe;border:1px solid #ddd6fe;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
+      +'<div style="font-size:18px;font-weight:800;color:#7c3aed">'+delivered+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Delivered</div></div>'
+      +(overdue?'<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
+      +'<div style="font-size:18px;font-weight:800;color:#dc2626">'+overdue+'</div><div style="font-size:9px;color:#dc2626;text-transform:uppercase">Overdue</div></div>':'')
+      +'</div>'
+      +'<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;margin-bottom:3px">'
+      +'<span style="font-size:10px;color:var(--muted)">Delivery progress</span>'
+      +'<span style="font-size:11px;font-weight:700;color:'+barColor+'">'+pctDel+'%</span></div>'
+      +'<div style="height:7px;background:#e5e7eb;border-radius:4px;overflow:hidden">'
+      +'<div style="height:100%;width:'+pctDel+'%;background:'+barColor+';border-radius:4px;transition:width .3s"></div></div></div>';
+  }
+  var tableHtml='';
+  if(total){
+    tableHtml='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:11px">'
+      +'<thead><tr style="background:var(--surface-2)">'
+      +'<th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">#</th>'
+      +'<th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Item</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Order Date</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delivery Date</th>'
+      +'<th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Dependency</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Ordered</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delivered</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase"></th>'
+      +'</tr></thead><tbody>'
+      +items.map(function(it,i){
+        var dd=pd(it.deliveryDate);
+        var isOverdue=!it.delivered&&dd&&dd<today;
+        var rowBg=isOverdue?'background:#fef2f2':it.delivered?'background:#f0fdf4':'';
+        var delStyle=isOverdue?'font-weight:700;color:#dc2626':it.delivered?'color:#15803d':'';
+        return '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
+          +'<td style="padding:5px 8px;color:var(--muted)">'+esc(it.sno)+'</td>'
+          +'<td style="padding:5px 8px;font-weight:600">'+(isOverdue?'🔴 ':it.delivered?'✅ ':'')+esc(it.item)+'</td>'
+          +'<td style="padding:5px 8px;text-align:center;color:var(--muted)">'+esc(it.orderDate||'—')+'</td>'
+          +'<td style="padding:5px 8px;text-align:center;'+delStyle+'">'+esc(it.deliveryDate||'—')+(isOverdue?' ⚠':'')+'</td>'
+          +'<td style="padding:5px 8px;color:var(--muted);font-size:10px">'+esc(it.dependency||'—')+'</td>'
+          +'<td style="padding:5px 8px;text-align:center">'
+          +'<input type="checkbox" '+(it.ordered?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'ordered\','+idx+')" style="cursor:pointer"></td>'
+          +'<td style="padding:5px 8px;text-align:center">'
+          +'<input type="checkbox" '+(it.delivered?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'delivered\','+idx+')" style="cursor:pointer"></td>'
+          +'<td style="padding:5px 8px;text-align:center">'
+          +'<button onclick="deleteProcureItem(\''+siteNameEsc+'\','+i+','+idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px" title="Remove">✕</button>'
+          +'</td></tr>';
+      }).join('')
+      +'</tbody></table></div>';
+  }
+  return '<div id="procure-sec-'+idx+'" data-procure-section style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">'
+    +'<div>'
+    +'<div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">📦 Procurement Plan</div>'
+    +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(total?total+' items · track order & delivery status':'Upload CSV to track procurement for this site')+'</div>'
+    +'</div>'
+    +uploadBtn
+    +'</div>'
+    +statsHtml
+    +(total?tableHtml:'<div style="font-size:11px;color:var(--muted);padding:4px 0">No procurement plan uploaded yet. CSV format: <code>S.No., Item, Order Date, Delivery Date, Dependency</code></div>')
+    +'</div>';
+}
+
+function refreshProcureSection(idx){
+  var r=allData[idx];if(!r) return;
+  var sec=document.getElementById('procure-sec-'+idx);
+  if(!sec) return;
+  var wrapper=document.createElement('div');
+  wrapper.innerHTML=renderProcureSection(r,idx);
+  sec.parentNode.replaceChild(wrapper.firstChild,sec);
+}
+
+// ── Priority / This-Week Handover helpers ─────────────────────────
+function handoverUrgencyMail(r){
+  var site=r['Site Name']||'Site';
+  var owner=r['Owner']||'PM';
+  var vendor=r['Vendor']||'—';
+  var satD=pd(r['SAT Date']);
+  var satDone=!!satD;
+  var cd=committedDate(r);
+  var cdStr=cd?cd.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var uatTarget=satD?new Date(satD.getTime()+10*86400000):null;
+  var uatStr=uatTarget?uatTarget.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var poDate=r['PO Date']||'—';
+  var ksDate=r['Kickoff Date']||'—';
+  var wsDate=r['Work Start Date']||'—';
+  var type=satDone?'UAT':'SAT';
+  var deadline=satDone?uatStr:cdStr;
+  var subj='🔴 Urgent: '+type+' Handover Deadline This Week — '+site+' — '+deadline;
+  var body='Dear Team,\n\nThis is an urgent reminder that the '+type+' handover for the below site is due this week.\n\n'
+    +'━━━━━━━━━━━━━━━━━━\nSite: '+site+'\nPM: '+owner+'\nVendor: '+vendor+'\n'
+    +'PO Date: '+poDate+'\nKickoff Date: '+ksDate+'\nWork Start Date: '+wsDate+'\n'
+    +(satDone?'SAT Completed: '+r['SAT Date']+'\nUAT Deadline: '+uatStr:'Committed SAT Date: '+cdStr)+'\n'
+    +'━━━━━━━━━━━━━━━━━━\n\n'
+    +'We are observing a potential delay in the final handover of this site. Request all concerned teams — HEM, Design, and Vendor — to prioritize and complete the '+type+' inspection by the stipulated deadline.\n\n'
+    +'Please confirm your schedule at the earliest.\n\nRegards,\n'+owner+'\nCARS24 Projects Team';
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+
+// ── HEM Delay helpers ────────────────────────────────────────────
+function getHemDelayTotal(siteName){
+  var entries=(HEM_DELAYS[siteName]||[]);
+  return entries.reduce(function(s,e){return s+(parseInt(e.days,10)||0);},0);
+}
+function saveHemDelays(){
+  try{localStorage.setItem('hem_delays',JSON.stringify(HEM_DELAYS));}catch(e){}
+}
+function logHemDelay(siteName,days,reason){
+  if(!HEM_DELAYS[siteName]) HEM_DELAYS[siteName]=[];
+  HEM_DELAYS[siteName].push({days:parseInt(days,10)||0,reason:reason||'',loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})});
+  saveHemDelays();
+}
+function deleteHemDelay(siteName,entryIdx){
+  if(!HEM_DELAYS[siteName]) return;
+  HEM_DELAYS[siteName].splice(entryIdx,1);
+  saveHemDelays();
+}
+function renderHemSection(r,idx){
+  var siteName=(r['Site Name']||'').trim();
+  var entries=HEM_DELAYS[siteName]||[];
+  var totalHem=getHemDelayTotal(siteName);
+  var poD=pd(r['PO Date']),satD=pd(r['SAT Date']);
+  var poSatActual=poD&&satD?Math.round((satD-poD)/86400000):null;
+  var poSatNet=poSatActual!==null?poSatActual-totalHem:null;
+  var TARGET=40;
+  var netColor=poSatNet===null?'#6b7280':poSatNet<=TARGET?'#16a34a':'#dc2626';
+  var timelineHtml='';
+  if(poD){
+    timelineHtml='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
+    if(poSatActual!==null){
+      timelineHtml+='<div style="background:#f0f7ff;border:1px solid #c7d7f0;border-radius:6px;padding:7px 12px;min-width:110px">'
+        +'<div style="font-size:9px;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">PO→SAT (Actual)</div>'
+        +'<div style="font-size:18px;font-weight:800;color:#1e3a5f;line-height:1.2">'+poSatActual+'d</div>'
+        +'<div style="font-size:9px;color:#6b7280">Target: '+TARGET+'d</div>'
+        +'</div>';
+    }
+    if(totalHem>0){
+      timelineHtml+='<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:7px 12px;min-width:110px">'
+        +'<div style="font-size:9px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.05em">HEM Delay</div>'
+        +'<div style="font-size:18px;font-weight:800;color:#92400e;line-height:1.2">'+totalHem+'d</div>'
+        +'<div style="font-size:9px;color:#92400e">Excluded from timeline</div>'
+        +'</div>';
+      timelineHtml+='<div style="background:'+(poSatNet<=TARGET?'#f0fdf4':'#fef2f2')+';border:1px solid '+(poSatNet<=TARGET?'#bbf7d0':'#fecaca')+';border-radius:6px;padding:7px 12px;min-width:110px">'
+        +'<div style="font-size:9px;font-weight:600;color:'+netColor+';text-transform:uppercase;letter-spacing:.05em">Net PO→SAT</div>'
+        +'<div style="font-size:18px;font-weight:800;color:'+netColor+';line-height:1.2">'+poSatNet+'d</div>'
+        +'<div style="font-size:9px;color:'+netColor+'">'+(poSatNet<=TARGET?'✅ Within target':'⚠ Over target')+'</div>'
+        +'</div>';
+    } else if(poSatActual===null){
+      timelineHtml+='<div style="font-size:11px;color:#6b7280;padding:4px 0">SAT not completed yet — net timeline will show once SAT date is filled.</div>';
+    }
+    timelineHtml+='</div>';
+  } else {
+    timelineHtml='<div style="font-size:11px;color:#6b7280;padding:4px 0 8px">PO Date not set — timeline will appear once PO Date is filled.</div>';
+  }
+  var entriesHtml=entries.length
+    ?entries.map(function(e,i){
+      return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:6px 0;border-bottom:1px solid #fef3c7">'
+        +'<div>'
+        +'<span style="font-size:12px;font-weight:700;color:#92400e">'+e.days+' days</span>'
+        +(e.reason?'<span style="font-size:11px;color:#78350f;margin-left:6px">— '+esc(e.reason)+'</span>':'')
+        +'<div style="font-size:10px;color:#a16207;margin-top:1px">Logged: '+esc(e.loggedOn)+'</div>'
+        +'</div>'
+        +'<button onclick="deleteHemDelay(\''+esc(siteName).replace(/'/g,"\\'")+'\','+i+');refreshHemSection('+idx+')" '
+        +'style="background:none;border:none;color:#d97706;cursor:pointer;font-size:13px;padding:0 4px" title="Remove">✕</button>'
+        +'</div>';
+    }).join('')
+    :'<div style="font-size:11px;color:#a16207;padding:4px 0">No HEM delays logged yet.</div>';
+  return '<div id="hem-delay-sec-'+idx+'" data-hem-section style="background:#fffdf5;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">'
+    +'<div>'
+    +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">⏳ HEM Delay Tracker</div>'
+    +'<div style="font-size:10px;color:#a16207;margin-top:1px">Log inspection delays caused by HEM team — excluded from PO→SAT calculation (target: '+TARGET+'d)</div>'
+    +'</div>'
+    +'<button onclick="showHemForm('+idx+')" id="hem-add-btn-'+idx+'" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;border:1px solid #d97706;background:#fef3c7;color:#92400e;cursor:pointer">+ Log Delay</button>'
+    +'</div>'
+    +timelineHtml
+    +'<div id="hem-form-'+idx+'" style="display:none;margin-bottom:10px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">'
+    +'<div style="font-size:10px;font-weight:600;color:#92400e;margin-bottom:8px;text-transform:uppercase">New HEM Delay Entry</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<div><label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Days delayed</label>'
+    +'<input type="number" min="1" id="hem-days-'+idx+'" placeholder="e.g. 5" style="width:80px;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
+    +'<div style="flex:1;min-width:140px"><label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Reason (optional)</label>'
+    +'<input type="text" id="hem-reason-'+idx+'" placeholder="e.g. Awaiting inspection slot" style="width:100%;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:8px">'
+    +'<button onclick="submitHemDelay('+idx+',\''+esc(siteName).replace(/'/g,"\\'")+'\'+\'\')" style="padding:5px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+    +'<button onclick="document.getElementById(\'hem-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;font-size:11px;cursor:pointer">Cancel</button>'
+    +'</div>'
+    +'</div>'
+    +'<div id="hem-entries-'+idx+'">'+entriesHtml+'</div>'
+    +'</div>';
+}
+function refreshHemSection(idx){
+  var r=allData[idx];if(!r) return;
+  var sec=document.getElementById('hem-delay-sec-'+idx);
+  if(!sec) return;
+  var wrapper=document.createElement('div');
+  wrapper.innerHTML=renderHemSection(r,idx);
+  sec.parentNode.replaceChild(wrapper.firstChild,sec);
+}
+function showHemForm(idx){
+  var f=document.getElementById('hem-form-'+idx);
+  if(f){f.style.display='block';var di=document.getElementById('hem-days-'+idx);if(di)di.focus();}
+}
+function submitHemDelay(idx,siteName){
+  var dEl=document.getElementById('hem-days-'+idx);
+  var rEl=document.getElementById('hem-reason-'+idx);
+  var days=dEl?parseInt(dEl.value,10):0;
+  if(!days||days<1){toast('Enter a valid number of days','warn');return;}
+  var reason=rEl?rEl.value.trim():'';
+  logHemDelay(siteName,days,reason);
+  refreshHemSection(idx);
+  toast('HEM delay of '+days+' days logged','ok');
+}
+
 // ═══════════════════════════════════════════════════════════════
 function openModal(idx){
   const r=allData[idx];if(!r) return;
@@ -3420,6 +3773,8 @@ function openModal(idx){
     </div>
     ${llScopeHtml}
     ${llHtml}
+    ${renderHemSection(r,idx)}
+    ${renderProcureSection(r,idx)}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
@@ -4861,6 +5216,9 @@ var CC_MAP = {}; // site_name → cost_center code, loaded from Supabase
 var VR_CACHE = []; // vendor_ratings loaded from Supabase
 var UAT_EXEMPTIONS = {}; // site_name → {reason, by, at}
 try { UAT_EXEMPTIONS = JSON.parse(localStorage.getItem('uat_exemptions')||'{}'); } catch(e) {}
+
+var HEM_DELAYS = {}; // site_name → [{days, reason, loggedOn}]
+try { HEM_DELAYS = JSON.parse(localStorage.getItem('hem_delays')||'{}'); } catch(e) {}
 
 const DRIVE_ROOT = 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
 function getDriveLink(s){return DRIVE_MAP[(s||'').trim()]||DRIVE_ROOT;}
