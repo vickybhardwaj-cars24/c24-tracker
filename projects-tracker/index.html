@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.74</title>
+<title>Cars24 Projects Tracker v4.75</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3225,6 +3225,122 @@ function saveStatusEdit(idx) {
   toast('✓ Status updated to '+newStatus, 'ok');
 }
 
+// ── HEM Delay helpers ────────────────────────────────────────────
+function getHemDelayTotal(siteName){
+  var entries=(HEM_DELAYS[siteName]||[]);
+  return entries.reduce(function(s,e){return s+(parseInt(e.days,10)||0);},0);
+}
+function saveHemDelays(){
+  try{localStorage.setItem('hem_delays',JSON.stringify(HEM_DELAYS));}catch(e){}
+}
+function logHemDelay(siteName,days,reason){
+  if(!HEM_DELAYS[siteName]) HEM_DELAYS[siteName]=[];
+  HEM_DELAYS[siteName].push({days:parseInt(days,10)||0,reason:reason||'',loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})});
+  saveHemDelays();
+}
+function deleteHemDelay(siteName,entryIdx){
+  if(!HEM_DELAYS[siteName]) return;
+  HEM_DELAYS[siteName].splice(entryIdx,1);
+  saveHemDelays();
+}
+function renderHemSection(r,idx){
+  var siteName=(r['Site Name']||'').trim();
+  var entries=HEM_DELAYS[siteName]||[];
+  var totalHem=getHemDelayTotal(siteName);
+  var poD=pd(r['PO Date']),satD=pd(r['SAT Date']);
+  var poSatActual=poD&&satD?Math.round((satD-poD)/86400000):null;
+  var poSatNet=poSatActual!==null?poSatActual-totalHem:null;
+  var TARGET=40;
+  var netColor=poSatNet===null?'#6b7280':poSatNet<=TARGET?'#16a34a':'#dc2626';
+  var timelineHtml='';
+  if(poD){
+    timelineHtml='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
+    if(poSatActual!==null){
+      timelineHtml+='<div style="background:#f0f7ff;border:1px solid #c7d7f0;border-radius:6px;padding:7px 12px;min-width:110px">'
+        +'<div style="font-size:9px;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">PO→SAT (Actual)</div>'
+        +'<div style="font-size:18px;font-weight:800;color:#1e3a5f;line-height:1.2">'+poSatActual+'d</div>'
+        +'<div style="font-size:9px;color:#6b7280">Target: '+TARGET+'d</div>'
+        +'</div>';
+    }
+    if(totalHem>0){
+      timelineHtml+='<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:7px 12px;min-width:110px">'
+        +'<div style="font-size:9px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.05em">HEM Delay</div>'
+        +'<div style="font-size:18px;font-weight:800;color:#92400e;line-height:1.2">'+totalHem+'d</div>'
+        +'<div style="font-size:9px;color:#92400e">Excluded from timeline</div>'
+        +'</div>';
+      timelineHtml+='<div style="background:'+(poSatNet<=TARGET?'#f0fdf4':'#fef2f2')+';border:1px solid '+(poSatNet<=TARGET?'#bbf7d0':'#fecaca')+';border-radius:6px;padding:7px 12px;min-width:110px">'
+        +'<div style="font-size:9px;font-weight:600;color:'+netColor+';text-transform:uppercase;letter-spacing:.05em">Net PO→SAT</div>'
+        +'<div style="font-size:18px;font-weight:800;color:'+netColor+';line-height:1.2">'+poSatNet+'d</div>'
+        +'<div style="font-size:9px;color:'+netColor+'">'+(poSatNet<=TARGET?'✅ Within target':'⚠ Over target')+'</div>'
+        +'</div>';
+    } else if(poSatActual===null){
+      timelineHtml+='<div style="font-size:11px;color:#6b7280;padding:4px 0">SAT not completed yet — net timeline will show once SAT date is filled.</div>';
+    }
+    timelineHtml+='</div>';
+  } else {
+    timelineHtml='<div style="font-size:11px;color:#6b7280;padding:4px 0 8px">PO Date not set — timeline will appear once PO Date is filled.</div>';
+  }
+  var entriesHtml=entries.length
+    ?entries.map(function(e,i){
+      return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:6px 0;border-bottom:1px solid #fef3c7">'
+        +'<div>'
+        +'<span style="font-size:12px;font-weight:700;color:#92400e">'+e.days+' days</span>'
+        +(e.reason?'<span style="font-size:11px;color:#78350f;margin-left:6px">— '+esc(e.reason)+'</span>':'')
+        +'<div style="font-size:10px;color:#a16207;margin-top:1px">Logged: '+esc(e.loggedOn)+'</div>'
+        +'</div>'
+        +'<button onclick="deleteHemDelay(\''+esc(siteName).replace(/'/g,"\\'")+'\','+i+');refreshHemSection('+idx+')" '
+        +'style="background:none;border:none;color:#d97706;cursor:pointer;font-size:13px;padding:0 4px" title="Remove">✕</button>'
+        +'</div>';
+    }).join('')
+    :'<div style="font-size:11px;color:#a16207;padding:4px 0">No HEM delays logged yet.</div>';
+  return '<div id="hem-delay-sec-'+idx+'" data-hem-section style="background:#fffdf5;border:1px solid #fde68a;border-radius:8px;padding:12px 14px;margin-bottom:12px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">'
+    +'<div>'
+    +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">⏳ HEM Delay Tracker</div>'
+    +'<div style="font-size:10px;color:#a16207;margin-top:1px">Log inspection delays caused by HEM team — excluded from PO→SAT calculation (target: '+TARGET+'d)</div>'
+    +'</div>'
+    +'<button onclick="showHemForm('+idx+')" id="hem-add-btn-'+idx+'" style="font-size:11px;font-weight:600;padding:4px 10px;border-radius:5px;border:1px solid #d97706;background:#fef3c7;color:#92400e;cursor:pointer">+ Log Delay</button>'
+    +'</div>'
+    +timelineHtml
+    +'<div id="hem-form-'+idx+'" style="display:none;margin-bottom:10px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">'
+    +'<div style="font-size:10px;font-weight:600;color:#92400e;margin-bottom:8px;text-transform:uppercase">New HEM Delay Entry</div>'
+    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+    +'<div><label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Days delayed</label>'
+    +'<input type="number" min="1" id="hem-days-'+idx+'" placeholder="e.g. 5" style="width:80px;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
+    +'<div style="flex:1;min-width:140px"><label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Reason (optional)</label>'
+    +'<input type="text" id="hem-reason-'+idx+'" placeholder="e.g. Awaiting inspection slot" style="width:100%;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
+    +'</div>'
+    +'<div style="display:flex;gap:6px;margin-top:8px">'
+    +'<button onclick="submitHemDelay('+idx+',\''+esc(siteName).replace(/'/g,"\\'")+'\'+\'\')" style="padding:5px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+    +'<button onclick="document.getElementById(\'hem-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;font-size:11px;cursor:pointer">Cancel</button>'
+    +'</div>'
+    +'</div>'
+    +'<div id="hem-entries-'+idx+'">'+entriesHtml+'</div>'
+    +'</div>';
+}
+function refreshHemSection(idx){
+  var r=allData[idx];if(!r) return;
+  var sec=document.getElementById('hem-delay-sec-'+idx);
+  if(!sec) return;
+  var wrapper=document.createElement('div');
+  wrapper.innerHTML=renderHemSection(r,idx);
+  sec.parentNode.replaceChild(wrapper.firstChild,sec);
+}
+function showHemForm(idx){
+  var f=document.getElementById('hem-form-'+idx);
+  if(f){f.style.display='block';var di=document.getElementById('hem-days-'+idx);if(di)di.focus();}
+}
+function submitHemDelay(idx,siteName){
+  var dEl=document.getElementById('hem-days-'+idx);
+  var rEl=document.getElementById('hem-reason-'+idx);
+  var days=dEl?parseInt(dEl.value,10):0;
+  if(!days||days<1){toast('Enter a valid number of days','warn');return;}
+  var reason=rEl?rEl.value.trim():'';
+  logHemDelay(siteName,days,reason);
+  refreshHemSection(idx);
+  toast('HEM delay of '+days+' days logged','ok');
+}
+
 // ═══════════════════════════════════════════════════════════════
 function openModal(idx){
   const r=allData[idx];if(!r) return;
@@ -3420,6 +3536,7 @@ function openModal(idx){
     </div>
     ${llScopeHtml}
     ${llHtml}
+    ${renderHemSection(r,idx)}
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
@@ -4861,6 +4978,9 @@ var CC_MAP = {}; // site_name → cost_center code, loaded from Supabase
 var VR_CACHE = []; // vendor_ratings loaded from Supabase
 var UAT_EXEMPTIONS = {}; // site_name → {reason, by, at}
 try { UAT_EXEMPTIONS = JSON.parse(localStorage.getItem('uat_exemptions')||'{}'); } catch(e) {}
+
+var HEM_DELAYS = {}; // site_name → [{days, reason, loggedOn}]
+try { HEM_DELAYS = JSON.parse(localStorage.getItem('hem_delays')||'{}'); } catch(e) {}
 
 const DRIVE_ROOT = 'https://drive.google.com/drive/folders/1Z70ck0p7mGe-DrmpYvP6JeF3SfmrFTcG';
 function getDriveLink(s){return DRIVE_MAP[(s||'').trim()]||DRIVE_ROOT;}
