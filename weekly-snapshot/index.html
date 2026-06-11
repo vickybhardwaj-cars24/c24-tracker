@@ -238,7 +238,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);font-s
 
   <div class="snap-foot">
     <span>CARS24 Infrastructure · Expansion Tracker · <strong id="foot-date"></strong></span>
-    <span id="foot-count"></span>
+    <span style="display:flex;align-items:center;gap:12px">
+      <a href="https://docs.google.com/presentation/d/1cebS6pGGi4ZSySCPVqMc6Hn5YxPWGJRSUX9_Ooml45M/edit?slide=id.g3e6f31f5e19_1_0#slide=id.g3e6f31f5e19_1_0" target="_blank" rel="noopener" style="color:rgba(255,255,255,.8);font-size:10px;font-weight:600;text-decoration:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);padding:3px 10px;border-radius:5px;white-space:nowrap">📊 View Full PPT →</a>
+      <span id="foot-count"></span>
+    </span>
   </div>
 
 </div><!-- /snapshot -->
@@ -436,9 +439,9 @@ function renderUpcoming(today) {
 function renderBUs(today) {
   const buOrder=['GS','HRC','C2B'];
   const buMeta={
-    'GS':{label:'GS — Greenfield Sites',color:'var(--blue)',cls:'bu-gs'},
-    'HRC':{label:'HRC — Hub Retail Centers',color:'var(--green)',cls:'bu-hrc'},
-    'C2B':{label:'C2B — Car 2 Business',color:'var(--purple)',cls:'bu-c2b'},
+    'GS':{label:'GS Sites — Greenfield Sites',color:'var(--blue)',cls:'bu-gs'},
+    'HRC':{label:'HRC — Hub Refurbishment Center',color:'var(--green)',cls:'bu-hrc'},
+    'C2B':{label:'C2B Yards — Car 2 Business',color:'var(--purple)',cls:'bu-c2b'},
   };
   const buMap={};
   allData.forEach(r=>{const b=r.BU||'Other'; if(!buMap[b]) buMap[b]=[]; buMap[b].push(r);});
