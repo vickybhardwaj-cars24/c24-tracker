@@ -237,6 +237,9 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);font-s
   <!-- BU Sections -->
   <div id="bu-sections"></div>
 
+  <!-- Pipeline — Pre-Workflow -->
+  <div id="pipeline-section"></div>
+
   <div class="snap-foot">
     <span>CARS24 Infrastructure · Expansion Tracker · <strong id="foot-date"></strong></span>
     <span style="display:flex;align-items:center;gap:12px">
@@ -420,7 +423,7 @@ function render() {
   document.getElementById('snap-date').textContent='Week of '+ds;
   document.getElementById('foot-date').textContent=ds;
   document.getElementById('foot-count').textContent=allData.length+' sites · #retail-pod-leaders · #refurb-hrc-expansion';
-  renderKPIs(today); renderZones(); renderWins(today); renderUpcoming(today); renderBUs(today);
+  renderKPIs(today); renderZones(); renderWins(today); renderUpcoming(today); renderBUs(today); renderPipeline();
 }
 
 function renderKPIs(today) {
@@ -506,8 +509,8 @@ function renderBUs(today) {
   const buMap={};
   allData.forEach(r=>{const b=r.BU||'Other'; if(!buMap[b]) buMap[b]=[]; buMap[b].push(r);});
 
-  // active statuses to show per BU (exclude pure BD/scouting noise)
-  const showStatus=['Additional Work','WIP','To Start','PO Awaited','Design','BOQ','On Hold'];
+  // active statuses — BD and Design are shown separately in Pipeline section
+  const showStatus=['WIP','Additional Work','To Start','PO Awaited','BOQ','On Hold'];
 
   let html='';
   buOrder.forEach(bu=>{
@@ -542,7 +545,7 @@ function renderBUs(today) {
         </thead>
         <tbody>
           ${sites.sort((a,b)=>{
-            const order=['WIP','Additional Work','To Start','PO Awaited','Design','BOQ','On Hold'];
+            const order=['WIP','Additional Work','To Start','PO Awaited','BOQ','On Hold'];
             return (order.indexOf(normSt(a.Status))||99)-(order.indexOf(normSt(b.Status))||99);
           }).map(r=>{
             const p=pctN(r);
@@ -564,6 +567,46 @@ function renderBUs(today) {
     </div>`;
   });
   document.getElementById('bu-sections').innerHTML=html;
+}
+
+function renderPipeline() {
+  const sites = allData.filter(r => { const ns=normSt(r.Status); return ns==='BD'||ns==='Design'; });
+  if (!sites.length) { document.getElementById('pipeline-section').innerHTML=''; return; }
+  const byBU = {};
+  sites.forEach(r => { const b=r.BU||'Other'; if(!byBU[b]) byBU[b]=[]; byBU[b].push(r); });
+  const buColors = {'GS':'var(--blue)','HRC':'var(--green)','C2B':'var(--purple)'};
+  const buLabels = {'GS':'GS Sites','HRC':'HRC','C2B':'C2B Yards'};
+  let html = `<div class="bu-section" style="border-top:2px solid var(--border)">
+    <div class="bu-header" style="background:var(--surface);border-bottom:1px solid var(--border)">
+      <span class="bu-label" style="color:var(--muted)">PIPELINE — NOT YET IN WORKFLOW</span>
+      <span class="bu-desc">${sites.length} sites · BD &amp; Design stage</span>
+    </div>
+    <div style="padding:12px 20px;display:flex;flex-wrap:wrap;gap:8px">`;
+  ['GS','HRC','C2B','Other'].forEach(bu => {
+    const rows = byBU[bu]; if (!rows || !rows.length) return;
+    const color = buColors[bu]||'var(--gray)';
+    const label = buLabels[bu]||bu;
+    html += `<div style="flex:1;min-width:200px;background:var(--white);border:1px solid var(--border);border-radius:8px;overflow:hidden">
+      <div style="padding:6px 12px;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:${color};background:var(--surface);border-bottom:1px solid var(--border)">${label}</div>
+      <table style="width:100%;border-collapse:collapse">`;
+    rows.sort((a,b)=>{
+      const o=['Design','BD']; return o.indexOf(normSt(a.Status))-o.indexOf(normSt(b.Status));
+    }).forEach(r => {
+      const zc='z'+(zoneCode(r.Zone)||'N');
+      const ns=normSt(r.Status);
+      const stColor = ns==='Design'?'var(--pink)':'var(--purple)';
+      const stBg = ns==='Design'?'var(--pink-bg)':'var(--purple-bg)';
+      html += `<tr style="border-bottom:1px solid var(--border)">
+        <td style="padding:5px 10px;font-size:10px;font-weight:600;color:var(--text)">${esc(r['Site Name']||'—')}</td>
+        <td style="padding:5px 6px"><span class="zone-pill ${zc}" style="font-size:8px">${esc(r.Zone||'')}</span></td>
+        <td style="padding:5px 8px"><span style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:10px;background:${stBg};color:${stColor}">${ns}</span></td>
+        <td style="padding:5px 8px;font-size:9px;color:var(--muted)">${esc(r.Owner||'—')}</td>
+      </tr>`;
+    });
+    html += `</table></div>`;
+  });
+  html += `</div></div>`;
+  document.getElementById('pipeline-section').innerHTML = html;
 }
 
 // Export
