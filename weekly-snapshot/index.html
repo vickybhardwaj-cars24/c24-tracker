@@ -349,6 +349,15 @@ function parseCSV(text) {
     if (normSt(obj['Status']) === 'UAT Done') {
       const uatD = pd(obj['UAT DATE']); if (uatD && uatD < fyStart) continue;
     }
+    // Skip "rolled over" projects: original planned date in last FY and no revised
+    // date pushing them into the current FY — these are carryovers, not current FY work
+    const ns = normSt(obj['Status']);
+    if (!['BD','Design','BOQ','PO Awaited','To Start'].includes(ns)) {
+      const planned = pd(obj['Planned Completion']);
+      const revised = pd(obj['Revised Completion']);
+      const effective = revised || planned;
+      if (effective && effective < fyStart) continue;
+    }
     let lu = '', ld = '';
     for (let k = dCols.length-1; k >= 0; k--) { const v = (row[dCols[k].i]||'').trim(); if (v) { lu = v; ld = dCols[k].h; break; } }
     obj['Latest Update'] = lu; obj['Latest Update Date'] = ld;
