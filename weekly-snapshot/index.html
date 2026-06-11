@@ -478,7 +478,7 @@ function renderBUs(today) {
             <th style="padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:left;width:100px">Status</th>
             <th style="padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:left;width:110px">Progress</th>
             <th style="padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:left;width:100px">Timeline</th>
-            <th style="padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:left">Latest Activity</th>
+            <th style="padding:6px 10px;font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);text-align:left">Delay Reason</th>
           </tr>
         </thead>
         <tbody>
@@ -492,15 +492,14 @@ function renderBUs(today) {
             const tgt=targetDate(r);
             const isRev=!!(r['Revised Completion']&&r['Revised Completion'].trim());
             const zc='z'+(zoneCode(r.Zone)||'N');
-            const upd=r['Latest Update']||'';
-            const updLines=upd.split('\n').map(l=>l.trim()).filter(l=>l&&!l.toLowerCase().startsWith('bd:')&&!l.toLowerCase().startsWith('task:')).slice(0,2).join(' · ');
+            const delay=(r['Reason for Delay']||'').trim();
             return `<tr>
               <td class="p-name">${esc(r['Site Name']||'—')}</td>
               <td class="p-zone"><span class="zone-pill ${zc}">${esc(r.Zone||'—')}</span></td>
               <td class="p-status">${badgeHtml(r.Status)}</td>
               <td class="p-pct">${p!==null?`<div class="pbar"><div class="pbar-t"><div class="pbar-f" style="width:${p}%;background:${pCol}"></div></div><span class="pbar-n" style="color:${pCol}">${p}%</span></div>`:'<span style="font-size:10px;color:var(--muted)">—</span>'}</td>
               <td><div><span class="tl-pill ${tl.cls}">${tl.label}</span>${tgt?`<div style="font-size:9px;color:${isRev?'var(--amber)':'var(--muted)'};margin-top:2px">${isRev?'↻ ':''}${esc(tgt)}</div>`:''}</div></td>
-              <td class="p-update">${r['Latest Update Date']?`<div class="p-update-date">${esc(r['Latest Update Date'])}</div>`:''}<div>${esc(updLines||'No recent update')}</div></td>
+              <td class="p-update"><div>${delay?esc(delay):'<span style="color:var(--muted);font-style:italic">—</span>'}</div></td>
             </tr>`;
           }).join('')}
         </tbody>
