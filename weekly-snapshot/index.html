@@ -444,7 +444,7 @@ function renderBUs(today) {
   allData.forEach(r=>{const b=r.BU||'Other'; if(!buMap[b]) buMap[b]=[]; buMap[b].push(r);});
 
   // active statuses to show per BU (exclude pure BD/scouting noise)
-  const showStatus=['UAT Done','SAT Done','Completed','Additional Work','WIP','To Start','PO Awaited','Design','BOQ','On Hold'];
+  const showStatus=['Additional Work','WIP','To Start','PO Awaited','Design','BOQ','On Hold'];
 
   let html='';
   buOrder.forEach(bu=>{
@@ -480,7 +480,7 @@ function renderBUs(today) {
         </thead>
         <tbody>
           ${sites.sort((a,b)=>{
-            const order=['WIP','Additional Work','SAT Done','UAT Done','Completed','To Start','PO Awaited','Design','BOQ','On Hold'];
+            const order=['WIP','Additional Work','To Start','PO Awaited','Design','BOQ','On Hold'];
             return (order.indexOf(normSt(a.Status))||99)-(order.indexOf(normSt(b.Status))||99);
           }).map(r=>{
             const p=pctN(r);
