@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.80</title>
+<title>Cars24 Projects Tracker v4.81</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -707,7 +707,7 @@ try { PROCURE_DATA = JSON.parse(localStorage.getItem('procure_data')||'{}'); } c
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════════
-const META_COLS = ['S.No.','BU','Site Name','Zone','Owner','Vendor','Vendor Rating','Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE','Planned Completion','Revised Completion','Reason for Delay'];
+const META_COLS = ['S.No.','BU','Cost Center','Site Name','Zone','Owner','Vendor','Vendor Rating','Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE','Planned Completion','Revised Completion','Reason for Delay'];
 let DATE_COLS = ['7 Apr','8 Apr','9 Apr','10 Apr','11 Apr','12 Apr','13 Apr','14 Apr','15 Apr','16 Apr','17 Apr','18 Apr','19 Apr','20 Apr','21 Apr','22 Apr','23 Apr','24 Apr','25 Apr','26 Apr','27 Apr','28 Apr','29 Apr','30 Apr','1 May','2 May','3 May','4 May','5 May','6 May','7 May','8 May'];
 let allData = [], filteredData = [], sortCol = '', sortDir = 1;
 var __rawCSVData = null; // snapshot of allData right after CSV parse, before any Supabase overrides
@@ -4034,6 +4034,8 @@ function parseCSV(txt) {
   if (rows.length < 2) return [];
   // Normalise headers: strip BOM, trim, then map known aliases to canonical META_COL names
   const HDR_ALIASES = {
+    's.no.':'S.No.','s.no':'S.No.','sr no':'S.No.','sr. no':'S.No.','sr. no.':'S.No.','serial no':'S.No.',
+    'cost center':'Cost Center','cost centre':'Cost Center',
     'vendor name':'Vendor','contractor':'Vendor','vendor/contractor':'Vendor',
     'site name':'Site Name','sitename':'Site Name',
     'owner':'Owner','owner name':'Owner','pm':'Owner','project manager':'Owner',
@@ -4055,6 +4057,14 @@ function parseCSV(txt) {
     if (dtm) return dtm[2]+' '+dtm[1];
     return HDR_ALIASES[clean.toLowerCase()] || clean;
   });
+  // If Owner column is blank/space in the HOTP export (common in Apps Script CSV),
+  // detect it positionally — it sits between 'Zone' and 'Vendor'.
+  if (!hdrs.includes('Owner')) {
+    var _zi=hdrs.indexOf('Zone'), _vi=hdrs.indexOf('Vendor');
+    if (_zi>=0 && _vi>_zi) {
+      for (var _bi=_zi+1;_bi<_vi;_bi++) { if (!hdrs[_bi]){hdrs[_bi]='Owner';break;} }
+    }
+  }
   DATE_COLS.length = 0;
   hdrs.forEach(h => { if (!META_COLS.includes(h)) DATE_COLS.push(h); });
   console.log('[CSV parse] META cols found:', META_COLS.filter(m=>hdrs.includes(m)));
