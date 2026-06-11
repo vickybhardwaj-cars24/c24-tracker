@@ -8,6 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="/shared/c24-favicon.js"></script>
 <script src="/shared/c24-uploader.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -546,7 +547,8 @@ function renderBUs(today) {
         <tbody>
           ${sites.sort((a,b)=>{
             const order=['WIP','Additional Work','To Start','PO Awaited','BOQ','On Hold'];
-            return (order.indexOf(normSt(a.Status))||99)-(order.indexOf(normSt(b.Status))||99);
+            const oi=s=>{const i=order.indexOf(normSt(s.Status));return i===-1?99:i;};
+            return oi(a)-oi(b);
           }).map(r=>{
             const p=pctN(r);
             const pCol=p>=80?'#0f9b51':p>=50?'#1a56db':'#b45309';
