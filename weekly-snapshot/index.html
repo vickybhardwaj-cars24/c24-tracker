@@ -338,11 +338,17 @@ function parseCSV(text) {
   const dCols = hdr.map((h,i) => ({i,h})).filter(x => datePat.test(x.h));
   // Site Name col index (handles extra Cost Center column)
   const siteIdx = hdr.indexOf('Site Name');
+  // FY starts 1 Apr — anything UAT-done before this date is last FY, skip it
+  const now = new Date(); const fyStart = new Date(now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear()-1, 3, 1);
   allData = [];
   for (let i = 1; i < rows.length; i++) {
     const row = rows[i];
     if (siteIdx < 0 || !row[siteIdx] || !row[siteIdx].trim()) continue;
     const obj = {}; hdr.forEach((h,j) => { if (mc.includes(h)) obj[h] = (row[j]||'').trim(); });
+    // Skip UAT-done projects from a previous financial year
+    if (normSt(obj['Status']) === 'UAT Done') {
+      const uatD = pd(obj['UAT DATE']); if (uatD && uatD < fyStart) continue;
+    }
     let lu = '', ld = '';
     for (let k = dCols.length-1; k >= 0; k--) { const v = (row[dCols[k].i]||'').trim(); if (v) { lu = v; ld = dCols[k].h; break; } }
     obj['Latest Update'] = lu; obj['Latest Update Date'] = ld;
