@@ -7,6 +7,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="/shared/c24-uploader.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
@@ -265,13 +266,57 @@ const HOTP_PATH  = 'projects-tracker';
 function workerAuthHeader() {
   try { var t = C24Uploader && typeof C24Uploader.getToken === 'function' && C24Uploader.getToken(); return t ? ('Bearer ' + t) : null; } catch(_) { return null; }
 }
+
+// Supabase — same project as the main tracker
+const SUPABASE_URL      = 'https://fnvylizldarvqejsfkbn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZudnlsaXpsZGFydnFlanNma2JuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODgzMDgsImV4cCI6MjA5NTA2NDMwOH0.YQwAIwpZCQGOev5kAABMSVFqdf36cZLwnrwPVFrhNfY';
+let __sb = null;
+function sbClient() {
+  if (!__sb && typeof supabase !== 'undefined') __sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  return __sb;
+}
+
+// After CSV is parsed, pull reason_for_delay + revised_completion from Supabase
+// and override the CSV values where Supabase has data.
+async function enrichFromSupabase() {
+  const sb = sbClient(); if (!sb || !allData.length) return;
+  try {
+    const { data, error } = await sb
+      .from('sites')
+      .select('site_name,reason_for_delay,revised_completion');
+    if (error || !data) return;
+    const sbMap = {};
+    data.forEach(row => { if (row.site_name) sbMap[row.site_name.trim().toLowerCase()] = row; });
+    allData.forEach(r => {
+      const key = (r['Site Name']||'').trim().toLowerCase();
+      const sb = sbMap[key]; if (!sb) return;
+      // Override Reason for Delay if Supabase has a value
+      if (sb.reason_for_delay && sb.reason_for_delay.trim())
+        r['Reason for Delay'] = sb.reason_for_delay.trim();
+      // Override Revised Completion if Supabase has a value
+      // Supabase stores dates as YYYY-MM-DD; convert to "DD Mon" for display
+      if (sb.revised_completion) {
+        const d = new Date(sb.revised_completion);
+        if (!isNaN(d)) {
+          r['Revised Completion'] = d.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+        }
+      }
+    });
+    render();
+  } catch(_) {}
+}
+
 function loadFromWorker() {
   const status = document.getElementById('load-status');
   if (status) status.textContent = 'Loading…';
   const headers = {}; const ah = workerAuthHeader(); if (ah) headers['Authorization'] = ah;
   fetch(WORKER_URL + HOTP_PATH + '.csv', { cache: 'no-store', headers })
     .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); })
-    .then(text => { parseCSV(text); if (status) status.textContent = '✓ Live'; })
+    .then(text => {
+      parseCSV(text);
+      enrichFromSupabase(); // overlay Supabase delay reasons + revised dates
+      if (status) status.textContent = '✓ Live';
+    })
     .catch(err => { if (status) status.textContent = '⚠ ' + err.message; toast('Load error: ' + err.message, 'err'); });
 }
 document.getElementById('refresh-btn').addEventListener('click', loadFromWorker);
