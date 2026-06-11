@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.77</title>
+<title>Cars24 Projects Tracker v4.78</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2284,6 +2284,7 @@ function renderSatUat(){
   const _snav='<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSatUat._sub=\'pipeline\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='pipeline'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Pipeline</button>'
     +'<button onclick="renderSatUat._sub=\'comm\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='comm'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Communication</button>'
+    +'<button onclick="renderSatUat._sub=\'hem\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='hem'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">HEM Delays</button>'
     +'</div>';
   function _mkDWORow(u,col,showA){
     var rh=getRevHistory(u.r);
@@ -2323,6 +2324,57 @@ function renderSatUat(){
         +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">To: blank - fill HEM and Design. CC: vicky.bhardwaj@cars24.com auto-added.</div>'
         +satCommHtml+uatCommHtml+'</div>'
       :'<div style="padding:40px;text-align:center;color:var(--muted)">No sites in the 14 day window right now.</div>');
+    return;
+  }
+  if(_sub==='hem'){
+    var _hemSites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
+    var _hemTotal=_hemSites.reduce(function(s,sn){return s+getHemDelayTotal(sn);},0);
+    var _hemHtml='';
+    if(!_hemSites.length){
+      _hemHtml='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No HEM delays logged yet. Open any site modal and use the ⏳ HEM Delay Tracker to log delays.</div>';
+    } else {
+      _hemHtml='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+        +'<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+        +'<div>'
+        +'<div style="font-size:13px;font-weight:700">⏳ HEM Delay Log — All Sites</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+_hemSites.length+' site'+((_hemSites.length>1)?'s':'')+' · '+_hemTotal+'d total delay logged</div>'
+        +'</div>'
+        +'</div>'
+        +'<table style="width:100%;border-collapse:collapse">'
+        +'<thead><tr style="background:var(--surface-2)">'
+        +'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Site</th>'
+        +'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Owner</th>'
+        +'<th style="padding:8px 12px;text-align:center;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Total Delay</th>'
+        +'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Entries</th>'
+        +'</tr></thead>'
+        +'<tbody>';
+      _hemSites.sort(function(a,b){return getHemDelayTotal(b)-getHemDelayTotal(a);}).forEach(function(sn,si){
+        var entries=HEM_DELAYS[sn];
+        var total=getHemDelayTotal(sn);
+        var row=allData.find(function(r){return (r['Site Name']||'').trim()===sn;});
+        var owner=row?(row['Owner']||'—'):'—';
+        var idx=row?allData.indexOf(row):-1;
+        var entriesDesc=entries.map(function(e){
+          return '<div style="display:flex;align-items:baseline;gap:6px;padding:2px 0">'
+            +'<span style="font-size:11px;font-weight:700;color:#92400e;white-space:nowrap">'+e.days+'d</span>'
+            +(e.reason?'<span style="font-size:11px;color:var(--text)">'+esc(e.reason)+'</span>':'')
+            +'<span style="font-size:10px;color:var(--muted);white-space:nowrap;margin-left:auto;padding-left:8px">'+esc(e.loggedOn)+'</span>'
+            +'</div>';
+        }).join('');
+        _hemHtml+='<tr style="border-bottom:1px solid var(--border);'+(si%2===0?'background:var(--surface)':'background:var(--surface-2)')+'">'
+          +'<td style="padding:10px 12px;vertical-align:top">'
+          +(idx>=0?'<a onclick="openModal('+idx+')" style="font-size:12px;font-weight:600;color:var(--primary);cursor:pointer;text-decoration:none">'+esc(sn)+'</a>':'<span style="font-size:12px;font-weight:600">'+esc(sn)+'</span>')
+          +'</td>'
+          +'<td style="padding:10px 12px;vertical-align:top;font-size:11px;color:var(--muted)">'+esc(owner)+'</td>'
+          +'<td style="padding:10px 12px;vertical-align:top;text-align:center">'
+          +'<span style="font-size:15px;font-weight:800;color:#92400e">'+total+'d</span>'
+          +'</td>'
+          +'<td style="padding:10px 12px;vertical-align:top">'+entriesDesc+'</td>'
+          +'</tr>';
+      });
+      _hemHtml+='</tbody></table></div>';
+    }
+    el.innerHTML=_snav+_hemHtml;
     return;
   }
 
