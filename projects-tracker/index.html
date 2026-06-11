@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.76</title>
+<title>Cars24 Projects Tracker v4.77</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1136,8 +1136,8 @@ async function loadSupabaseSiteFields() {
   if (!r || r.error || !r.data || !r.data.length) return;
   try {
     r.data.forEach(function(sfo) {
-      var sn = (sfo.site_name||'').trim();
-      var row = allData.find(function(d){ return (d['Site Name']||'').trim() === sn; });
+      var sn = (sfo.site_name||'').trim().toLowerCase();
+      var row = allData.find(function(d){ return (d['Site Name']||'').trim().toLowerCase() === sn; });
       if (!row) return;
       var fn = (sfo.field_name||'').trim();
       var v  = (sfo.field_value||'').trim();
@@ -2083,7 +2083,7 @@ function commCard(entry,type){
   const gmailUrl=_gmail.url, gmailSubj=_gmail.subj;
   const revDateVal=r['Revised Completion']||'';
   const revDateLine=type==='SAT'&&revDateVal
-    ?'<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-weight:600">Revised on: <span style="font-weight:700">'+esc(revDateVal)+'</span></div>'
+    ?'<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-weight:600">Revised to: <span style="font-weight:700">'+esc(revDateVal)+'</span></div>'
     :'';
   const _commType=(type==='SAT'?'hem_design_sat':'hem_design_uat');
   const _siteName=r['Site Name']||'';
@@ -3492,13 +3492,6 @@ function renderHemSection(r,idx){
   var timelineHtml='';
   if(poD){
     timelineHtml='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
-    if(poSatActual!==null){
-      timelineHtml+='<div style="background:#f0f7ff;border:1px solid #c7d7f0;border-radius:6px;padding:7px 12px;min-width:110px">'
-        +'<div style="font-size:9px;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">PO→SAT (Actual)</div>'
-        +'<div style="font-size:18px;font-weight:800;color:#1e3a5f;line-height:1.2">'+poSatActual+'d</div>'
-        +'<div style="font-size:9px;color:#6b7280">Target: '+TARGET+'d</div>'
-        +'</div>';
-    }
     if(totalHem>0){
       timelineHtml+='<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:7px 12px;min-width:110px">'
         +'<div style="font-size:9px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.05em">HEM Delay</div>'
@@ -5573,14 +5566,31 @@ function confirmLLBulkUpload(){
 // ═══════════════════════════════════════════════════════════
 // LANDLORD (LL) SCOPE FUNCTIONS — no POs, separate from Cars24 project schedule
 // ═══════════════════════════════════════════════════════════
+function _parseCSVLine(line){
+  var cols=[],cell='',inQ=false,i=0;
+  while(i<line.length){
+    var ch=line[i];
+    if(inQ){
+      if(ch==='"'&&line[i+1]==='"'){cell+='"';i+=2;}
+      else if(ch==='"'){inQ=false;i++;}
+      else{cell+=ch;i++;}
+    } else {
+      if(ch==='"'){inQ=true;i++;}
+      else if(ch===','){cols.push(cell.trim());cell='';i++;}
+      else{cell+=ch;i++;}
+    }
+  }
+  cols.push(cell.trim());
+  return cols;
+}
 function parseLLScopeCSV(txt){
   var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
   if(lines.length<2) return [];
-  var headers=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'');});
+  var headers=_parseCSVLine(lines[0]).map(function(h){return h.replace(/^﻿/,'').trim();});
   var tasks=[];
   for(var i=1;i<lines.length;i++){
     var line=lines[i].trim(); if(!line) continue;
-    var cols=line.split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+    var cols=_parseCSVLine(line);
     var obj={}; headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
     var task=obj['Task']||obj['task']||'';
     if(!task) continue;
