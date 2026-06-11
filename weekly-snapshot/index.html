@@ -198,7 +198,10 @@ body{font-family:'Sora',sans-serif;background:var(--bg);color:var(--text);font-s
     </div>
     <div class="sh-right">
       <div class="sh-date" id="snap-date">—</div>
-      <div class="sh-cadence">Weekly ·</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-top:4px">
+        <div class="sh-cadence">Weekly ·</div>
+        <a href="https://docs.google.com/presentation/d/1cebS6pGGi4ZSySCPVqMc6Hn5YxPWGJRSUX9_Ooml45M/edit?slide=id.g3e6f31f5e19_1_0#slide=id.g3e6f31f5e19_1_0" target="_blank" rel="noopener" style="color:rgba(255,255,255,.8);font-size:10px;font-weight:600;text-decoration:none;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);padding:3px 10px;border-radius:5px;white-space:nowrap">📊 Project Images →</a>
+      </div>
     </div>
   </div>
 
@@ -423,7 +426,7 @@ function render() {
   const ds=today.toLocaleDateString('en-IN',{day:'numeric',month:'long',year:'numeric'});
   document.getElementById('snap-date').textContent='Week of '+ds;
   document.getElementById('foot-date').textContent=ds;
-  document.getElementById('foot-count').textContent=allData.length+' sites · #retail-pod-leaders · #refurb-hrc-expansion';
+  document.getElementById('foot-count').textContent=allData.length+' sites';
   renderKPIs(today); renderZones(); renderWins(today); renderUpcoming(today); renderBUs(today); renderPipeline();
 }
 
