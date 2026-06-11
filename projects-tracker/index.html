@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.76</title>
+<title>Cars24 Projects Tracker v4.81</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -707,7 +707,7 @@ try { PROCURE_DATA = JSON.parse(localStorage.getItem('procure_data')||'{}'); } c
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
 // ═══════════════════════════════════════════════════════════════
-const META_COLS = ['S.No.','BU','Site Name','Zone','Owner','Vendor','Vendor Rating','Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE','Planned Completion','Revised Completion'];
+const META_COLS = ['S.No.','BU','Cost Center','Site Name','Zone','Owner','Vendor','Vendor Rating','Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE','Planned Completion','Revised Completion','Reason for Delay'];
 let DATE_COLS = ['7 Apr','8 Apr','9 Apr','10 Apr','11 Apr','12 Apr','13 Apr','14 Apr','15 Apr','16 Apr','17 Apr','18 Apr','19 Apr','20 Apr','21 Apr','22 Apr','23 Apr','24 Apr','25 Apr','26 Apr','27 Apr','28 Apr','29 Apr','30 Apr','1 May','2 May','3 May','4 May','5 May','6 May','7 May','8 May'];
 let allData = [], filteredData = [], sortCol = '', sortDir = 1;
 var __rawCSVData = null; // snapshot of allData right after CSV parse, before any Supabase overrides
@@ -879,6 +879,7 @@ function onSbLoginSuccess() {
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
+          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){ console.warn('loadHemDelaysFromSupabase failed:', e3); }); })
           .then(function(){ buildFilters(); renderKPIs(); applyFilters(); try{var _sk='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _sv={};allData.forEach(function(r){if(r['Site Name'])_sv[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_sk,JSON.stringify(_sv));}catch(_){} });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
@@ -1136,8 +1137,8 @@ async function loadSupabaseSiteFields() {
   if (!r || r.error || !r.data || !r.data.length) return;
   try {
     r.data.forEach(function(sfo) {
-      var sn = (sfo.site_name||'').trim();
-      var row = allData.find(function(d){ return (d['Site Name']||'').trim() === sn; });
+      var sn = (sfo.site_name||'').trim().toLowerCase();
+      var row = allData.find(function(d){ return (d['Site Name']||'').trim().toLowerCase() === sn; });
       if (!row) return;
       var fn = (sfo.field_name||'').trim();
       var v  = (sfo.field_value||'').trim();
@@ -2083,7 +2084,7 @@ function commCard(entry,type){
   const gmailUrl=_gmail.url, gmailSubj=_gmail.subj;
   const revDateVal=r['Revised Completion']||'';
   const revDateLine=type==='SAT'&&revDateVal
-    ?'<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-weight:600">Revised on: <span style="font-weight:700">'+esc(revDateVal)+'</span></div>'
+    ?'<div style="font-size:10px;color:#7c3aed;margin-top:3px;font-weight:600">Revised to: <span style="font-weight:700">'+esc(revDateVal)+'</span></div>'
     :'';
   const _commType=(type==='SAT'?'hem_design_sat':'hem_design_uat');
   const _siteName=r['Site Name']||'';
@@ -2284,6 +2285,7 @@ function renderSatUat(){
   const _snav='<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSatUat._sub=\'pipeline\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='pipeline'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Pipeline</button>'
     +'<button onclick="renderSatUat._sub=\'comm\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='comm'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Communication</button>'
+    +'<button onclick="renderSatUat._sub=\'hem\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='hem'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">HEM Delays</button>'
     +'</div>';
   function _mkDWORow(u,col,showA){
     var rh=getRevHistory(u.r);
@@ -2323,6 +2325,57 @@ function renderSatUat(){
         +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">To: blank - fill HEM and Design. CC: vicky.bhardwaj@cars24.com auto-added.</div>'
         +satCommHtml+uatCommHtml+'</div>'
       :'<div style="padding:40px;text-align:center;color:var(--muted)">No sites in the 14 day window right now.</div>');
+    return;
+  }
+  if(_sub==='hem'){
+    var _hemSites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
+    var _hemTotal=_hemSites.reduce(function(s,sn){return s+getHemDelayTotal(sn);},0);
+    var _hemHtml='';
+    if(!_hemSites.length){
+      _hemHtml='<div style="padding:40px;text-align:center;color:var(--muted);font-size:13px">No HEM delays logged yet. Open any site modal and use the ⏳ HEM Delay Tracker to log delays.</div>';
+    } else {
+      _hemHtml='<div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;overflow:hidden">'
+        +'<div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+        +'<div>'
+        +'<div style="font-size:13px;font-weight:700">⏳ HEM Delay Log — All Sites</div>'
+        +'<div style="font-size:11px;color:var(--muted);margin-top:2px">'+_hemSites.length+' site'+((_hemSites.length>1)?'s':'')+' · '+_hemTotal+'d total delay logged</div>'
+        +'</div>'
+        +'</div>'
+        +'<table style="width:100%;border-collapse:collapse">'
+        +'<thead><tr style="background:var(--surface-2)">'
+        +'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Site</th>'
+        +'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Owner</th>'
+        +'<th style="padding:8px 12px;text-align:center;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Total Delay</th>'
+        +'<th style="padding:8px 12px;text-align:left;font-size:10px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.5px">Entries</th>'
+        +'</tr></thead>'
+        +'<tbody>';
+      _hemSites.sort(function(a,b){return getHemDelayTotal(b)-getHemDelayTotal(a);}).forEach(function(sn,si){
+        var entries=HEM_DELAYS[sn];
+        var total=getHemDelayTotal(sn);
+        var row=allData.find(function(r){return (r['Site Name']||'').trim()===sn;});
+        var owner=row?(row['Owner']||'—'):'—';
+        var idx=row?allData.indexOf(row):-1;
+        var entriesDesc=entries.map(function(e){
+          return '<div style="display:flex;align-items:baseline;gap:6px;padding:2px 0">'
+            +'<span style="font-size:11px;font-weight:700;color:#92400e;white-space:nowrap">'+e.days+'d</span>'
+            +(e.reason?'<span style="font-size:11px;color:var(--text)">'+esc(e.reason)+'</span>':'')
+            +'<span style="font-size:10px;color:var(--muted);white-space:nowrap;margin-left:auto;padding-left:8px">'+esc(e.loggedOn)+'</span>'
+            +'</div>';
+        }).join('');
+        _hemHtml+='<tr style="border-bottom:1px solid var(--border);'+(si%2===0?'background:var(--surface)':'background:var(--surface-2)')+'">'
+          +'<td style="padding:10px 12px;vertical-align:top">'
+          +(idx>=0?'<a onclick="openModal('+idx+')" style="font-size:12px;font-weight:600;color:var(--primary);cursor:pointer;text-decoration:none">'+esc(sn)+'</a>':'<span style="font-size:12px;font-weight:600">'+esc(sn)+'</span>')
+          +'</td>'
+          +'<td style="padding:10px 12px;vertical-align:top;font-size:11px;color:var(--muted)">'+esc(owner)+'</td>'
+          +'<td style="padding:10px 12px;vertical-align:top;text-align:center">'
+          +'<span style="font-size:15px;font-weight:800;color:#92400e">'+total+'d</span>'
+          +'</td>'
+          +'<td style="padding:10px 12px;vertical-align:top">'+entriesDesc+'</td>'
+          +'</tr>';
+      });
+      _hemHtml+='</tbody></table></div>';
+    }
+    el.innerHTML=_snav+_hemHtml;
     return;
   }
 
@@ -3470,15 +3523,56 @@ function getHemDelayTotal(siteName){
 function saveHemDelays(){
   try{localStorage.setItem('hem_delays',JSON.stringify(HEM_DELAYS));}catch(e){}
 }
+async function saveHemDelaysToSupabase(siteName){
+  if(!__sbClient||!__sbUser) return;
+  var entries=HEM_DELAYS[siteName]||[];
+  var byName=(__sbProfile&&__sbProfile.full_name)||__sbUser.email;
+  try{
+    await __sbClient.from('site_field_overrides').upsert(
+      {site_name:siteName,field_name:'hem_delays',field_value:JSON.stringify(entries),updated_by_name:byName,updated_at:new Date().toISOString()},
+      {onConflict:'site_name,field_name'}
+    );
+  }catch(e){console.warn('saveHemDelaysToSupabase failed:',e);}
+}
+async function loadHemDelaysFromSupabase(){
+  if(!__sbClient) return;
+  var r;
+  try{r=await __sbClient.from('site_field_overrides').select('site_name,field_value').eq('field_name','hem_delays');}
+  catch(e){console.warn('loadHemDelaysFromSupabase failed:',e);return;}
+  if(!r||r.error||!r.data||!r.data.length) return;
+  r.data.forEach(function(row){
+    try{
+      var entries=JSON.parse(row.field_value||'[]');
+      if(Array.isArray(entries)&&entries.length){
+        HEM_DELAYS[row.site_name]=entries;
+      }
+    }catch(e){}
+  });
+  saveHemDelays();
+}
+async function migrateHemDelaysToSupabase(btn){
+  if(!__sbClient||!__sbUser){toast('Sign in first to migrate','err');return;}
+  var sites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
+  if(!sites.length){toast('No HEM delays in localStorage to migrate','ok');return;}
+  if(btn){btn.disabled=true;btn.textContent='Migrating…';}
+  var ok=0,fail=0;
+  for(var i=0;i<sites.length;i++){
+    try{await saveHemDelaysToSupabase(sites[i]);ok++;}catch(e){fail++;}
+  }
+  if(btn){btn.disabled=false;btn.textContent='⏳ Migrate HEM Delays';}
+  toast('Migrated '+ok+' site'+(ok!==1?'s':'')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
+}
 function logHemDelay(siteName,days,reason){
   if(!HEM_DELAYS[siteName]) HEM_DELAYS[siteName]=[];
   HEM_DELAYS[siteName].push({days:parseInt(days,10)||0,reason:reason||'',loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})});
   saveHemDelays();
+  saveHemDelaysToSupabase(siteName);
 }
 function deleteHemDelay(siteName,entryIdx){
   if(!HEM_DELAYS[siteName]) return;
   HEM_DELAYS[siteName].splice(entryIdx,1);
   saveHemDelays();
+  saveHemDelaysToSupabase(siteName);
 }
 function renderHemSection(r,idx){
   var siteName=(r['Site Name']||'').trim();
@@ -3492,13 +3586,6 @@ function renderHemSection(r,idx){
   var timelineHtml='';
   if(poD){
     timelineHtml='<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px">';
-    if(poSatActual!==null){
-      timelineHtml+='<div style="background:#f0f7ff;border:1px solid #c7d7f0;border-radius:6px;padding:7px 12px;min-width:110px">'
-        +'<div style="font-size:9px;font-weight:600;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">PO→SAT (Actual)</div>'
-        +'<div style="font-size:18px;font-weight:800;color:#1e3a5f;line-height:1.2">'+poSatActual+'d</div>'
-        +'<div style="font-size:9px;color:#6b7280">Target: '+TARGET+'d</div>'
-        +'</div>';
-    }
     if(totalHem>0){
       timelineHtml+='<div style="background:#fef3c7;border:1px solid #fde68a;border-radius:6px;padding:7px 12px;min-width:110px">'
         +'<div style="font-size:9px;font-weight:600;color:#92400e;text-transform:uppercase;letter-spacing:.05em">HEM Delay</div>'
@@ -3947,9 +4034,12 @@ function parseCSV(txt) {
   if (rows.length < 2) return [];
   // Normalise headers: strip BOM, trim, then map known aliases to canonical META_COL names
   const HDR_ALIASES = {
+    's.no.':'S.No.','s.no':'S.No.','sr no':'S.No.','sr. no':'S.No.','sr. no.':'S.No.','serial no':'S.No.',
+    'cost center':'Cost Center','cost centre':'Cost Center',
     'vendor name':'Vendor','contractor':'Vendor','vendor/contractor':'Vendor',
     'site name':'Site Name','sitename':'Site Name',
-    'owner name':'Owner','pm':'Owner','project manager':'Owner',
+    'owner':'Owner','owner name':'Owner','pm':'Owner','project manager':'Owner',
+    'pm name':'Owner','project owner':'Owner','assigned to':'Owner','assigned owner':'Owner','site owner':'Owner',
     'vendor rating':'Vendor Rating','rating':'Vendor Rating',
     'percentage completion':'Percentage Completion','% completion':'Percentage Completion','completion %':'Percentage Completion','% complete':'Percentage Completion',
     'planned completion':'Planned Completion','planned date':'Planned Completion',
@@ -3967,8 +4057,18 @@ function parseCSV(txt) {
     if (dtm) return dtm[2]+' '+dtm[1];
     return HDR_ALIASES[clean.toLowerCase()] || clean;
   });
+  // If Owner column is blank/space in the HOTP export (common in Apps Script CSV),
+  // detect it positionally — it sits between 'Zone' and 'Vendor'.
+  if (!hdrs.includes('Owner')) {
+    var _zi=hdrs.indexOf('Zone'), _vi=hdrs.indexOf('Vendor');
+    if (_zi>=0 && _vi>_zi) {
+      for (var _bi=_zi+1;_bi<_vi;_bi++) { if (!hdrs[_bi]){hdrs[_bi]='Owner';break;} }
+    }
+  }
   DATE_COLS.length = 0;
   hdrs.forEach(h => { if (!META_COLS.includes(h)) DATE_COLS.push(h); });
+  console.log('[CSV parse] META cols found:', META_COLS.filter(m=>hdrs.includes(m)));
+  console.log('[CSV parse] Unmapped headers (treated as date cols):', hdrs.filter(h=>!META_COLS.includes(h)).slice(0,5));
   return rows.slice(1).map(r => {
     const o = {}; hdrs.forEach((h, i) => { o[h] = (r[i] || '').trim(); }); return o;
   });
@@ -3989,10 +4089,13 @@ function handleCSV(event){
       if(!parsed.length){toast('No data found','err');return;}
       allData=parsed.filter(function(r){return (r['Site Name']||'').trim();});filteredData=[...allData];
       applyHOTPUpdates();
-      buildFilters();renderKPIs();applyFilters();
       stampCSV('hotp');
       var sv=document.getElementById('slackv');if(sv&&sv.style.display!=='none') renderSlackTab();
       toast('✓ Loaded '+allData.length+' sites','ok');
+      loadSupabaseSiteFields()
+        .catch(function(e2){console.warn('loadSupabaseSiteFields failed:',e2);})
+        .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){console.warn('loadHemDelaysFromSupabase failed:',e3);}); })
+        .then(function(){buildFilters();renderKPIs();applyFilters();});
     }catch(err){console.error(err);toast('Parse error: '+err.message,'err');}
   };
   reader.onerror=()=>toast('File read error','err');
@@ -5573,14 +5676,31 @@ function confirmLLBulkUpload(){
 // ═══════════════════════════════════════════════════════════
 // LANDLORD (LL) SCOPE FUNCTIONS — no POs, separate from Cars24 project schedule
 // ═══════════════════════════════════════════════════════════
+function _parseCSVLine(line){
+  var cols=[],cell='',inQ=false,i=0;
+  while(i<line.length){
+    var ch=line[i];
+    if(inQ){
+      if(ch==='"'&&line[i+1]==='"'){cell+='"';i+=2;}
+      else if(ch==='"'){inQ=false;i++;}
+      else{cell+=ch;i++;}
+    } else {
+      if(ch==='"'){inQ=true;i++;}
+      else if(ch===','){cols.push(cell.trim());cell='';i++;}
+      else{cell+=ch;i++;}
+    }
+  }
+  cols.push(cell.trim());
+  return cols;
+}
 function parseLLScopeCSV(txt){
   var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
   if(lines.length<2) return [];
-  var headers=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'');});
+  var headers=_parseCSVLine(lines[0]).map(function(h){return h.replace(/^﻿/,'').trim();});
   var tasks=[];
   for(var i=1;i<lines.length;i++){
     var line=lines[i].trim(); if(!line) continue;
-    var cols=line.split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+    var cols=_parseCSVLine(line);
     var obj={}; headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
     var task=obj['Task']||obj['task']||'';
     if(!task) continue;
@@ -6958,6 +7078,7 @@ initSupabase();
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
+          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){ console.warn('loadHemDelaysFromSupabase failed:', e3); }); })
           .then(function(){
             buildFilters();
             renderKPIs();
@@ -7304,6 +7425,15 @@ function _renderAdminTabInner(el) {
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Push all currently-loaded CSV rows into Supabase so team edits persist and are shared across devices. Run once after uploading a fresh CSV.</div>'
     + '</div>'
     + '<button id="sb-sync-btn" onclick="syncAllSitesToSupabase()" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">☁ Sync CSV → Supabase</button>'
+    + '</div>'
+    + '</div>'
+    + '<div style="background:var(--white);border:1px solid #fde68a;border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-size:13px;font-weight:700">⏳ Migrate HEM Delays → Supabase</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Run once to push any HEM delays saved locally in this browser to Supabase so they persist across all devices.</div>'
+    + '</div>'
+    + '<button onclick="migrateHemDelaysToSupabase(this)" style="padding:8px 16px;background:#d97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">⏳ Migrate HEM Delays</button>'
     + '</div>'
     + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
