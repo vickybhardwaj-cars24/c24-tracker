@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.78</title>
+<title>Cars24 Projects Tracker v4.79</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -879,6 +879,7 @@ function onSbLoginSuccess() {
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
+          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){ console.warn('loadHemDelaysFromSupabase failed:', e3); }); })
           .then(function(){ buildFilters(); renderKPIs(); applyFilters(); try{var _sk='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _sv={};allData.forEach(function(r){if(r['Site Name'])_sv[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_sk,JSON.stringify(_sv));}catch(_){} });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
@@ -3522,15 +3523,56 @@ function getHemDelayTotal(siteName){
 function saveHemDelays(){
   try{localStorage.setItem('hem_delays',JSON.stringify(HEM_DELAYS));}catch(e){}
 }
+async function saveHemDelaysToSupabase(siteName){
+  if(!__sbClient||!__sbUser) return;
+  var entries=HEM_DELAYS[siteName]||[];
+  var byName=(__sbProfile&&__sbProfile.full_name)||__sbUser.email;
+  try{
+    await __sbClient.from('site_field_overrides').upsert(
+      {site_name:siteName,field_name:'hem_delays',field_value:JSON.stringify(entries),updated_by_name:byName,updated_at:new Date().toISOString()},
+      {onConflict:'site_name,field_name'}
+    );
+  }catch(e){console.warn('saveHemDelaysToSupabase failed:',e);}
+}
+async function loadHemDelaysFromSupabase(){
+  if(!__sbClient) return;
+  var r;
+  try{r=await __sbClient.from('site_field_overrides').select('site_name,field_value').eq('field_name','hem_delays');}
+  catch(e){console.warn('loadHemDelaysFromSupabase failed:',e);return;}
+  if(!r||r.error||!r.data||!r.data.length) return;
+  r.data.forEach(function(row){
+    try{
+      var entries=JSON.parse(row.field_value||'[]');
+      if(Array.isArray(entries)&&entries.length){
+        HEM_DELAYS[row.site_name]=entries;
+      }
+    }catch(e){}
+  });
+  saveHemDelays();
+}
+async function migrateHemDelaysToSupabase(btn){
+  if(!__sbClient||!__sbUser){toast('Sign in first to migrate','err');return;}
+  var sites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
+  if(!sites.length){toast('No HEM delays in localStorage to migrate','ok');return;}
+  if(btn){btn.disabled=true;btn.textContent='Migrating…';}
+  var ok=0,fail=0;
+  for(var i=0;i<sites.length;i++){
+    try{await saveHemDelaysToSupabase(sites[i]);ok++;}catch(e){fail++;}
+  }
+  if(btn){btn.disabled=false;btn.textContent='⏳ Migrate HEM Delays';}
+  toast('Migrated '+ok+' site'+(ok!==1?'s':'')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
+}
 function logHemDelay(siteName,days,reason){
   if(!HEM_DELAYS[siteName]) HEM_DELAYS[siteName]=[];
   HEM_DELAYS[siteName].push({days:parseInt(days,10)||0,reason:reason||'',loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})});
   saveHemDelays();
+  saveHemDelaysToSupabase(siteName);
 }
 function deleteHemDelay(siteName,entryIdx){
   if(!HEM_DELAYS[siteName]) return;
   HEM_DELAYS[siteName].splice(entryIdx,1);
   saveHemDelays();
+  saveHemDelaysToSupabase(siteName);
 }
 function renderHemSection(r,idx){
   var siteName=(r['Site Name']||'').trim();
@@ -7020,6 +7062,7 @@ initSupabase();
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
+          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){ console.warn('loadHemDelaysFromSupabase failed:', e3); }); })
           .then(function(){
             buildFilters();
             renderKPIs();
@@ -7366,6 +7409,15 @@ function _renderAdminTabInner(el) {
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Push all currently-loaded CSV rows into Supabase so team edits persist and are shared across devices. Run once after uploading a fresh CSV.</div>'
     + '</div>'
     + '<button id="sb-sync-btn" onclick="syncAllSitesToSupabase()" style="padding:8px 16px;background:#2563eb;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">☁ Sync CSV → Supabase</button>'
+    + '</div>'
+    + '</div>'
+    + '<div style="background:var(--white);border:1px solid #fde68a;border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-size:13px;font-weight:700">⏳ Migrate HEM Delays → Supabase</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Run once to push any HEM delays saved locally in this browser to Supabase so they persist across all devices.</div>'
+    + '</div>'
+    + '<button onclick="migrateHemDelaysToSupabase(this)" style="padding:8px 16px;background:#d97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">⏳ Migrate HEM Delays</button>'
     + '</div>'
     + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
