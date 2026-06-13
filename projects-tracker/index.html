@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.82</title>
+<title>Cars24 Projects Tracker v4.83</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -817,6 +817,8 @@ function loadSbProfile(userId) {
   function resolveRole(profileRole) {
     var email = (__sbUser && __sbUser.email) || '';
     if (ADMIN_EMAILS.indexOf(email.toLowerCase()) !== -1) return 'admin';
+    // Any cars24.com email is at minimum a PM; DB role can still elevate to admin
+    if (email.toLowerCase().endsWith('@cars24.com')) return profileRole === 'admin' ? 'admin' : 'pm';
     return profileRole || 'viewer';
   }
   __sbClient.from('profiles').select('*').eq('id', userId).single()
