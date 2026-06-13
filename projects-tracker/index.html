@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.81</title>
+<title>Cars24 Projects Tracker v4.82</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1948,7 +1948,7 @@ function renderTable(){
       '<td style="font-size:11px;white-space:nowrap">'+fmtRaw(r['SAT Date'])+'</td>',
       '<td style="font-size:11px;'+(isUatWarn?'color:#d97706;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['UAT DATE'])+'</td>',
       '<td style="font-size:11px;'+(isOv?'color:#dc2626;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['Planned Completion'])+(nearMilestone?'<span style="font-size:9px;background:#eff6ff;color:#2563eb;padding:1px 4px;border-radius:3px;font-weight:700;margin-left:3px">⚡'+daysToSAT+'d</span>':'')+'</td>',
-      (()=>{const rv=r['Revised Completion']||'';const pD2=pd(r['Planned Completion']),rD2=pd(rv);const slp=pD2&&rD2&&rD2>pD2?Math.round((rD2-pD2)/86400000):0;return '<td style="font-size:11px;white-space:nowrap;'+(slp?'color:#d97706;font-weight:600':'color:var(--muted)')+'">'+(rv?fmtRaw(rv)+(slp?' <span style="font-size:9px;background:#fffbeb;color:#d97706;padding:1px 4px;border-radius:3px">+'+slp+'d</span>':''):'<span style="color:#e5e7eb">—</span>')+'</td>';})(),
+      (()=>{const rv=r['Revised Completion']||'';const pD2=pd(r['Planned Completion']),rD2=pd(rv);const slp=pD2&&rD2&&rD2>pD2?Math.round((rD2-pD2)/86400000):0;const canEditRev=(__sbRole==='admin'||__sbRole==='pm');const isoRv=rD2&&!isNaN(rD2)?rD2.getFullYear()+'-'+(rD2.getMonth()<9?'0':'')+(rD2.getMonth()+1)+'-'+(rD2.getDate()<10?'0':'')+rD2.getDate():'';return '<td style="font-size:11px;white-space:nowrap;'+(slp?'color:#d97706;font-weight:600':'color:var(--muted)')+'" onclick="event.stopPropagation()">'+'<div id="trev-disp-'+idx+'" style="display:flex;align-items:center;gap:4px">'+(rv?fmtRaw(rv)+(slp?' <span style="font-size:9px;background:#fffbeb;color:#d97706;padding:1px 4px;border-radius:3px">+'+slp+'d</span>':''):'<span style="color:#e5e7eb">—</span>')+(canEditRev?'<span onclick="openInlineRevEdit('+idx+')" title="Edit revised date" style="font-size:10px;color:#7c3aed;background:#f5f3ff;padding:1px 5px;border-radius:3px;border:1px solid #e9d5ff;font-weight:600;cursor:pointer;margin-left:2px;flex-shrink:0">✎</span>':'')+'</div>'+(canEditRev?'<div id="trev-panel-'+idx+'" style="display:none;margin-top:4px;background:#faf9ff;border:1px solid #e9d5ff;border-radius:7px;padding:8px;min-width:200px;position:relative;z-index:300"><div style="font-size:10px;font-weight:700;color:var(--muted);margin-bottom:3px">New Date</div><input type="date" id="trev-date-'+idx+'" value="'+isoRv+'" style="width:100%;border:1px solid #d1d5db;border-radius:5px;padding:5px 7px;font-size:12px;font-family:Inter,sans-serif;outline:none;color:#111827;background:#fff;box-sizing:border-box"><div style="font-size:10px;font-weight:700;color:var(--muted);margin:6px 0 3px">Reason</div><input type="text" id="trev-reason-'+idx+'" placeholder="e.g. Contractor delay…" style="width:100%;border:1px solid #d1d5db;border-radius:5px;padding:5px 7px;font-size:12px;font-family:Inter,sans-serif;outline:none;color:#111827;background:#fff;box-sizing:border-box"><div style="display:flex;gap:5px;margin-top:7px"><button onclick="confirmInlineRevEdit('+idx+')" style="flex:1;background:#7c3aed;color:#fff;border:none;border-radius:5px;padding:5px 8px;font-size:11px;font-weight:700;cursor:pointer">Save</button><button onclick="cancelInlineRevEdit('+idx+')" style="flex:1;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:5px;padding:5px 8px;font-size:11px;font-weight:600;cursor:pointer">Cancel</button></div></div>':'')+'</td>';})(),
       '<td class="td-upd" style="max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(upd)+'</td>',
     ];
     return '<tr class="'+rowCls+'" onclick="openModal('+idx+')">'+cells.filter((_,ci)=>!hidden.has(ci)).join('')+'</tr>';
@@ -3175,6 +3175,42 @@ function cancelRevEdit(idx) {
   var disp  = document.getElementById('rev-disp-'  + idx);
   if (panel) panel.style.display = 'none';
   if (disp)  disp.style.display  = '';
+}
+
+function openInlineRevEdit(idx) {
+  var panel = document.getElementById('trev-panel-' + idx);
+  var disp  = document.getElementById('trev-disp-'  + idx);
+  if (!panel) return;
+  var r = allData[idx]; if (!r) return;
+  var dateInp = document.getElementById('trev-date-' + idx);
+  if (dateInp) {
+    var d = pd(r['Revised Completion'] || '');
+    dateInp.value = d && !isNaN(d) ? d.toISOString().split('T')[0] : '';
+  }
+  var reasonInp = document.getElementById('trev-reason-' + idx);
+  if (reasonInp) reasonInp.value = '';
+  if (disp) disp.style.display = 'none';
+  panel.style.display = '';
+  if (dateInp) setTimeout(function(){ dateInp.showPicker && dateInp.showPicker(); }, 50);
+}
+
+function cancelInlineRevEdit(idx) {
+  var panel = document.getElementById('trev-panel-' + idx);
+  var disp  = document.getElementById('trev-disp-'  + idx);
+  if (panel) panel.style.display = 'none';
+  if (disp)  disp.style.display  = '';
+}
+
+function confirmInlineRevEdit(idx) {
+  var dateInp   = document.getElementById('trev-date-'   + idx);
+  var reasonInp = document.getElementById('trev-reason-' + idx);
+  if (!dateInp || !dateInp.value) { toast('Pick a date first', 'err'); return; }
+  var d = new Date(dateInp.value + 'T00:00:00');
+  var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  var newDateStr = d.getDate() + ' ' + MONS[d.getMonth()] + ' ' + d.getFullYear();
+  var reason = reasonInp ? reasonInp.value.trim() : '';
+  saveRevisedDate(idx, newDateStr, reason);
+  cancelInlineRevEdit(idx);
 }
 
 // Generic date-picker (no reason field) — used for SAT, UAT, PO, Kickoff, Work Start, Planned
