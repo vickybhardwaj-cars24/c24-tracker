@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.83</title>
+<title>Cars24 Projects Tracker v4.84</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -703,7 +703,7 @@ let ATTENDANCE_DATA = [];
 var SCHED_DATA = {}; // Cars24 scope: { siteName: [ {po, tasks:[{sno,task,vendor,startDate,endDate,done}]} ] }
 var LL_SCOPE_DATA = {}; // Landlord scope: { siteName: [ {task, expectedDate, done} ] }
 var PROCURE_DATA = {}; // Procurement plan: { siteName: [{sno,item,orderDate,deliveryDate,dependency,ordered,delivered}] }
-try { PROCURE_DATA = JSON.parse(localStorage.getItem('procure_data')||'{}'); } catch(e) {}
+try { PROCURE_DATA = JSON.parse(localStorage.getItem('procure_data')||'{}'); } catch(e) {} // local fallback until Worker loads
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -3389,7 +3389,30 @@ function saveStatusEdit(idx) {
 }
 
 // ── Procurement Plan helpers ─────────────────────────────────────
-function saveProcureData(){ try{localStorage.setItem('procure_data',JSON.stringify(PROCURE_DATA));}catch(e){} }
+function loadProcureData(){
+  if(location.protocol==='file:') return Promise.resolve();
+  return fetch(WORKER_URL+PROCURE_TOOL_PATH+'-mappings.json',{cache:'no-store'})
+    .then(function(r){ return r.ok?r.json():{}; })
+    .then(function(data){
+      if(data&&typeof data==='object'&&!Array.isArray(data)&&Object.keys(data).length){
+        PROCURE_DATA=data;
+        try{localStorage.setItem('procure_data',JSON.stringify(PROCURE_DATA));}catch(e){}
+      }
+    })
+    .catch(function(e){ console.warn('loadProcureData failed:',e); });
+}
+
+function saveProcureData(){
+  try{localStorage.setItem('procure_data',JSON.stringify(PROCURE_DATA));}catch(e){}
+  if(location.protocol==='file:') return;
+  fetch(WORKER_URL.replace(/\/+$/,'')+'/mappings',{
+    method:'POST',
+    headers:{'Content-Type':'application/json','X-Tool-Path':PROCURE_TOOL_PATH},
+    body:JSON.stringify(PROCURE_DATA)
+  }).then(function(r){return r.json();})
+    .then(function(j){if(!j.success) toast('Procurement save failed: '+(j.error||''),'err');})
+    .catch(function(e){ toast('Network error saving procurement data','err'); });
+}
 
 function parseProcurementCSV(text){
   var lines=text.split('\n').map(function(l){return l.trim();}).filter(function(l){return l;});
@@ -6880,6 +6903,7 @@ const TOOL_PATH        = 'projects-tracker';
 const SNAG_TOOL_PATH   = 'projects-tracker-snag';
 const TICKET_TOOL_PATH     = 'tickets';
 const ATTENDANCE_TOOL_PATH = 'attendance';
+const PROCURE_TOOL_PATH    = 'procurement';
 const EMAIL_LOG_KEY = '__email_log';
 const HOTP_UPDATES_TOOL = 'hotp-updates';
 const SCHED_TOOL = 'project-schedule';   // Cars24 scope of work (with POs)
@@ -7102,7 +7126,8 @@ initSupabase();
     loadEmailLog(),
     loadHOTPUpdates(),
     loadSchedData(),
-    loadLLScopeData()
+    loadLLScopeData(),
+    loadProcureData()
   ]).then(function(results){
       var text = results[0];
       var parsed = parseCSV(text);
