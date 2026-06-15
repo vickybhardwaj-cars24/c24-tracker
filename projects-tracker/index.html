@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.84</title>
+<title>Cars24 Projects Tracker v4.85</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -115,6 +115,7 @@ td{padding:7px 12px;vertical-align:middle}
 .bc-IT{background:#f5f3ff;color:#6d28d9}
 .bc-Finance{background:#fff7ed;color:#9a3412}
 .bc-Infra{background:#fef3c7;color:#92400e}
+.bc-CS{background:#ecfdf5;color:#065f46}
 .bc-other{background:#f3f4f6;color:#374151}
 .rbadge{display:inline-flex;align-items:center;padding:2px 7px;border-radius:5px;font-size:11px;font-weight:600}
 .r1{background:#fee2e2;color:#dc2626}.r2{background:#ffedd5;color:#ea580c}
@@ -703,7 +704,7 @@ let ATTENDANCE_DATA = [];
 var SCHED_DATA = {}; // Cars24 scope: { siteName: [ {po, tasks:[{sno,task,vendor,startDate,endDate,done}]} ] }
 var LL_SCOPE_DATA = {}; // Landlord scope: { siteName: [ {task, expectedDate, done} ] }
 var PROCURE_DATA = {}; // Procurement plan: { siteName: [{sno,item,orderDate,deliveryDate,dependency,ordered,delivered}] }
-try { PROCURE_DATA = JSON.parse(localStorage.getItem('procure_data')||'{}'); } catch(e) {} // local fallback until Worker loads
+
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & STATE
@@ -714,7 +715,7 @@ let allData = [], filteredData = [], sortCol = '', sortDir = 1;
 var __rawCSVData = null; // snapshot of allData right after CSV parse, before any Supabase overrides
 const TICKET_CLOSED = new Set(); // session-only closed ticket IDs
 var PO_MAP = {}; // session-only PO numbers keyed by site name
-const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra'];
+const BLOCKER_PREFIXES = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra','CS'];
 const UAT_WARN_DAYS = 15; // days after SAT before warning
 const notifiedSet = new Set(); // track notified sites in session
 
@@ -3396,14 +3397,12 @@ function loadProcureData(){
     .then(function(data){
       if(data&&typeof data==='object'&&!Array.isArray(data)&&Object.keys(data).length){
         PROCURE_DATA=data;
-        try{localStorage.setItem('procure_data',JSON.stringify(PROCURE_DATA));}catch(e){}
       }
     })
     .catch(function(e){ console.warn('loadProcureData failed:',e); });
 }
 
 function saveProcureData(){
-  try{localStorage.setItem('procure_data',JSON.stringify(PROCURE_DATA));}catch(e){}
   if(location.protocol==='file:') return;
   fetch(WORKER_URL.replace(/\/+$/,'')+'/mappings',{
     method:'POST',
@@ -3578,9 +3577,19 @@ function handoverUrgencyMail(r){
 }
 
 // ── HEM Delay helpers ────────────────────────────────────────────
+function calcAutoHemDays(entry,r){
+  if(!entry.auto||!entry.committedDate) return parseInt(entry.days,10)||0;
+  var committed=pd(entry.committedDate);
+  if(!committed) return 0;
+  var done=entry.type==='UAT'?pd((r||{})['UAT DATE']):pd((r||{})['SAT Date']);
+  var ref=done?new Date(done.getTime()):new Date();
+  ref.setHours(0,0,0,0);committed.setHours(0,0,0,0);
+  return Math.max(0,Math.round((ref-committed)/86400000));
+}
 function getHemDelayTotal(siteName){
+  var r=allData.find(function(x){return (x['Site Name']||'').trim()===siteName;});
   var entries=(HEM_DELAYS[siteName]||[]);
-  return entries.reduce(function(s,e){return s+(parseInt(e.days,10)||0);},0);
+  return entries.reduce(function(s,e){return s+(e.auto?calcAutoHemDays(e,r):(parseInt(e.days,10)||0));},0);
 }
 function saveHemDelays(){
   try{localStorage.setItem('hem_delays',JSON.stringify(HEM_DELAYS));}catch(e){}
@@ -3624,9 +3633,10 @@ async function migrateHemDelaysToSupabase(btn){
   if(btn){btn.disabled=false;btn.textContent='⏳ Migrate HEM Delays';}
   toast('Migrated '+ok+' site'+(ok!==1?'s':'')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
 }
-function logHemDelay(siteName,days,reason){
+function logHemDelay(siteName,days,reason,autoEntry){
   if(!HEM_DELAYS[siteName]) HEM_DELAYS[siteName]=[];
-  HEM_DELAYS[siteName].push({days:parseInt(days,10)||0,reason:reason||'',loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})});
+  var entry=autoEntry||{days:parseInt(days,10)||0,reason:reason||'',loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})};
+  HEM_DELAYS[siteName].push(entry);
   saveHemDelays();
   saveHemDelaysToSupabase(siteName);
 }
@@ -3666,13 +3676,21 @@ function renderHemSection(r,idx){
   } else {
     timelineHtml='<div style="font-size:11px;color:#6b7280;padding:4px 0 8px">PO Date not set — timeline will appear once PO Date is filled.</div>';
   }
+  var r2=allData.find(function(x){return (x['Site Name']||'').trim()===siteName;});
   var entriesHtml=entries.length
     ?entries.map(function(e,i){
+      var autoDays=e.auto?calcAutoHemDays(e,r2):null;
+      var dispDays=e.auto?autoDays:(parseInt(e.days,10)||0);
+      var isDone=e.auto&&(e.type==='UAT'?pd((r2||{})['UAT DATE']):pd((r2||{})['SAT Date']));
+      var statusLabel=e.auto?(isDone?'✅ '+e.type+' done':'⏳ Running until '+e.type+' date'):'Manual';
       return '<div style="display:flex;align-items:flex-start;justify-content:space-between;padding:6px 0;border-bottom:1px solid #fef3c7">'
         +'<div>'
-        +'<span style="font-size:12px;font-weight:700;color:#92400e">'+e.days+' days</span>'
+        +'<span style="font-size:12px;font-weight:700;color:#92400e">'+dispDays+' days</span>'
+        +(e.auto?'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;margin-left:5px;font-weight:600">'+esc(e.type)+' delay</span>':'')
         +(e.reason?'<span style="font-size:11px;color:#78350f;margin-left:6px">— '+esc(e.reason)+'</span>':'')
-        +'<div style="font-size:10px;color:#a16207;margin-top:1px">Logged: '+esc(e.loggedOn)+'</div>'
+        +'<div style="font-size:10px;color:#a16207;margin-top:1px">'
+        +(e.auto?'Committed: '+esc(e.committedDate)+' · '+statusLabel:'Logged: '+esc(e.loggedOn))
+        +'</div>'
         +'</div>'
         +'<button onclick="deleteHemDelay(\''+esc(siteName).replace(/'/g,"\\'")+'\','+i+');refreshHemSection('+idx+')" '
         +'style="background:none;border:none;color:#d97706;cursor:pointer;font-size:13px;padding:0 4px" title="Remove">✕</button>'
@@ -3690,9 +3708,24 @@ function renderHemSection(r,idx){
     +timelineHtml
     +'<div id="hem-form-'+idx+'" style="display:none;margin-bottom:10px;padding:10px;background:#fffbeb;border:1px solid #fde68a;border-radius:6px">'
     +'<div style="font-size:10px;font-weight:600;color:#92400e;margin-bottom:8px;text-transform:uppercase">New HEM Delay Entry</div>'
-    +'<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-    +'<div><label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Days delayed</label>'
-    +'<input type="number" min="1" id="hem-days-'+idx+'" placeholder="e.g. 5" style="width:80px;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
+    +'<div style="margin-bottom:8px">'
+    +'<label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Delay type</label>'
+    +'<select id="hem-type-'+idx+'" onchange="updateHemFormMode('+idx+')" style="padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111">'
+    +'<option value="manual">Manual (enter days)</option>'
+    +'<option value="SAT">SAT Delay (auto-calculate from committed date)</option>'
+    +'<option value="UAT">UAT Delay (auto-calculate from committed date)</option>'
+    +'</select>'
+    +'</div>'
+    +'<div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap">'
+    +'<div id="hem-days-wrap-'+idx+'">'
+    +'<label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Days delayed</label>'
+    +'<input type="number" min="1" id="hem-days-'+idx+'" placeholder="e.g. 5" style="width:80px;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111">'
+    +'</div>'
+    +'<div id="hem-committed-wrap-'+idx+'" style="display:none">'
+    +'<label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Committed date (DD Mon YYYY)</label>'
+    +'<input type="text" id="hem-committed-'+idx+'" placeholder="e.g. 10 Jun 2026" style="width:140px;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111">'
+    +'<div id="hem-auto-preview-'+idx+'" style="font-size:10px;color:#92400e;margin-top:3px"></div>'
+    +'</div>'
     +'<div style="flex:1;min-width:140px"><label style="font-size:10px;color:#78350f;display:block;margin-bottom:3px">Reason (optional)</label>'
     +'<input type="text" id="hem-reason-'+idx+'" placeholder="e.g. Awaiting inspection slot" style="width:100%;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
     +'</div>'
@@ -3716,15 +3749,38 @@ function showHemForm(idx){
   var f=document.getElementById('hem-form-'+idx);
   if(f){f.style.display='block';var di=document.getElementById('hem-days-'+idx);if(di)di.focus();}
 }
+function updateHemFormMode(idx){
+  var sel=document.getElementById('hem-type-'+idx);
+  var dw=document.getElementById('hem-days-wrap-'+idx);
+  var cw=document.getElementById('hem-committed-wrap-'+idx);
+  if(!sel||!dw||!cw) return;
+  var isAuto=sel.value==='SAT'||sel.value==='UAT';
+  dw.style.display=isAuto?'none':'';
+  cw.style.display=isAuto?'':'none';
+}
 function submitHemDelay(idx,siteName){
+  var selEl=document.getElementById('hem-type-'+idx);
   var dEl=document.getElementById('hem-days-'+idx);
   var rEl=document.getElementById('hem-reason-'+idx);
-  var days=dEl?parseInt(dEl.value,10):0;
-  if(!days||days<1){toast('Enter a valid number of days','warn');return;}
+  var cEl=document.getElementById('hem-committed-'+idx);
   var reason=rEl?rEl.value.trim():'';
-  logHemDelay(siteName,days,reason);
-  refreshHemSection(idx);
-  toast('HEM delay of '+days+' days logged','ok');
+  var type=selEl?selEl.value:'manual';
+  if(type==='SAT'||type==='UAT'){
+    var committed=cEl?cEl.value.trim():'';
+    if(!committed){toast('Enter the committed '+type+' date','warn');return;}
+    var cd=pd(committed);
+    if(!cd){toast('Invalid date — use DD Mon YYYY (e.g. 10 Jun 2026)','warn');return;}
+    var autoEntry={auto:true,type:type,committedDate:committed,reason:reason,loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})};
+    logHemDelay(siteName,0,reason,autoEntry);
+    refreshHemSection(idx);
+    toast(type+' delay auto-tracking started from '+committed,'ok');
+  } else {
+    var days=dEl?parseInt(dEl.value,10):0;
+    if(!days||days<1){toast('Enter a valid number of days','warn');return;}
+    logHemDelay(siteName,days,reason);
+    refreshHemSection(idx);
+    toast('HEM delay of '+days+' days logged','ok');
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -3924,6 +3980,9 @@ function openModal(idx){
     ${llHtml}
     ${renderHemSection(r,idx)}
     ${renderProcureSection(r,idx)}
+    <div id="modal-date-strip-${idx}" style="position:sticky;top:64px;z-index:4;background:var(--white);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.07)">
+      ${[['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'—'],['SAT',r['SAT Date']||'—'],['UAT',r['UAT DATE']||'—'],['Owner',r['Owner']||'—'],['Status',(r['Status']||'').toUpperCase()||'—']].map(([l,v])=>`<div style="display:flex;flex-direction:column;min-width:60px"><span style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${l}</span><span style="font-size:11px;font-weight:700;color:var(--text)">${esc(v)}</span></div>`).join('<div style="width:1px;background:var(--border);align-self:stretch"></div>')}
+    </div>
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
         <div class="addbox"><div class="arow"><span style="font-size:11px;color:var(--muted)">Date:</span><input type="text" id="nd-${idx}" value="${esc(tc)}" placeholder="e.g. 12 Apr"></div><textarea id="nt-${idx}" placeholder="Write update…"></textarea><div style="margin-top:6px"><button class="btn btn-p btn-sm" onclick="addU(${idx})">Add Update</button></div></div>
