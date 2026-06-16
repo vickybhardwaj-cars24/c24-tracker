@@ -535,13 +535,20 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
     setSnapping(true);
     try {
       const el = snapRef.current;
-      // Temporarily expand overflow so html2canvas captures all columns
+      // Temporarily expand the card + inner scroll area so html2canvas
+      // captures every column without clipping the edges.
       const scrollDiv = el.querySelector('.overflow-x-auto');
-      const prevOverflow = scrollDiv ? scrollDiv.style.overflow : null;
-      const prevTableW = el.querySelector('table') ? el.querySelector('table').style.minWidth : null;
-      if(scrollDiv) scrollDiv.style.overflow = 'visible';
       const table = el.querySelector('table');
-      if(table) table.style.minWidth = 'none';
+      const fullW = table ? table.scrollWidth : el.scrollWidth;
+      const saved = {
+        cardOverflow: el.style.overflow, cardWidth: el.style.width,
+        scrollOverflow: scrollDiv ? scrollDiv.style.overflow : null,
+        tableMinW: table ? table.style.minWidth : null,
+      };
+      el.style.overflow = 'visible';
+      el.style.width = fullW + 'px';
+      if(scrollDiv) scrollDiv.style.overflow = 'visible';
+      if(table) table.style.minWidth = fullW + 'px';
 
       const bg = document.documentElement.classList.contains('dark') ? '#111' : '#f9fafb';
       const canvas = await html2canvas(el,{
@@ -549,13 +556,16 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
         scale: 2,
         useCORS: true,
         logging: false,
-        width: el.scrollWidth,
-        windowWidth: el.scrollWidth + 200,
+        width: fullW,
+        height: el.scrollHeight,
+        windowWidth: fullW + 100,
       });
 
       // Restore
-      if(scrollDiv) scrollDiv.style.overflow = prevOverflow||'';
-      if(table && prevTableW!==null) table.style.minWidth = prevTableW||'';
+      el.style.overflow = saved.cardOverflow||'';
+      el.style.width = saved.cardWidth||'';
+      if(scrollDiv) scrollDiv.style.overflow = saved.scrollOverflow||'';
+      if(table) table.style.minWidth = saved.tableMinW||'';
 
       const link = document.createElement('a');
       const today = new Date().toISOString().slice(0,10);
