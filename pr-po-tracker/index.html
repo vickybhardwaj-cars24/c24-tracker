@@ -620,8 +620,8 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
           {snapping?'Exporting…':'Export Image'}
         </button>
       </div>
-      <div className="flex gap-4 items-start">
-        <div ref={snapRef} className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+      <div className="flex flex-col gap-4">
+        <div ref={snapRef} className="w-full min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
           <div className="px-4 pt-3 pb-1 border-b border-gray-100 dark:border-gray-800">
             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Approval TAT — {filtered.length} PRs · {new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
           </div>
@@ -678,7 +678,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
           </div>
         </div>
 
-        <div className="shrink-0 flex flex-col gap-3">
+        <div className="flex flex-wrap gap-3 items-start">
           <PFPivotTable rows={filtered}/>
           <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-[11px] w-64">
             <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">SCM TAT Rules</div>
