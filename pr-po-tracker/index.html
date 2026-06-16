@@ -670,7 +670,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
                   <th className="px-3 py-2.5 text-right font-bold">PR Value</th>
                   <th className="px-3 py-2.5 text-left font-bold">L1 Approval</th>
                   <th className="px-3 py-2.5 text-left font-bold">BizFin</th>
-                  <th className="px-3 py-2.5 text-left font-bold">Current Pending From</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Current Pending From</th>
                   <th className="px-3 py-2.5 text-center font-bold">Aging L1</th>
                   <th className="px-3 py-2.5 text-center font-bold">Aging BizFin</th>
                   <th className="px-3 py-2.5 text-center font-bold">Aging SCM</th>
@@ -699,7 +699,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
                           ? <span className="text-purple-500 font-semibold">{r.bfBy||'Pending'}</span>
                           : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-3 py-2.5"><PFPendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
+                    <td className="px-3 py-2.5 text-center"><PFPendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
                     <PFAgingCell days={r.agingL1} tat={1}/>
                     <PFAgingCell days={r.agingBF} tat={1}/>
                     <PFAgingCell days={r.agingSCM} tat={r.pendingStage==='SCM'?r.tat:null}/>
