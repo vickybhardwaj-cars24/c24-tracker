@@ -18,6 +18,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
@@ -167,6 +168,8 @@ function Ico({ n, size=16, cls='' }) {
     logout:   <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
     refresh:  <><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>,
     spin:     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
+    image:    <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
+    loader:   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -524,6 +527,27 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
   const [fCreatedBy,setFCreatedBy]=useState(new Set());
   const [fPending,setFPending]=useState(new Set());
   const [search,setSearch]=useState('');
+  const [snapping,setSnapping]=useState(false);
+  const snapRef=useRef(null);
+
+  const takeScreenshot = useCallback(async()=>{
+    if(!snapRef.current||snapping) return;
+    setSnapping(true);
+    try {
+      const canvas = await html2canvas(snapRef.current,{
+        backgroundColor: document.documentElement.classList.contains('dark') ? '#111' : '#f9fafb',
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+      const link = document.createElement('a');
+      const today = new Date().toISOString().slice(0,10);
+      link.download = `approval-tat-${today}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch(e){ console.error(e); }
+    setSnapping(false);
+  },[snapping]);
 
   const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
   const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
@@ -572,7 +596,18 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
             <Ico n="x" size={11}/> Clear {activeFilters>0?`(${activeFilters+( search?1:0)})`:''}</button>
         )}
         <span className="text-xs text-gray-400 ml-auto">{filtered.length} rows</span>
+        <button onClick={takeScreenshot} disabled={snapping}
+          title="Export as PNG image"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4736FE]/10 hover:bg-[#4736FE]/20 text-[#4736FE] text-xs font-semibold transition-colors disabled:opacity-50">
+          <Ico n={snapping?'loader':'image'} size={13} cls={snapping?'spin':''}/>
+          {snapping?'Exporting…':'Export Image'}
+        </button>
       </div>
+      <div ref={snapRef} className="p-2"
+        style={{background: document.documentElement.classList.contains('dark')?'#111':'#f9fafb'}}>
+        <div className="flex items-center justify-between mb-3 px-1">
+          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Approval TAT — {filtered.length} PRs · {new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+        </div>
 
       <div className="flex gap-4 items-start">
         <div className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
@@ -650,6 +685,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
             </div>
           </div>
         </div>
+      </div>
       </div>
     </div>
   );
