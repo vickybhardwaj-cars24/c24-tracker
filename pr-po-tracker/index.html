@@ -10,13 +10,41 @@
   (function(){
     try{var t=localStorage.getItem('c24-theme');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(_){}
   })();
-  tailwind.config={darkMode:'class'}
+  window.tailwind = window.tailwind || {};
+  window.tailwind.config = { darkMode: 'class' };
 </script>
-<script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+<script>
+  // Prevent Babel from processing any script tag that isn't explicitly text/babel.
+  // Babel standalone 7.x watches for DOM mutations and may try to transform
+  // scripts injected by third-party tools (Vercel feedback widget, etc.) which
+  // contain ES module import syntax and crash when injected as regular scripts.
+  (function(){
+    var _orig = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(node){
+      if(node && node.nodeType===1 && node.tagName==='SCRIPT'){
+        var t = node.getAttribute('type');
+        if(!t || t==='module'){
+          // Force a non-babel type so Babel skips it
+          if(!t) node.setAttribute('type','text/javascript');
+        }
+      }
+      return _orig.call(this,node);
+    };
+    var _origInsert = Node.prototype.insertBefore;
+    Node.prototype.insertBefore = function(node, ref){
+      if(node && node.nodeType===1 && node.tagName==='SCRIPT'){
+        var t = node.getAttribute('type');
+        if(!t) node.setAttribute('type','text/javascript');
+      }
+      return _origInsert.call(this,node,ref);
+    };
+  })();
+</script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
@@ -44,12 +72,13 @@
 <body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-presets="react" data-plugins="transform-modules-commonjs">
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ── Worker config (same as projects-tracker) ──────────────────────────────
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH  = 'prpo-tracker';
+const APPROVAL_PATH = 'prpo-approval';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -405,7 +434,255 @@ function SlackPanel({ pendingL1, pendingBizFin }) {
   );
 }
 
-// ── Approval TAT Section ──────────────────────────────────────────────────
+// ── Processflows CSV — column indices (0-based) ───────────────────────────
+const PF_CI = {
+  PR_CODE:     0,  PR_DATE:    1,  STATUS:     2,  SUBJECT:    6,
+  AMOUNT:     17,  CREATED_BY: 22, CUR_PENDING: 28,
+  L1_BY:      33,  L1_DATE:    34, BF_BY:      38, BF_DATE:    39,
+};
+
+function pfScmTAT(amount) {
+  if (amount < 100000) return 1;
+  if (amount < 500000) return 6;
+  if (amount < 4000000) return 7;
+  return 15;
+}
+
+function pfDaysSince(dateVal) {
+  if (!dateVal) return null;
+  const s = String(dateVal).trim();
+  const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
+  const d = m1 ? new Date(+m1[3], +m1[2]-1, +m1[1]) : parseDate(s);
+  if (!d || isNaN(d)) return null;
+  const t = new Date(); t.setHours(0,0,0,0);
+  const diff = Math.floor((t - d) / 86400000);
+  return diff >= 0 ? diff : null;
+}
+
+function pfFmtDate(v) {
+  if (!v) return '—';
+  const s = String(v).trim();
+  const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
+  if (m1) return new Date(+m1[3], +m1[2]-1, +m1[1]).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  return s;
+}
+
+function parseProcessflowsCSV(text) {
+  const res = Papa.parse(text, { skipEmptyLines: true });
+  if (!res.data || res.data.length < 2) return [];
+  let startIdx = 0;
+  for (let i = 0; i < Math.min(5, res.data.length); i++) {
+    if (String(res.data[i][0] || '').trim() === 'PR Code') { startIdx = i + 1; break; }
+  }
+  return res.data.slice(startIdx)
+    .filter(row => row.length > 5 && String(row[PF_CI.PR_CODE] || '').trim().startsWith('PR-'))
+    .map(row => {
+      const get = i => String(row[i] || '').trim();
+      const amount = parseFloat(get(PF_CI.AMOUNT).replace(/[₹,\s]/g,'')) || 0;
+      const l1Date = get(PF_CI.L1_DATE), bfDate = get(PF_CI.BF_DATE);
+      const l1By = get(PF_CI.L1_BY), bfBy = get(PF_CI.BF_BY);
+      const curPending = get(PF_CI.CUR_PENDING); // name of who currently needs to act
+      const prDate = get(PF_CI.PR_DATE);
+      let pendingStage, pendingLabel;
+      if (!l1Date)       { pendingStage='L1';    const nm=curPending||l1By; pendingLabel=nm?`L1 (${nm})`:'L1'; }
+      else if (!bfDate)  { pendingStage='BizFin'; const nm=curPending||bfBy; pendingLabel=nm?`Bizfin (${nm})`:'Bizfin'; }
+      else               { pendingStage='SCM';    pendingLabel='SCM'; }
+      const agingL1  = !l1Date ? pfDaysSince(prDate) : null;
+      const agingBF  = l1Date && !bfDate ? pfDaysSince(l1Date) : null;
+      const agingSCM = l1Date && bfDate  ? pfDaysSince(bfDate) : null;
+      let tat, agingForTAT;
+      if (pendingStage==='L1')     { tat=1; agingForTAT=agingL1; }
+      else if (pendingStage==='BizFin') { tat=1; agingForTAT=agingBF; }
+      else { tat=pfScmTAT(amount); agingForTAT=agingSCM; }
+      const pctTAT = tat!=null && agingForTAT!=null ? Math.round((agingForTAT/tat)*100) : null;
+      return { prCode:get(PF_CI.PR_CODE), prDate, status:get(PF_CI.STATUS), location:get(PF_CI.SUBJECT),
+        amount, createdBy:get(PF_CI.CREATED_BY), l1By, l1Date, bfBy, bfDate,
+        pendingStage, pendingLabel, agingL1, agingBF, agingSCM, tat, pctTAT, agingForTAT };
+    });
+}
+
+function PFPivotTable({ rows }) {
+  const { entries, total } = useMemo(() => {
+    const map = {};
+    rows.forEach(r => { map[r.pendingLabel] = (map[r.pendingLabel]||0)+1; });
+    const entries = Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    return { entries, total: entries.reduce((s,[,c])=>s+c,0) };
+  }, [rows]);
+  return (
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden text-xs w-64 shrink-0 self-start">
+      <div className="px-4 py-2.5 bg-amber-400/20 border-b border-gray-100 dark:border-gray-800 font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wide">Pending With — Summary</div>
+      <table className="w-full">
+        <thead><tr className="bg-gray-50 dark:bg-white/[0.02] text-gray-400">
+          <th className="px-4 py-2 text-left font-semibold">Current Pending from</th>
+          <th className="px-4 py-2 text-center font-semibold">Count</th>
+        </tr></thead>
+        <tbody>
+          {entries.map(([label,count])=>(
+            <tr key={label} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+              <td className="px-4 py-2">{label}</td><td className="px-4 py-2 text-center font-bold">{count}</td>
+            </tr>
+          ))}
+          <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-white/[0.05] font-bold">
+            <td className="px-4 py-2">Grand Total</td><td className="px-4 py-2 text-center">{total}</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function PFAgingCell({ days, tat }) {
+  if (days==null) return <td className="px-3 py-2.5 text-center text-gray-400">—</td>;
+  const over = tat!=null && days>tat;
+  return <td className={`px-3 py-2.5 text-center font-semibold text-xs ${over?'text-red-400 tat-overdue':'text-gray-600 dark:text-gray-300'}`}>{days}d</td>;
+}
+function PFTATCell({ pct }) {
+  if (pct==null) return <td className="px-3 py-2.5 text-center text-gray-400">—</td>;
+  const color = pct>=100?'text-red-500 font-bold':pct>=70?'text-amber-500 font-semibold':'text-green-500 font-semibold';
+  return <td className={`px-3 py-2.5 text-center text-xs ${pct>=100?'tat-overdue':''}`}><span className={color}>{pct}%</span></td>;
+}
+function PFPendingBadge({ label, stage }) {
+  const map={L1:'bg-amber-500/15 text-amber-500 border-amber-500/30',BizFin:'bg-purple-500/15 text-purple-400 border-purple-500/30',SCM:'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'};
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${map[stage]||'bg-gray-500/15 text-gray-400 border-gray-500/30'}`}>{label}</span>;
+}
+
+function ApprovalTATTab({ approvalRows, approvalFileRef }) {
+  const [fStatus,setFStatus]=useState(new Set());
+  const [fCreatedBy,setFCreatedBy]=useState(new Set());
+  const [fPending,setFPending]=useState(new Set());
+  const [search,setSearch]=useState('');
+
+  const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
+  const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
+
+  const filtered = useMemo(()=>{
+    let out=approvalRows;
+    if(fStatus.size>0)    out=out.filter(r=>fStatus.has(r.status));
+    if(fCreatedBy.size>0) out=out.filter(r=>fCreatedBy.has(r.createdBy));
+    if(fPending.size>0)   out=out.filter(r=>fPending.has(r.pendingStage));
+    if(search){const q=search.toLowerCase();out=out.filter(r=>r.location.toLowerCase().includes(q)||r.prCode.toLowerCase().includes(q)||r.createdBy.toLowerCase().includes(q)||r.pendingLabel.toLowerCase().includes(q));}
+    return out;
+  },[approvalRows,fStatus,fCreatedBy,fPending,search]);
+
+  const activeFilters = fStatus.size+fCreatedBy.size+fPending.size;
+
+  if (approvalRows.length===0) return (
+    <div className="fade-in flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
+      <div className="w-16 h-16 rounded-2xl bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center">
+        <Ico n="upload" size={28} cls="text-[#4736FE]"/>
+      </div>
+      <div className="text-center">
+        <div className="font-semibold text-base text-gray-600 dark:text-gray-300">No Approval data loaded</div>
+        <div className="text-sm mt-1">Upload the PR export from processflows.ai to see approval aging</div>
+      </div>
+      <button onClick={()=>approvalFileRef.current&&approvalFileRef.current.click()}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] transition-colors">
+        <Ico n="upload" size={14}/> Upload Approval CSV
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="fade-in">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative">
+          <Ico n="search" size={13} cls="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search PRs…"
+            className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] w-44"/>
+        </div>
+        <MultiCheck label="Status"      options={statusOpts}         selected={fStatus}    onChange={setFStatus}/>
+        <MultiCheck label="EMSS POC"    options={createdOpts}        selected={fCreatedBy} onChange={setFCreatedBy}/>
+        <MultiCheck label="Pending With" options={['L1','BizFin','SCM']} selected={fPending}   onChange={setFPending}/>
+        {(activeFilters>0||search) && (
+          <button onClick={()=>{setFStatus(new Set());setFCreatedBy(new Set());setFPending(new Set());setSearch('');}}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400 transition-colors">
+            <Ico n="x" size={11}/> Clear {activeFilters>0?`(${activeFilters+( search?1:0)})`:''}</button>
+        )}
+        <span className="text-xs text-gray-400 ml-auto">{filtered.length} rows</span>
+      </div>
+
+      <div className="flex gap-4 items-start">
+        <div className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[1000px]">
+              <thead>
+                <tr className="bg-amber-400 text-black">
+                  <th className="px-3 py-2.5 text-left font-bold">Location</th>
+                  <th className="px-3 py-2.5 text-left font-bold">EMSS POC</th>
+                  <th className="px-3 py-2.5 text-left font-bold">PR Number</th>
+                  <th className="px-3 py-2.5 text-left font-bold">PR Date</th>
+                  <th className="px-3 py-2.5 text-right font-bold">PR Value</th>
+                  <th className="px-3 py-2.5 text-left font-bold">L1 Approval</th>
+                  <th className="px-3 py-2.5 text-left font-bold">BizFin</th>
+                  <th className="px-3 py-2.5 text-left font-bold">Current Pending From</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Aging L1</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Aging BizFin</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Aging SCM</th>
+                  <th className="px-3 py-2.5 text-center font-bold">TAT</th>
+                  <th className="px-3 py-2.5 text-center font-bold">% TAT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r,i)=>(
+                  <tr key={r.prCode+i}
+                    className={`border-b border-gray-50 dark:border-gray-800/60 hover:brightness-95 dark:hover:brightness-110 transition-all ${r.status==='cancelled'?'opacity-50':''}`}>
+                    <td className="px-3 py-2.5 font-medium max-w-[200px] truncate" title={r.location}>{r.location||'—'}</td>
+                    <td className="px-3 py-2.5 text-gray-500 max-w-[110px] truncate">{r.createdBy||'—'}</td>
+                    <td className="px-3 py-2.5 font-mono text-[10px] text-[#4736FE]">{r.prCode}</td>
+                    <td className="px-3 py-2.5 text-gray-400">{pfFmtDate(r.prDate)}</td>
+                    <td className="px-3 py-2.5 text-right font-medium">{fmtMoney(r.amount,true)}</td>
+                    <td className="px-3 py-2.5">
+                      {r.l1Date
+                        ? <span className="text-green-600 dark:text-green-400 text-[10px]">{r.l1By?r.l1By.split(' ')[0]:''} · {pfFmtDate(r.l1Date)}</span>
+                        : <span className="text-amber-500 font-semibold">{r.l1By||'Pending'}</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {r.bfDate
+                        ? <span className="text-green-600 dark:text-green-400 text-[10px]">{r.bfBy?r.bfBy.split(' ')[0]:''} · {pfFmtDate(r.bfDate)}</span>
+                        : r.l1Date
+                          ? <span className="text-purple-500 font-semibold">{r.bfBy||'Pending'}</span>
+                          : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5"><PFPendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
+                    <PFAgingCell days={r.agingL1} tat={1}/>
+                    <PFAgingCell days={r.agingBF} tat={1}/>
+                    <PFAgingCell days={r.agingSCM} tat={r.pendingStage==='SCM'?r.tat:null}/>
+                    <td className="px-3 py-2.5 text-center text-gray-500">{r.tat!=null?r.tat+'d':'—'}</td>
+                    <PFTATCell pct={r.pctTAT}/>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex flex-col gap-3">
+          <PFPivotTable rows={filtered}/>
+          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-[11px] w-64">
+            <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">SCM TAT Rules</div>
+            <div className="space-y-1 text-gray-500 dark:text-gray-400">
+              <div className="flex justify-between"><span>&lt; ₹1 L</span><span className="font-semibold">1 day</span></div>
+              <div className="flex justify-between"><span>₹1 L – ₹5 L</span><span className="font-semibold">6 days</span></div>
+              <div className="flex justify-between"><span>₹5 L – ₹40 L</span><span className="font-semibold">7 days</span></div>
+              <div className="flex justify-between"><span>₹40 L – ₹1 Cr</span><span className="font-semibold">15 days</span></div>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 flex justify-between"><span>L1 &amp; BizFin</span><span className="font-semibold">1 day each</span></div>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-[11px] w-64">
+            <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">% TAT Color</div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-green-500/30"></span><span className="text-gray-500 dark:text-gray-400">&lt;70% — On track</span></div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-amber-500/30"></span><span className="text-gray-500 dark:text-gray-400">70–99% — At risk</span></div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-red-500/30"></span><span className="text-gray-500 dark:text-gray-400">≥100% — Overdue</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Approval TAT Section (legacy — kept for old data format) ──────────────
 
 function TatSection({ title, rows, dateKey, dateLabel, color }) {
   const today = new Date(); today.setHours(0,0,0,0);
@@ -630,11 +907,13 @@ function InvoicingPending({ rows, fyFilter, fyOptions, onFYChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 
-function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
+function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
   const urlCC = useMemo(()=>new URLSearchParams(window.location.search).get('costCenter')||'', []);
   const uploadRef = useRef();
+  const approvalUploadRef = useRef();
 
   const [tab, setTab] = useState('table');
+  const approvalRows = approvalData;
   const [search, setSearch] = useState('');
   const [fTypes, setFTypes]           = useState(new Set());
   const [fPOCs, setFPOCs]             = useState(new Set());
@@ -708,6 +987,28 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
     reader.readAsText(file);
   }
 
+  function handleApprovalUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!auth) { toast('Please log in first to upload', 'err'); e.target.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const csvText = ev.target.result;
+      const rows = parseProcessflowsCSV(csvText);
+      if (!rows.length) { toast('Could not parse approval CSV — check format', 'err'); e.target.value=''; return; }
+      onApprovalDataChange(rows);
+      setTab('approval');
+      window.C24Uploader.upload({ csvText, workerUrl: WORKER_URL, toolPath: APPROVAL_PATH, auth })
+        .then(() => toast(`✓ ${rows.length} PRs saved to cloud`))
+        .catch(er => {
+          if (er.status===401) { toast('Session expired — log in again', 'err'); onLogout(); }
+          else toast('Cloud save failed: '+(er.message||er), 'err');
+        });
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
   function clearFilters() {
     setFCostCenter(new Set()); setFTypes(new Set()); setFPOCs(new Set());
     setFLocations(new Set()); setFVendors(new Set()); setFStatus(new Set()); setFFY(new Set()); setSearch('');
@@ -730,8 +1031,13 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400 hidden sm:block">{data.length.toLocaleString()} records</span>
-          {/* Upload CSV (requires auth) */}
+          {/* Upload CSVs */}
           <input ref={uploadRef} type="file" accept=".csv" className="hidden" onChange={handleUpload}/>
+          <input ref={approvalUploadRef} type="file" accept=".csv" className="hidden" onChange={handleApprovalUpload}/>
+          <button onClick={()=>{ if(auth) approvalUploadRef.current.click(); else onLogin(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">
+            <Ico n="upload" size={12}/> Approval CSV
+          </button>
           {auth ? (
             <>
               <button onClick={()=>uploadRef.current.click()} disabled={uploading}
@@ -799,15 +1105,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
         )}
 
         {tab==='approval' && (
-          <div className="fade-in">
-            <div className="flex items-center gap-2 mb-4">
-              <MultiCheck label="FY" options={opts.fyOptions} selected={fFY} onChange={setFFY}/>
-              {fFY.size>0 && <button onClick={()=>setFFY(new Set())} className="text-xs text-[#4736FE] hover:underline">Clear FY</button>}
-            </div>
-            <SlackPanel pendingL1={fFY.size>0?pendingL1.filter(r=>fFY.has(getFY(r['PR Date']))):pendingL1} pendingBizFin={fFY.size>0?pendingBizFin.filter(r=>fFY.has(getFY(r['PR Date']))):pendingBizFin}/>
-            <TatSection title={`Pending L1 Approval`} rows={fFY.size>0?pendingL1.filter(r=>fFY.has(getFY(r['PR Date']))):pendingL1} dateKey="PR Date" dateLabel="PR Date" color="red"/>
-            <TatSection title={`Pending BizFin Approval — L1 Done`} rows={fFY.size>0?pendingBizFin.filter(r=>fFY.has(getFY(r['PR Date']))):pendingBizFin} dateKey="L1 Approval" dateLabel="L1 Date" color="amber"/>
-          </div>
+          <ApprovalTATTab approvalRows={approvalRows} approvalFileRef={approvalUploadRef}/>
         )}
 
         {tab==='invoicing' && (
@@ -899,14 +1197,15 @@ function EmptyScreen({ loading, auth, onLogin, onLogout, theme, onToggleTheme, t
 // ── Root App ──────────────────────────────────────────────────────────────
 
 function App() {
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [auth, setAuth]         = useState(null);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [theme, setTheme]       = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
-  const { toasts, add: toast }  = useToast();
+  const [data, setData]               = useState(null);
+  const [approvalData, setApprovalData] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [auth, setAuth]               = useState(null);
+  const [loginOpen, setLoginOpen]     = useState(false);
+  const [theme, setTheme]             = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
+  const { toasts, add: toast }        = useToast();
 
-  // Fetch from Cloudflare Worker on mount
+  // Fetch main CSV + approval CSV from Cloudflare on mount
   useEffect(() => {
     if (location.protocol === 'file:') { setLoading(false); return; }
     window.C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', { cache: 'no-store' })
@@ -915,8 +1214,15 @@ function App() {
         if (rows) setData(rows);
         else toast('No valid data in stored CSV', 'err');
       })
-      .catch(() => { /* no data yet — show empty state */ })
+      .catch(() => {})
       .finally(() => setLoading(false));
+    // Load approval CSV — skeleton:false avoids conflicting with the main fetch overlay
+    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store', skeleton: false })
+      .then(text => {
+        const rows = parseProcessflowsCSV(text);
+        if (rows.length) setApprovalData(rows);
+      })
+      .catch(() => {});
   }, []);
 
   function toggleTheme() {
@@ -933,7 +1239,8 @@ function App() {
   return (
     <>
       {data
-        ? <Dashboard data={data} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
+        ? <Dashboard data={data} approvalData={approvalData} onApprovalDataChange={setApprovalData}
+            auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
             onUploadDone={setData} theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
         : <EmptyScreen loading={loading} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
             theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
