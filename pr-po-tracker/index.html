@@ -518,9 +518,9 @@ function PFPendingBadge({ label, stage }) {
 }
 
 function ApprovalTATTab({ approvalRows, approvalFileRef }) {
-  const [fStatus,setFStatus]=useState('');
-  const [fCreatedBy,setFCreatedBy]=useState('');
-  const [fPending,setFPending]=useState('');
+  const [fStatus,setFStatus]=useState(new Set());
+  const [fCreatedBy,setFCreatedBy]=useState(new Set());
+  const [fPending,setFPending]=useState(new Set());
   const [search,setSearch]=useState('');
 
   const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
@@ -528,20 +528,14 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
 
   const filtered = useMemo(()=>{
     let out=approvalRows;
-    if(fStatus)    out=out.filter(r=>r.status===fStatus);
-    if(fCreatedBy) out=out.filter(r=>r.createdBy===fCreatedBy);
-    if(fPending)   out=out.filter(r=>r.pendingStage===fPending);
+    if(fStatus.size>0)    out=out.filter(r=>fStatus.has(r.status));
+    if(fCreatedBy.size>0) out=out.filter(r=>fCreatedBy.has(r.createdBy));
+    if(fPending.size>0)   out=out.filter(r=>fPending.has(r.pendingStage));
     if(search){const q=search.toLowerCase();out=out.filter(r=>r.location.toLowerCase().includes(q)||r.prCode.toLowerCase().includes(q)||r.createdBy.toLowerCase().includes(q)||r.pendingLabel.toLowerCase().includes(q));}
     return out;
   },[approvalRows,fStatus,fCreatedBy,fPending,search]);
 
-  function Sel({val,setVal,opts,placeholder}){
-    return <select value={val} onChange={e=>setVal(e.target.value)}
-      className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] cursor-pointer">
-      <option value="">{placeholder}</option>
-      {opts.map(o=><option key={o} value={o}>{o}</option>)}
-    </select>;
-  }
+  const activeFilters = fStatus.size+fCreatedBy.size+fPending.size;
 
   if (approvalRows.length===0) return (
     <div className="fade-in flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
@@ -567,12 +561,13 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
           <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search PRs…"
             className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] w-44"/>
         </div>
-        <Sel val={fStatus}    setVal={setFStatus}    opts={statusOpts}  placeholder="All Statuses"/>
-        <Sel val={fCreatedBy} setVal={setFCreatedBy} opts={createdOpts} placeholder="All EMSS POC"/>
-        <Sel val={fPending}   setVal={setFPending}   opts={['L1','BizFin','SCM']} placeholder="All Pending With"/>
-        {(fStatus||fCreatedBy||fPending||search) && (
-          <button onClick={()=>{setFStatus('');setFCreatedBy('');setFPending('');setSearch('');}}
-            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400"><Ico n="x" size={11}/> Clear</button>
+        <MultiCheck label="Status"      options={statusOpts}         selected={fStatus}    onChange={setFStatus}/>
+        <MultiCheck label="EMSS POC"    options={createdOpts}        selected={fCreatedBy} onChange={setFCreatedBy}/>
+        <MultiCheck label="Pending With" options={['L1','BizFin','SCM']} selected={fPending}   onChange={setFPending}/>
+        {(activeFilters>0||search) && (
+          <button onClick={()=>{setFStatus(new Set());setFCreatedBy(new Set());setFPending(new Set());setSearch('');}}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400 transition-colors">
+            <Ico n="x" size={11}/> Clear {activeFilters>0?`(${activeFilters+( search?1:0)})`:''}</button>
         )}
         <span className="text-xs text-gray-400 ml-auto">{filtered.length} rows</span>
       </div>
