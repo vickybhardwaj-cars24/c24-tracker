@@ -15,26 +15,6 @@
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
-<script>
-  (function(){
-    var _orig = Node.prototype.appendChild;
-    Node.prototype.appendChild = function(node){
-      if(node && node.nodeType===1 && node.tagName==='SCRIPT'){
-        var t = node.getAttribute('type');
-        if(!t) node.setAttribute('type','text/javascript');
-      }
-      return _orig.call(this,node);
-    };
-    var _origInsert = Node.prototype.insertBefore;
-    Node.prototype.insertBefore = function(node, ref){
-      if(node && node.nodeType===1 && node.tagName==='SCRIPT'){
-        var t = node.getAttribute('type');
-        if(!t) node.setAttribute('type','text/javascript');
-      }
-      return _origInsert.call(this,node,ref);
-    };
-  })();
-</script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
@@ -62,7 +42,7 @@ td,th{overflow:hidden;text-overflow:ellipsis}
 </head>
 <body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
 <div id="root"></div>
-<script type="text/babel" data-presets="react" data-plugins="transform-modules-commonjs">
+<script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo, useCallback, memo } = React;
 
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
