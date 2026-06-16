@@ -16,8 +16,35 @@
 <script src="https://cdn.tailwindcss.com/3.4.17"></script>
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
-<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-<script src="https://unpkg.com/papaparse@5/papaparse.min.js"></script>
+<script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
+<script>
+  // Prevent Babel from processing any script tag that isn't explicitly text/babel.
+  // Babel standalone 7.x watches for DOM mutations and may try to transform
+  // scripts injected by third-party tools (Vercel feedback widget, etc.) which
+  // contain ES module import syntax and crash when injected as regular scripts.
+  (function(){
+    var _orig = Node.prototype.appendChild;
+    Node.prototype.appendChild = function(node){
+      if(node && node.nodeType===1 && node.tagName==='SCRIPT'){
+        var t = node.getAttribute('type');
+        if(!t || t==='module'){
+          // Force a non-babel type so Babel skips it
+          if(!t) node.setAttribute('type','text/javascript');
+        }
+      }
+      return _orig.call(this,node);
+    };
+    var _origInsert = Node.prototype.insertBefore;
+    Node.prototype.insertBefore = function(node, ref){
+      if(node && node.nodeType===1 && node.tagName==='SCRIPT'){
+        var t = node.getAttribute('type');
+        if(!t) node.setAttribute('type','text/javascript');
+      }
+      return _origInsert.call(this,node,ref);
+    };
+  })();
+</script>
+<script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
@@ -45,7 +72,7 @@
 <body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
 <div id="root"></div>
 
-<script type="text/babel" data-presets="react">
+<script type="text/babel" data-presets="react" data-plugins="transform-modules-commonjs">
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
 // ── Worker config (same as projects-tracker) ──────────────────────────────
