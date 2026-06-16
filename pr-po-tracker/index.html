@@ -3,16 +3,16 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>PR Approval Tracker — CARS24 v1.0</title>
+<title>PR/PO Tracker — CARS24</title>
 <script src="/shared/c24-favicon.js"></script>
 <script src="/shared/c24-uploader.js"></script>
 <script>
   (function(){
     try{var t=localStorage.getItem('c24-theme');if(t==='dark')document.documentElement.classList.add('dark');else document.documentElement.classList.remove('dark');}catch(_){}
   })();
+  tailwind.config={darkMode:'class'}
 </script>
 <script src="https://cdn.tailwindcss.com"></script>
-<script>tailwind.config={darkMode:'class'}</script>
 <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -26,185 +26,156 @@
   ::-webkit-scrollbar-thumb{background:#4736FE55;border-radius:3px}
   .fade-in{animation:fadeIn .2s ease}
   @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .row-cancelled{background:rgba(239,68,68,.08)!important;border-left:3px solid #ef4444}
+  .row-pr_only{background:rgba(59,130,246,.08)!important;border-left:3px solid #3b82f6}
+  .row-po_issued{background:rgba(245,158,11,.06)!important;border-left:3px solid #f59e0b}
+  .row-invoiced{background:rgba(34,197,94,.07)!important;border-left:3px solid #22c55e}
+  .dark .row-cancelled{background:rgba(239,68,68,.12)!important}
+  .dark .row-pr_only{background:rgba(59,130,246,.1)!important}
+  .dark .row-po_issued{background:rgba(245,158,11,.08)!important}
+  .dark .row-invoiced{background:rgba(34,197,94,.09)!important}
+  .tat-overdue{background:rgba(239,68,68,.1)!important}
+  .dark .tat-overdue{background:rgba(239,68,68,.15)!important}
+  td,th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
   .spin{animation:spin 1s linear infinite}
   @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
-  td,th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-  .loc-cell{max-width:220px}
-  .tat-red{background:rgba(239,68,68,.13)!important}
-  .tat-amber{background:rgba(245,158,11,.10)!important}
-  .tat-green{background:rgba(34,197,94,.10)!important}
-  .dark .tat-red{background:rgba(239,68,68,.18)!important}
-  .dark .tat-amber{background:rgba(245,158,11,.14)!important}
-  .dark .tat-green{background:rgba(34,197,94,.13)!important}
 </style>
 </head>
-<body class="bg-gray-50 dark:bg-[#0f0f0f] text-gray-900 dark:text-gray-100 min-h-screen">
+<body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
 <div id="root"></div>
 
 <script type="text/babel" data-presets="react">
 const { useState, useEffect, useRef, useMemo, useCallback } = React;
 
+// ── Worker config (same as projects-tracker) ──────────────────────────────
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH  = 'prpo-tracker';
 
-// ── Column indices (0-based from processflows CSV) ────────────────────────
-const CI = {
-  PR_CODE: 0,   // A
-  PR_DATE: 1,   // B
-  STATUS:  2,   // C
-  SUBJECT: 6,   // G  — Location / Subject
-  AMOUNT:  17,  // R  — Total Amount
-  CREATED_BY: 22, // W — PR Created By (EMSS POC)
-  CUR_PENDING: 28, // AC — Current pending approvals (raw from system)
-  L1_BY:   33,  // AH — Approved/Rejected By 1 (L1 approver name)
-  L1_DATE: 34,  // AI — Approved/Rejected Date 1 (L1 date)
-  BF_BY:   38,  // AM — Approved/Rejected By 2 (BizFin approver)
-  BF_DATE: 39,  // AN — Approved/Rejected Date 2 (BizFin date)
-};
+// ── Helpers ───────────────────────────────────────────────────────────────
 
-// ── SCM TAT by value ──────────────────────────────────────────────────────
-function scmTAT(amount) {
-  if (amount < 100000)   return 1;
-  if (amount < 500000)   return 6;
-  if (amount < 4000000)  return 7;
-  if (amount < 10000000) return 15;
-  return 15;
+function parseNum(v) {
+  if (v == null || v === '') return 0;
+  return parseFloat(String(v).replace(/[₹,\s]/g, '')) || 0;
 }
 
-// ── Date helpers ──────────────────────────────────────────────────────────
+const MONTHS = {jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11,
+  january:0,february:1,fabruary:1,march:2,april:3,june:5,july:6,august:7,
+  september:8,october:9,november:10,december:11};
+
 function parseDate(v) {
   if (!v) return null;
-  const s = String(v).trim();
+  const s = String(v).trim().split('&')[0].trim();
   if (!s) return null;
-  // DD-MM-YYYY or DD/MM/YYYY
-  const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
-  if (m1) { const [,d,mo,y] = m1; return new Date(+y, +mo-1, +d); }
-  // DD/M/YYYY
-  const m2 = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
-  if (m2) { const [,d,mo,y] = m2; return new Date(+y, +mo-1, +d); }
-  const d = new Date(s);
+  let d = new Date(s);
   if (!isNaN(d)) return d;
+  const m = s.match(/(\d{1,2})[\s\-\/]([A-Za-z]+)[\s\-\/']?(\d{2,4})?/);
+  if (m) {
+    const day = parseInt(m[1]);
+    const mon = MONTHS[m[2].toLowerCase().slice(0,3)];
+    let yr = m[3] ? parseInt(m[3]) : 2024;
+    if (yr < 100) yr += 2000;
+    if (mon !== undefined && day > 0 && day <= 31) return new Date(yr, mon, day);
+  }
   return null;
 }
 
-function today() {
-  const t = new Date();
-  return new Date(t.getFullYear(), t.getMonth(), t.getDate());
-}
-
-function daysSince(dateVal) {
-  if (!dateVal) return null;
-  const d = parseDate(dateVal);
-  if (!d) return null;
-  const diff = Math.floor((today() - d) / 86400000);
-  return diff >= 0 ? diff : null;
-}
-
-function fmtDate(v) {
-  const d = parseDate(v);
-  if (!d) return '—';
-  return d.toLocaleDateString('en-IN', { day:'2-digit', month:'short', year:'numeric' });
-}
-
-function fmtMoney(v) {
-  if (!v) return '—';
-  if (v >= 10000000) return `₹${(v/10000000).toFixed(2)} Cr`;
-  if (v >= 100000)   return `₹${(v/100000).toFixed(2)} L`;
-  if (v >= 1000)     return `₹${(v/1000).toFixed(1)} K`;
+function fmtMoney(v, short=false) {
+  if (!v || v === 0) return '—';
+  if (short) {
+    if (v >= 10000000) return `₹${(v/10000000).toFixed(2)}Cr`;
+    if (v >= 100000) return `₹${(v/100000).toFixed(2)}L`;
+    if (v >= 1000) return `₹${(v/1000).toFixed(1)}K`;
+  }
   return '₹' + Math.round(v).toLocaleString('en-IN');
+}
+
+function daysDiff(a, b) {
+  const da = a instanceof Date ? a : parseDate(a);
+  const db = b instanceof Date ? b : parseDate(b);
+  if (!da || !db) return null;
+  return Math.round((db - da) / 86400000);
+}
+
+function rowStatus(r) {
+  const rem = String(r['Remarks'] || '').toLowerCase();
+  const poSt = String(r['PO Status'] || '').toLowerCase();
+  const poNum = String(r['PO Number'] || '').trim();
+  if (rem.includes('cancel') || rem.includes('reject') || poSt.includes('cancel')) return 'cancelled';
+  const poLow = poNum.toLowerCase();
+  if (!poNum || poLow === 'po awaited' || poLow.startsWith('po awaited')) return 'pr_only';
+  if (String(r['Bill received Date'] || '').trim()) return 'invoiced';
+  return 'po_issued';
+}
+
+const STATUS_META = {
+  cancelled: { label:'Cancelled', badgeCls:'bg-red-500/15 text-red-500 border border-red-500/30' },
+  pr_only:   { label:'PR Issued', badgeCls:'bg-blue-500/15 text-blue-400 border border-blue-500/30' },
+  po_issued: { label:'PO Issued', badgeCls:'bg-amber-500/15 text-amber-400 border border-amber-500/30' },
+  invoiced:  { label:'Invoiced',  badgeCls:'bg-green-500/15 text-green-400 border border-green-500/30' },
+};
+
+function parseCSVText(text) {
+  const res = Papa.parse(text, { skipEmptyLines: true });
+  let hIdx = -1;
+  res.data.forEach((row, i) => {
+    if (row.some(c => String(c).trim() === 'PR Number' || String(c).trim() === 'S.No.')) hIdx = i;
+  });
+  if (hIdx === -1) return null;
+  const headers = res.data[hIdx].map(h => String(h).trim());
+  const rows = res.data.slice(hIdx + 1)
+    .filter(row => row.some(c => String(c).trim()))
+    .map(row => { const o = {}; headers.forEach((h, i) => { o[h] = String(row[i]||'').trim(); }); return o; })
+    .filter(r => r['PR Number'] || r['Location']);
+  return rows.length ? rows : null;
 }
 
 function uniq(arr) { return [...new Set(arr.filter(Boolean))].sort(); }
 
-// ── Parse CSV into structured rows ────────────────────────────────────────
-function parseCSV(text) {
-  const res = Papa.parse(text, { skipEmptyLines: true });
-  if (!res.data || res.data.length < 2) return [];
-
-  // find header row — look for PR Code in col 0
-  let startIdx = 0;
-  for (let i = 0; i < Math.min(5, res.data.length); i++) {
-    if (String(res.data[i][0] || '').trim() === 'PR Code') { startIdx = i + 1; break; }
-  }
-
-  return res.data.slice(startIdx)
-    .filter(row => row.length > 5 && String(row[CI.PR_CODE] || '').trim().startsWith('PR-'))
-    .map(row => {
-      const get = (i) => String(row[i] || '').trim();
-      const amount = parseFloat(get(CI.AMOUNT).replace(/[₹,\s]/g,'')) || 0;
-      const l1Date = get(CI.L1_DATE);
-      const bfDate = get(CI.BF_DATE);
-      const l1By   = get(CI.L1_BY);
-      const bfBy   = get(CI.BF_BY);
-      const prDate = get(CI.PR_DATE);
-
-      // Determine current pending stage
-      let pendingStage, pendingLabel;
-      if (!l1Date) {
-        pendingStage = 'L1';
-        pendingLabel = l1By ? `L1 (${l1By.split(' ')[0]})` : 'L1';
-      } else if (!bfDate) {
-        pendingStage = 'BizFin';
-        pendingLabel = bfBy ? `Bizfin (${bfBy.split(' ')[0]})` : 'Bizfin';
-      } else {
-        pendingStage = 'SCM';
-        pendingLabel = 'SCM';
-      }
-
-      // Aging
-      const agingL1  = (!l1Date) ? daysSince(prDate) : null;
-      const agingBF  = (l1Date && !bfDate) ? daysSince(l1Date) : null;
-      const agingSCM = (l1Date && bfDate) ? daysSince(bfDate) : null;
-
-      // TAT & %TAT
-      let tat = null, pctTAT = null, agingForTAT = null;
-      if (pendingStage === 'L1')     { tat = 1; agingForTAT = agingL1; }
-      else if (pendingStage === 'BizFin') { tat = 1; agingForTAT = agingBF; }
-      else { tat = scmTAT(amount); agingForTAT = agingSCM; }
-
-      if (tat != null && agingForTAT != null) {
-        pctTAT = Math.round((agingForTAT / tat) * 100);
-      }
-
-      return {
-        prCode:       get(CI.PR_CODE),
-        prDate,
-        status:       get(CI.STATUS),
-        location:     get(CI.SUBJECT),
-        amount,
-        createdBy:    get(CI.CREATED_BY),
-        l1By, l1Date,
-        bfBy, bfDate,
-        pendingStage, pendingLabel,
-        agingL1, agingBF, agingSCM,
-        tat, pctTAT, agingForTAT,
-      };
-    });
+function getFY(dateStr) {
+  const d = parseDate(dateStr);
+  if (!d) return null;
+  const m = d.getMonth(); // 0=Jan
+  const y = d.getFullYear();
+  const fyStart = m >= 3 ? y : y - 1; // Apr=3
+  const s2 = String(fyStart).slice(2);
+  const e2 = String(fyStart + 1).slice(2);
+  return `FY ${s2}-${e2}`;
 }
 
 // ── Icons ─────────────────────────────────────────────────────────────────
+
 function Ico({ n, size=16, cls='' }) {
-  const icons = {
-    upload:  <><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></>,
-    search:  <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
-    x:       <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
-    moon:    <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>,
-    sun:     <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></>,
-    lock:    <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
-    filter:  <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
-    spin:    <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
-    refresh: <><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>,
-    home:    <><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></>,
+  const d = {
+    upload:   <><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></>,
+    search:   <><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></>,
+    x:        <><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></>,
+    moon:     <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>,
+    sun:      <><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></>,
+    copy:     <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></>,
+    back:     <><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></>,
+    alert:    <><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></>,
+    check:    <><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></>,
+    clock:    <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+    file:     <><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></>,
+    filter:   <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>,
+    chL:      <polyline points="15 18 9 12 15 6"/>,
+    chR:      <polyline points="9 18 15 12 9 6"/>,
+    slack:    <path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/>,
+    lock:     <><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></>,
+    logout:   <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
+    refresh:  <><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>,
+    spin:     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
       strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={cls}>
-      {icons[n]}
+      {d[n]}
     </svg>
   );
 }
 
 // ── Toast ─────────────────────────────────────────────────────────────────
+
 function useToast() {
   const [toasts, setToasts] = useState([]);
   const add = useCallback((msg, type='ok') => {
@@ -214,32 +185,38 @@ function useToast() {
   }, []);
   return { toasts, add };
 }
+
 function ToastLayer({ toasts }) {
   return (
     <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-50 flex flex-col gap-2 items-center pointer-events-none">
       {toasts.map(t => (
         <div key={t.id} className={`px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl fade-in
-          ${t.type==='ok' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>{t.msg}</div>
+          ${t.type==='ok' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`}>
+          {t.msg}
+        </div>
       ))}
     </div>
   );
 }
 
 // ── Login Modal ───────────────────────────────────────────────────────────
-function LoginModal({ onSuccess, onClose }) {
+
+function LoginModal({ onSuccess, onClose, toast }) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState('');
+
   function submit(e) {
     e.preventDefault();
     if (!user || !pass) { setErr('Enter username and password.'); return; }
     setErr(''); setLoading(true);
     window.C24Uploader.verify({ workerUrl: WORKER_URL, auth: { username: user, password: pass } })
-      .then(() => onSuccess({ username: user, password: pass }))
-      .catch(er => setErr(er.status === 401 ? 'Wrong credentials.' : 'Error: ' + (er.message || er)))
+      .then(() => { onSuccess({ username: user, password: pass }); })
+      .catch(er => { setErr(er.status === 401 ? 'Wrong credentials.' : 'Error: ' + (er.message || er)); })
       .finally(() => setLoading(false));
   }
+
   return (
     <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-sm p-6 fade-in" onClick={e=>e.stopPropagation()}>
@@ -247,17 +224,22 @@ function LoginModal({ onSuccess, onClose }) {
           <div className="w-9 h-9 rounded-xl bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center">
             <Ico n="lock" size={16} cls="text-[#4736FE]"/>
           </div>
-          <div><div className="font-bold text-sm">Login to upload</div><div className="text-xs text-gray-400">CARS24 credentials required</div></div>
-          <button onClick={onClose} className="ml-auto w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10"><Ico n="x" size={14}/></button>
+          <div>
+            <div className="font-bold text-sm">Login to upload</div>
+            <div className="text-xs text-gray-400">CARS24 credentials required</div>
+          </div>
+          <button onClick={onClose} className="ml-auto w-7 h-7 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10">
+            <Ico n="x" size={14}/>
+          </button>
         </div>
         <form onSubmit={submit} className="space-y-3">
           <input value={user} onChange={e=>setUser(e.target.value)} placeholder="Username"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:outline-none focus:border-[#4736FE]"/>
+            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:outline-none focus:border-[#4736FE] transition-colors"/>
           <input type="password" value={pass} onChange={e=>setPass(e.target.value)} placeholder="Password"
-            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:outline-none focus:border-[#4736FE]"/>
+            className="w-full px-3 py-2 text-sm rounded-lg border border-gray-200 dark:border-gray-700 bg-transparent focus:outline-none focus:border-[#4736FE] transition-colors"/>
           {err && <p className="text-xs text-red-400">{err}</p>}
           <button type="submit" disabled={loading}
-            className="w-full py-2 rounded-lg bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] disabled:opacity-50 flex items-center justify-center gap-2">
+            className="w-full py-2 rounded-lg bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] disabled:opacity-50 transition-colors flex items-center justify-center gap-2">
             {loading ? <><Ico n="spin" size={14} cls="spin"/> Verifying…</> : 'Login'}
           </button>
         </form>
@@ -266,62 +248,252 @@ function LoginModal({ onSuccess, onClose }) {
   );
 }
 
-// ── TAT Cell ──────────────────────────────────────────────────────────────
-function TATCell({ pct }) {
-  if (pct == null) return <td className="px-3 py-2 text-center text-gray-400 text-xs">—</td>;
-  const cls = pct >= 100 ? 'tat-red' : pct >= 70 ? 'tat-amber' : 'tat-green';
-  const color = pct >= 100 ? 'text-red-500 font-bold' : pct >= 70 ? 'text-amber-500 font-semibold' : 'text-green-500';
-  return (
-    <td className={`px-3 py-2 text-center text-xs ${cls}`}>
-      <span className={color}>{pct}%</span>
-    </td>
-  );
-}
+// ── Metric Cards ──────────────────────────────────────────────────────────
 
-function AgingCell({ days, tat }) {
-  if (days == null) return <td className="px-3 py-2 text-center text-gray-400 text-xs">—</td>;
-  const over = tat != null && days > tat;
+function MetricCard({ label, value, sub, color='indigo', icon }) {
+  const colors = {
+    indigo: 'bg-[#4736FE]/10 border-[#4736FE]/30 text-[#4736FE]',
+    blue:   'bg-blue-500/10 border-blue-500/30 text-blue-400',
+    amber:  'bg-amber-500/10 border-amber-500/30 text-amber-400',
+    green:  'bg-green-500/10 border-green-500/30 text-green-400',
+  };
   return (
-    <td className={`px-3 py-2 text-center text-xs font-semibold ${over ? 'text-red-500' : 'text-gray-700 dark:text-gray-300'}`}>
-      {days}d
-    </td>
-  );
-}
-
-// ── Pivot Summary ─────────────────────────────────────────────────────────
-function PivotTable({ rows }) {
-  const counts = useMemo(() => {
-    const map = {};
-    rows.forEach(r => {
-      map[r.pendingLabel] = (map[r.pendingLabel] || 0) + 1;
-    });
-    const entries = Object.entries(map).sort((a,b) => b[1]-a[1]);
-    const total = entries.reduce((s,[,c]) => s+c, 0);
-    return { entries, total };
-  }, [rows]);
-
-  return (
-    <div className="bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-xl overflow-hidden text-xs">
-      <div className="px-3 py-2 bg-amber-400/20 border-b border-gray-200 dark:border-gray-700 font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wide">
-        Pending With — Summary
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5 flex items-start gap-4">
+      <div className={`w-10 h-10 rounded-xl border flex items-center justify-center flex-shrink-0 ${colors[color]}`}>
+        {icon}
       </div>
+      <div className="min-w-0">
+        <div className="text-xs text-gray-400 font-medium mb-1 truncate">{label}</div>
+        <div className="text-xl font-bold leading-tight">{value}</div>
+        {sub && <div className="text-xs text-gray-400 mt-0.5">{sub}</div>}
+      </div>
+    </div>
+  );
+}
+
+// ── Multi-select filter ───────────────────────────────────────────────────
+
+function MultiCheck({ label, options, selected, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef();
+  useEffect(() => {
+    function h(e) { if (ref.current && !ref.current.contains(e.target)) setOpen(false); }
+    document.addEventListener('mousedown', h);
+    return () => document.removeEventListener('mousedown', h);
+  }, []);
+  const count = selected.size;
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={()=>setOpen(o=>!o)}
+        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors
+          ${count>0 ? 'border-[#4736FE] bg-[#4736FE]/10 text-[#4736FE]' : 'border-gray-200 dark:border-gray-700 text-gray-500 dark:text-gray-400 hover:border-gray-300'}`}>
+        <Ico n="filter" size={11}/>{label}{count>0&&` (${count})`}
+      </button>
+      {open && (
+        <div className="absolute top-full mt-1 left-0 z-30 min-w-[200px] max-w-[280px] bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-2 max-h-64 overflow-y-auto fade-in">
+          <div className="flex items-center justify-between px-1 pb-1 mb-1 border-b border-gray-100 dark:border-gray-800">
+            <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{label}</span>
+            {count>0 && <button onClick={()=>onChange(new Set())} className="text-[10px] text-[#4736FE] hover:underline">Clear</button>}
+          </div>
+          {options.map(o => (
+            <label key={o} className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-white/[0.04] cursor-pointer">
+              <input type="checkbox" checked={selected.has(o)}
+                onChange={e=>{const s=new Set(selected);e.target.checked?s.add(o):s.delete(o);onChange(s);}}
+                className="accent-[#4736FE] w-3.5 h-3.5"/>
+              <span className="text-xs truncate text-gray-600 dark:text-gray-300">{o}</span>
+            </label>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Row Detail Modal ──────────────────────────────────────────────────────
+
+function DetailModal({ row, onClose }) {
+  if (!row) return null;
+  const st = rowStatus(row);
+  const sm = STATUS_META[st];
+  const fields = [
+    ['Location',row['Location']],['Cost Center',row['Cost Center']],
+    ['EMSS POC',row['EMSS POC']],['Budget Category',row['Budget Category']],
+    ['Type',row['CAPEX / OPEX / AMC']],['Vendor',row['Vendor Name']],
+    ['PR Number',row['PR Number']],['PR Date',row['PR Date']],
+    ['PR Basic Value',fmtMoney(parseNum(row['PR Basic Value']))],
+    ['PR Value with GST',fmtMoney(parseNum(row['PR Value with GST']))],
+    ['PO Number',row['PO Number']],['PO Date',row['PO Date']],
+    ['PO Basic Value',fmtMoney(parseNum(row['PO Basic Value']))],
+    ['PO with GST',fmtMoney(parseNum(row['PO with GST Value']))],
+    ['PR→PO Days',row['Diff.days Between PR & PO']||'—'],
+    ['Bill Received',row['Bill received Date']],
+    ['Bill Basic',fmtMoney(parseNum(row['Bill Basic Value']))],
+    ['Bill with GST',fmtMoney(parseNum(row['Bill with GST value']))],
+    ['Part Pmt Balance',fmtMoney(parseNum(row['Part Payment Balance']))],
+    ['L1 Approval',row['L1 Approval']],['BizFin',row['Bizfin']],
+    ['PO Status',row['PO Status']],['Remarks',row['Remarks']],
+    ['Provision',row['Provision']],
+  ].filter(([,v]) => v && v !== '0' && v !== '₹0' && v !== '—');
+
+  return (
+    <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white dark:bg-[#1a1a1a] rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col fade-in"
+        onClick={e=>e.stopPropagation()}>
+        <div className="flex items-start justify-between p-5 border-b border-gray-100 dark:border-gray-800">
+          <div>
+            <div className="font-bold text-base mb-1">{row['PR Number']||'—'}</div>
+            <div className="text-sm text-gray-400 mb-2">{row['Location']||'—'}</div>
+            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold ${sm.badgeCls}`}>{sm.label}</span>
+          </div>
+          <button onClick={onClose} className="w-8 h-8 rounded-full flex items-center justify-center text-gray-400 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors mt-0.5">
+            <Ico n="x" size={16}/>
+          </button>
+        </div>
+        <div className="overflow-y-auto p-5">
+          <div className="grid grid-cols-2 gap-3">
+            {fields.map(([l,v]) => (
+              <div key={l} className="bg-gray-50 dark:bg-white/[0.03] rounded-xl p-3">
+                <div className="text-[10px] text-gray-400 font-medium uppercase tracking-wider mb-1">{l}</div>
+                <div className="text-sm font-medium break-words">{v||'—'}</div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Slack Summary ─────────────────────────────────────────────────────────
+
+function SlackPanel({ pendingL1, pendingBizFin }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const [copied, setCopied] = useState(false);
+  const l1Over = pendingL1.filter(r => { const p=parseDate(r['PR Date']); return p && daysDiff(p,today)>=1; });
+  const bfOver = pendingBizFin.filter(r => { const l=parseDate(r['L1 Approval']); return l && daysDiff(l,today)>=1; });
+  const text = [
+    `*PR/PO Approval Status* — ${today.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}`,
+    '',
+    l1Over.length>0
+      ? `⚠️ *${l1Over.length} PR${l1Over.length>1?'s':''} pending L1 approval > 24hrs*\n`+l1Over.slice(0,10).map(r=>`  • \`${r['PR Number']}\` — ${r['Location']||'—'} (${r['EMSS POC']||'—'}) — PR: ${r['PR Date']||'—'}`).join('\n')
+      : '✅ No PRs pending L1 approval > 24hrs',
+    '',
+    bfOver.length>0
+      ? `⚠️ *${bfOver.length} PR${bfOver.length>1?'s':''} pending BizFin approval > 24hrs*\n`+bfOver.slice(0,10).map(r=>`  • \`${r['PR Number']}\` — ${r['Location']||'—'} (L1: ${r['L1 Approval']||'—'})`).join('\n')
+      : '✅ No PRs pending BizFin approval > 24hrs',
+    '',`_Generated by CARS24 PR/PO Tracker_`,
+  ].join('\n');
+  function copy() { navigator.clipboard.writeText(text).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);}); }
+  return (
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5 mb-6">
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-lg bg-purple-500/10 flex items-center justify-center">
+            <Ico n="slack" size={16} cls="text-purple-400"/>
+          </div>
+          <div>
+            <div className="text-sm font-semibold">Slack Summary</div>
+            <div className="text-xs text-gray-400">Auto-generated approval digest</div>
+          </div>
+        </div>
+        <button onClick={copy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 transition-colors border border-purple-500/30">
+          <Ico n={copied?'check':'copy'} size={12}/>{copied?'Copied!':'Copy'}
+        </button>
+      </div>
+      <pre className="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-black/30 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap leading-relaxed font-mono">{text}</pre>
+    </div>
+  );
+}
+
+// ── Processflows CSV — column indices (0-based) ───────────────────────────
+const PF_CI = {
+  PR_CODE:    0,  PR_DATE:    1,  STATUS:     2,  SUBJECT:    6,
+  AMOUNT:     17, CREATED_BY: 22, L1_BY:      33, L1_DATE:    34,
+  BF_BY:      38, BF_DATE:    39,
+};
+
+function pfScmTAT(amount) {
+  if (amount < 100000) return 1;
+  if (amount < 500000) return 6;
+  if (amount < 4000000) return 7;
+  return 15;
+}
+
+function pfDaysSince(dateVal) {
+  if (!dateVal) return null;
+  const s = String(dateVal).trim();
+  const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
+  const d = m1 ? new Date(+m1[3], +m1[2]-1, +m1[1]) : parseDate(s);
+  if (!d || isNaN(d)) return null;
+  const t = new Date(); t.setHours(0,0,0,0);
+  const diff = Math.floor((t - d) / 86400000);
+  return diff >= 0 ? diff : null;
+}
+
+function pfFmtDate(v) {
+  if (!v) return '—';
+  const s = String(v).trim();
+  const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
+  if (m1) return new Date(+m1[3], +m1[2]-1, +m1[1]).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  return s;
+}
+
+function parseProcessflowsCSV(text) {
+  const res = Papa.parse(text, { skipEmptyLines: true });
+  if (!res.data || res.data.length < 2) return [];
+  let startIdx = 0;
+  for (let i = 0; i < Math.min(5, res.data.length); i++) {
+    if (String(res.data[i][0] || '').trim() === 'PR Code') { startIdx = i + 1; break; }
+  }
+  return res.data.slice(startIdx)
+    .filter(row => row.length > 5 && String(row[PF_CI.PR_CODE] || '').trim().startsWith('PR-'))
+    .map(row => {
+      const get = i => String(row[i] || '').trim();
+      const amount = parseFloat(get(PF_CI.AMOUNT).replace(/[₹,\s]/g,'')) || 0;
+      const l1Date = get(PF_CI.L1_DATE), bfDate = get(PF_CI.BF_DATE);
+      const l1By = get(PF_CI.L1_BY), bfBy = get(PF_CI.BF_BY);
+      const prDate = get(PF_CI.PR_DATE);
+      let pendingStage, pendingLabel;
+      if (!l1Date)       { pendingStage='L1';     pendingLabel=l1By?`L1 (${l1By.split(' ')[0]})`:'L1'; }
+      else if (!bfDate)  { pendingStage='BizFin';  pendingLabel=bfBy?`Bizfin (${bfBy.split(' ')[0]})`:'Bizfin'; }
+      else               { pendingStage='SCM';     pendingLabel='SCM'; }
+      const agingL1  = !l1Date ? pfDaysSince(prDate) : null;
+      const agingBF  = l1Date && !bfDate ? pfDaysSince(l1Date) : null;
+      const agingSCM = l1Date && bfDate  ? pfDaysSince(bfDate) : null;
+      let tat, agingForTAT;
+      if (pendingStage==='L1')     { tat=1; agingForTAT=agingL1; }
+      else if (pendingStage==='BizFin') { tat=1; agingForTAT=agingBF; }
+      else { tat=pfScmTAT(amount); agingForTAT=agingSCM; }
+      const pctTAT = tat!=null && agingForTAT!=null ? Math.round((agingForTAT/tat)*100) : null;
+      return { prCode:get(PF_CI.PR_CODE), prDate, status:get(PF_CI.STATUS), location:get(PF_CI.SUBJECT),
+        amount, createdBy:get(PF_CI.CREATED_BY), l1By, l1Date, bfBy, bfDate,
+        pendingStage, pendingLabel, agingL1, agingBF, agingSCM, tat, pctTAT, agingForTAT };
+    });
+}
+
+function PFPivotTable({ rows }) {
+  const { entries, total } = useMemo(() => {
+    const map = {};
+    rows.forEach(r => { map[r.pendingLabel] = (map[r.pendingLabel]||0)+1; });
+    const entries = Object.entries(map).sort((a,b)=>b[1]-a[1]);
+    return { entries, total: entries.reduce((s,[,c])=>s+c,0) };
+  }, [rows]);
+  return (
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden text-xs w-64 shrink-0 self-start">
+      <div className="px-4 py-2.5 bg-amber-400/20 border-b border-gray-100 dark:border-gray-800 font-bold text-amber-600 dark:text-amber-400 text-[11px] uppercase tracking-wide">Pending With — Summary</div>
       <table className="w-full">
-        <thead>
-          <tr className="bg-gray-50 dark:bg-[#111] text-gray-500 dark:text-gray-400">
-            <th className="px-3 py-1.5 text-left font-semibold">Current Pending from</th>
-            <th className="px-3 py-1.5 text-center font-semibold">Count</th>
-          </tr>
-        </thead>
+        <thead><tr className="bg-gray-50 dark:bg-white/[0.02] text-gray-400">
+          <th className="px-4 py-2 text-left font-semibold">Current Pending from</th>
+          <th className="px-4 py-2 text-center font-semibold">Count</th>
+        </tr></thead>
         <tbody>
-          {counts.entries.map(([label, count]) => (
-            <tr key={label} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/5">
-              <td className="px-3 py-1.5">{label}</td>
-              <td className="px-3 py-1.5 text-center font-bold">{count}</td>
+          {entries.map(([label,count])=>(
+            <tr key={label} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/[0.03]">
+              <td className="px-4 py-2">{label}</td><td className="px-4 py-2 text-center font-bold">{count}</td>
             </tr>
           ))}
-          <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-[#111] font-bold">
-            <td className="px-3 py-1.5">Grand Total</td>
-            <td className="px-3 py-1.5 text-center">{counts.total}</td>
+          <tr className="border-t-2 border-gray-300 dark:border-gray-600 bg-gray-100 dark:bg-white/[0.05] font-bold">
+            <td className="px-4 py-2">Grand Total</td><td className="px-4 py-2 text-center">{total}</td>
           </tr>
         </tbody>
       </table>
@@ -329,322 +501,710 @@ function PivotTable({ rows }) {
   );
 }
 
-// ── Status badge ──────────────────────────────────────────────────────────
-function StatusBadge({ status }) {
-  const s = String(status||'').toLowerCase();
-  const map = {
-    submitted: 'bg-blue-500/15 text-blue-400 border-blue-500/30',
-    processed: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    completed: 'bg-green-500/15 text-green-400 border-green-500/30',
-    cancelled: 'bg-red-500/15 text-red-400 border-red-500/30',
-  };
-  const cls = map[s] || 'bg-gray-500/15 text-gray-400 border-gray-500/30';
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cls}`}>{status||'—'}</span>;
+function PFAgingCell({ days, tat }) {
+  if (days==null) return <td className="px-3 py-2.5 text-center text-gray-400">—</td>;
+  const over = tat!=null && days>tat;
+  return <td className={`px-3 py-2.5 text-center font-semibold text-xs ${over?'text-red-400 tat-overdue':'text-gray-600 dark:text-gray-300'}`}>{days}d</td>;
+}
+function PFTATCell({ pct }) {
+  if (pct==null) return <td className="px-3 py-2.5 text-center text-gray-400">—</td>;
+  const color = pct>=100?'text-red-500 font-bold':pct>=70?'text-amber-500 font-semibold':'text-green-500 font-semibold';
+  return <td className={`px-3 py-2.5 text-center text-xs ${pct>=100?'tat-overdue':''}`}><span className={color}>{pct}%</span></td>;
+}
+function PFPendingBadge({ label, stage }) {
+  const map={L1:'bg-amber-500/15 text-amber-500 border-amber-500/30',BizFin:'bg-purple-500/15 text-purple-400 border-purple-500/30',SCM:'bg-cyan-500/15 text-cyan-400 border-cyan-500/30'};
+  return <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${map[stage]||'bg-gray-500/15 text-gray-400 border-gray-500/30'}`}>{label}</span>;
 }
 
-// ── Pending badge ─────────────────────────────────────────────────────────
-function PendingBadge({ label, stage }) {
-  const map = {
-    L1:     'bg-amber-500/15 text-amber-500 border-amber-500/30',
-    BizFin: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-    SCM:    'bg-cyan-500/15 text-cyan-400 border-cyan-500/30',
-  };
-  const cls = map[stage] || 'bg-gray-500/15 text-gray-400 border-gray-500/30';
-  return <span className={`inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold border ${cls}`}>{label}</span>;
-}
+function ApprovalTATTab({ approvalRows, approvalFileRef }) {
+  const [fStatus,setFStatus]=useState('');
+  const [fCreatedBy,setFCreatedBy]=useState('');
+  const [fPending,setFPending]=useState('');
+  const [search,setSearch]=useState('');
 
-// ── Main App ──────────────────────────────────────────────────────────────
-function App() {
-  const { toasts, add: toast } = useToast();
-  const [dark, setDark] = useState(() => {
-    try { return localStorage.getItem('c24-theme') !== 'light'; } catch { return true; }
-  });
-  const [rows, setRows] = useState([]);
-  const [loading, setLoading] = useState(false);
-  const [auth, setAuth] = useState(null);
-  const [showLogin, setShowLogin] = useState(false);
-  const [showUpload, setShowUpload] = useState(false);
-  const fileRef = useRef();
+  const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
+  const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
 
-  // Filters
-  const [fStatus, setFStatus] = useState('');       // PR status (submitted/processed/etc)
-  const [fCreatedBy, setFCreatedBy] = useState(''); // EMSS POC
-  const [fPending, setFPending]   = useState('');   // pending stage L1/BizFin/SCM
-  const [search, setSearch] = useState('');
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    try { localStorage.setItem('c24-theme', dark ? 'dark' : 'light'); } catch {}
-  }, [dark]);
-
-  // Try load from Cloudflare on mount
-  useEffect(() => {
-    loadFromWorker();
-  }, []);
-
-  async function loadFromWorker() {
-    setLoading(true);
-    try {
-      const res = await fetch(`${WORKER_URL}?tool=${TOOL_PATH}`, { method: 'GET' });
-      if (res.ok) {
-        const text = await res.text();
-        if (text && text.trim().startsWith('PR')) {
-          const parsed = parseCSV(text);
-          if (parsed.length) { setRows(parsed); toast(`Loaded ${parsed.length} PRs from cloud`); }
-        }
-      }
-    } catch (e) { /* silent — user can upload manually */ }
-    setLoading(false);
-  }
-
-  async function handleFile(file) {
-    if (!file) return;
-    const text = await file.text();
-    const parsed = parseCSV(text);
-    if (!parsed.length) { toast('Could not parse CSV — check format', 'err'); return; }
-    setRows(parsed);
-    toast(`Loaded ${parsed.length} PRs`);
-    // upload if authed
-    if (auth) uploadToWorker(text, auth);
-  }
-
-  async function uploadToWorker(text, creds) {
-    try {
-      await window.C24Uploader.upload({
-        workerUrl: WORKER_URL,
-        toolPath: TOOL_PATH,
-        content: text,
-        auth: creds,
-      });
-      toast('Saved to cloud ✓');
-    } catch (e) { toast('Cloud save failed: ' + (e.message || e), 'err'); }
-  }
-
-  // Filter options
-  const statusOpts  = useMemo(() => uniq(rows.map(r => r.status)), [rows]);
-  const createdOpts = useMemo(() => uniq(rows.map(r => r.createdBy)), [rows]);
-  const pendingOpts = ['L1', 'BizFin', 'SCM'];
-
-  const filtered = useMemo(() => {
-    let out = rows;
-    if (fStatus)    out = out.filter(r => r.status === fStatus);
-    if (fCreatedBy) out = out.filter(r => r.createdBy === fCreatedBy);
-    if (fPending)   out = out.filter(r => r.pendingStage === fPending);
-    if (search) {
-      const q = search.toLowerCase();
-      out = out.filter(r =>
-        r.location.toLowerCase().includes(q) ||
-        r.prCode.toLowerCase().includes(q) ||
-        r.createdBy.toLowerCase().includes(q) ||
-        r.pendingLabel.toLowerCase().includes(q)
-      );
-    }
+  const filtered = useMemo(()=>{
+    let out=approvalRows;
+    if(fStatus)    out=out.filter(r=>r.status===fStatus);
+    if(fCreatedBy) out=out.filter(r=>r.createdBy===fCreatedBy);
+    if(fPending)   out=out.filter(r=>r.pendingStage===fPending);
+    if(search){const q=search.toLowerCase();out=out.filter(r=>r.location.toLowerCase().includes(q)||r.prCode.toLowerCase().includes(q)||r.createdBy.toLowerCase().includes(q)||r.pendingLabel.toLowerCase().includes(q));}
     return out;
-  }, [rows, fStatus, fCreatedBy, fPending, search]);
+  },[approvalRows,fStatus,fCreatedBy,fPending,search]);
 
-  const totalAmt = useMemo(() => filtered.reduce((s,r) => s+r.amount, 0), [filtered]);
+  function Sel({val,setVal,opts,placeholder}){
+    return <select value={val} onChange={e=>setVal(e.target.value)}
+      className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] cursor-pointer">
+      <option value="">{placeholder}</option>
+      {opts.map(o=><option key={o} value={o}>{o}</option>)}
+    </select>;
+  }
 
-  function Sel({ val, setVal, opts, placeholder }) {
-    return (
-      <select value={val} onChange={e=>setVal(e.target.value)}
-        className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:border-[#4736FE] cursor-pointer">
-        <option value="">{placeholder}</option>
-        {opts.map(o => <option key={o} value={o}>{o}</option>)}
-      </select>
-    );
+  if (approvalRows.length===0) return (
+    <div className="fade-in flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
+      <div className="w-16 h-16 rounded-2xl bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center">
+        <Ico n="upload" size={28} cls="text-[#4736FE]"/>
+      </div>
+      <div className="text-center">
+        <div className="font-semibold text-base text-gray-600 dark:text-gray-300">No Approval data loaded</div>
+        <div className="text-sm mt-1">Upload the PR export from processflows.ai to see approval aging</div>
+      </div>
+      <button onClick={()=>approvalFileRef.current&&approvalFileRef.current.click()}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] transition-colors">
+        <Ico n="upload" size={14}/> Upload Approval CSV
+      </button>
+    </div>
+  );
+
+  return (
+    <div className="fade-in">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative">
+          <Ico n="search" size={13} cls="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search PRs…"
+            className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] w-44"/>
+        </div>
+        <Sel val={fStatus}    setVal={setFStatus}    opts={statusOpts}  placeholder="All Statuses"/>
+        <Sel val={fCreatedBy} setVal={setFCreatedBy} opts={createdOpts} placeholder="All EMSS POC"/>
+        <Sel val={fPending}   setVal={setFPending}   opts={['L1','BizFin','SCM']} placeholder="All Pending With"/>
+        {(fStatus||fCreatedBy||fPending||search) && (
+          <button onClick={()=>{setFStatus('');setFCreatedBy('');setFPending('');setSearch('');}}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400"><Ico n="x" size={11}/> Clear</button>
+        )}
+        <span className="text-xs text-gray-400 ml-auto">{filtered.length} rows</span>
+      </div>
+
+      <div className="flex gap-4 items-start">
+        <div className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs min-w-[1000px]">
+              <thead>
+                <tr className="bg-amber-400 text-black">
+                  <th className="px-3 py-2.5 text-left font-bold">Location</th>
+                  <th className="px-3 py-2.5 text-left font-bold">EMSS POC</th>
+                  <th className="px-3 py-2.5 text-left font-bold">PR Number</th>
+                  <th className="px-3 py-2.5 text-left font-bold">PR Date</th>
+                  <th className="px-3 py-2.5 text-right font-bold">PR Value</th>
+                  <th className="px-3 py-2.5 text-left font-bold">L1 Approval</th>
+                  <th className="px-3 py-2.5 text-left font-bold">BizFin</th>
+                  <th className="px-3 py-2.5 text-left font-bold">Current Pending From</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Aging L1</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Aging BizFin</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Aging SCM</th>
+                  <th className="px-3 py-2.5 text-center font-bold">TAT</th>
+                  <th className="px-3 py-2.5 text-center font-bold">% TAT</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((r,i)=>(
+                  <tr key={r.prCode+i}
+                    className={`border-b border-gray-50 dark:border-gray-800/60 hover:brightness-95 dark:hover:brightness-110 transition-all ${r.status==='cancelled'?'opacity-50':''}`}>
+                    <td className="px-3 py-2.5 font-medium max-w-[200px] truncate" title={r.location}>{r.location||'—'}</td>
+                    <td className="px-3 py-2.5 text-gray-500 max-w-[110px] truncate">{r.createdBy||'—'}</td>
+                    <td className="px-3 py-2.5 font-mono text-[10px] text-[#4736FE]">{r.prCode}</td>
+                    <td className="px-3 py-2.5 text-gray-400">{pfFmtDate(r.prDate)}</td>
+                    <td className="px-3 py-2.5 text-right font-medium">{fmtMoney(r.amount,true)}</td>
+                    <td className="px-3 py-2.5">
+                      {r.l1Date
+                        ? <span className="text-green-600 dark:text-green-400 text-[10px]">{r.l1By?r.l1By.split(' ')[0]:''} · {pfFmtDate(r.l1Date)}</span>
+                        : <span className="text-amber-500 font-semibold">{r.l1By||'Pending'}</span>}
+                    </td>
+                    <td className="px-3 py-2.5">
+                      {r.bfDate
+                        ? <span className="text-green-600 dark:text-green-400 text-[10px]">{r.bfBy?r.bfBy.split(' ')[0]:''} · {pfFmtDate(r.bfDate)}</span>
+                        : r.l1Date
+                          ? <span className="text-purple-500 font-semibold">{r.bfBy||'Pending'}</span>
+                          : <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-3 py-2.5"><PFPendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
+                    <PFAgingCell days={r.agingL1} tat={1}/>
+                    <PFAgingCell days={r.agingBF} tat={1}/>
+                    <PFAgingCell days={r.agingSCM} tat={r.pendingStage==='SCM'?r.tat:null}/>
+                    <td className="px-3 py-2.5 text-center text-gray-500">{r.tat!=null?r.tat+'d':'—'}</td>
+                    <PFTATCell pct={r.pctTAT}/>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <div className="shrink-0 flex flex-col gap-3">
+          <PFPivotTable rows={filtered}/>
+          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-[11px] w-64">
+            <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">SCM TAT Rules</div>
+            <div className="space-y-1 text-gray-500 dark:text-gray-400">
+              <div className="flex justify-between"><span>&lt; ₹1 L</span><span className="font-semibold">1 day</span></div>
+              <div className="flex justify-between"><span>₹1 L – ₹5 L</span><span className="font-semibold">6 days</span></div>
+              <div className="flex justify-between"><span>₹5 L – ₹40 L</span><span className="font-semibold">7 days</span></div>
+              <div className="flex justify-between"><span>₹40 L – ₹1 Cr</span><span className="font-semibold">15 days</span></div>
+              <div className="border-t border-gray-200 dark:border-gray-700 pt-1 mt-1 flex justify-between"><span>L1 &amp; BizFin</span><span className="font-semibold">1 day each</span></div>
+            </div>
+          </div>
+          <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-[11px] w-64">
+            <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">% TAT Color</div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-green-500/30"></span><span className="text-gray-500 dark:text-gray-400">&lt;70% — On track</span></div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-amber-500/30"></span><span className="text-gray-500 dark:text-gray-400">70–99% — At risk</span></div>
+              <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-red-500/30"></span><span className="text-gray-500 dark:text-gray-400">≥100% — Overdue</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Approval TAT Section (legacy — kept for old data format) ──────────────
+
+function TatSection({ title, rows, dateKey, dateLabel, color }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  if (rows.length === 0) return (
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-5 mb-4">
+      <div className="flex items-center gap-2 mb-1"><Ico n="check" size={16} cls="text-green-400"/><span className="font-semibold text-sm">{title}</span></div>
+      <p className="text-sm text-gray-400">No pending approvals ✓</p>
+    </div>
+  );
+  return (
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden mb-4">
+      <div className="px-5 py-4 border-b border-gray-100 dark:border-gray-800 flex items-center gap-2">
+        <Ico n="clock" size={16} cls={color==='red'?'text-red-400':'text-amber-400'}/>
+        <span className="font-semibold text-sm">{title}</span>
+        <span className={`ml-auto text-xs px-2 py-0.5 rounded-full font-semibold ${color==='red'?'bg-red-500/15 text-red-400':'bg-amber-500/15 text-amber-400'}`}>{rows.length} pending</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs">
+          <thead>
+            <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
+              {['PR Number','Location','POC','PR Date',dateLabel,'TAT (days)','Value'].map(h=>(
+                <th key={h} className="text-left px-4 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r,i)=>{
+              const ref2=parseDate(r[dateKey]);
+              const tat=ref2?daysDiff(ref2,today):null;
+              const over=tat!==null&&tat>=1;
+              return (
+                <tr key={i} className={`border-b border-gray-50 dark:border-gray-800/60 ${over?'tat-overdue':''}`}>
+                  <td className="px-4 py-2.5 font-mono text-[11px] text-[#4736FE]">{r['PR Number']}</td>
+                  <td className="px-4 py-2.5 text-gray-600 dark:text-gray-300 max-w-[160px] truncate">{r['Location']||'—'}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{r['EMSS POC']||'—'}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{r['PR Date']||'—'}</td>
+                  <td className="px-4 py-2.5 text-gray-500">{r[dateKey]||'—'}</td>
+                  <td className="px-4 py-2.5">{tat!==null?<span className={`font-bold ${over?'text-red-400':'text-green-400'}`}>{tat}d{over?' ⚠':''}</span>:'—'}</td>
+                  <td className="px-4 py-2.5 text-right font-medium">{fmtMoney(parseNum(r['PR Basic Value']),true)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ── Data Table ────────────────────────────────────────────────────────────
+
+const PAGE_SIZE = 50;
+
+function DataTable({ rows, onRowClick }) {
+  const [page, setPage] = useState(1);
+  const pages = Math.ceil(rows.length / PAGE_SIZE);
+  const slice = rows.slice((page-1)*PAGE_SIZE, page*PAGE_SIZE);
+  useEffect(()=>setPage(1),[rows.length]);
+
+  const cols = [
+    { key:'S.No.',           label:'#',         w:'44px'  },
+    { key:'Location',        label:'Location',  w:'170px' },
+    { key:'EMSS POC',        label:'POC',       w:'110px' },
+    { key:'CAPEX / OPEX / AMC', label:'Type',   w:'70px'  },
+    { key:'PR Number',       label:'PR No.',    w:'155px' },
+    { key:'PR Basic Value',  label:'PR Value',  w:'95px'  },
+    { key:'PR Date',         label:'PR Date',   w:'90px'  },
+    { key:'Vendor Name',     label:'Vendor',    w:'140px' },
+    { key:'PO Number',       label:'PO No.',    w:'155px' },
+    { key:'PO Date',         label:'PO Date',   w:'90px'  },
+    { key:'Bill received Date', label:'Bill',   w:'90px'  },
+    { key:'status',          label:'Status',    w:'100px' },
+  ];
+
+  return (
+    <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+      <div className="flex flex-wrap items-center gap-2 justify-between px-5 py-3 border-b border-gray-100 dark:border-gray-800">
+        <span className="text-xs text-gray-400">{rows.length.toLocaleString()} rows</span>
+        <div className="flex flex-wrap items-center gap-1">
+          {[['pr_only','PR Issued','text-blue-400'],['po_issued','PO Issued','text-amber-400'],
+            ['invoiced','Invoiced','text-green-400'],['cancelled','Cancelled','text-red-400']].map(([s,l,c])=>(
+            <span key={s} className={`text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 dark:bg-white/[0.05] ${c}`}>● {l}</span>
+          ))}
+        </div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-xs min-w-[900px]">
+          <thead>
+            <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
+              {cols.map(c=>(
+                <th key={c.key} style={{width:c.w,minWidth:c.w}} className="text-left px-3 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{c.label}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {slice.map((r,i)=>{
+              const st=rowStatus(r);
+              const sm=STATUS_META[st];
+              const typeVal=(r['CAPEX / OPEX / AMC']||'').split(/[\s\/]/)[0]||'—';
+              const typeClsPick=typeVal.toLowerCase().startsWith('cap')?'bg-violet-500/10 text-violet-400':typeVal.toLowerCase().startsWith('op')?'bg-sky-500/10 text-sky-400':'bg-gray-100 dark:bg-white/[0.06] text-gray-400';
+              return (
+                <tr key={i} className={`border-b border-gray-50 dark:border-gray-800/60 cursor-pointer hover:brightness-95 dark:hover:brightness-110 transition-all row-${st}`}
+                  onClick={()=>onRowClick(r)} title="Click for details">
+                  <td className="px-3 py-2 text-gray-400">{r['S.No.']||i+1}</td>
+                  <td className="px-3 py-2 font-medium" style={{maxWidth:'170px',overflow:'hidden',textOverflow:'ellipsis'}} title={r['Location']}>{r['Location']||'—'}</td>
+                  <td className="px-3 py-2 text-gray-500" style={{maxWidth:'110px',overflow:'hidden',textOverflow:'ellipsis'}}>{r['EMSS POC']||'—'}</td>
+                  <td className="px-3 py-2"><span className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${typeClsPick}`}>{typeVal}</span></td>
+                  <td className="px-3 py-2 font-mono text-[10px] text-[#4736FE]" style={{maxWidth:'155px',overflow:'hidden',textOverflow:'ellipsis'}} title={r['PR Number']}>{r['PR Number']||'—'}</td>
+                  <td className="px-3 py-2 text-right font-medium">{fmtMoney(parseNum(r['PR Basic Value']),true)}</td>
+                  <td className="px-3 py-2 text-gray-400">{r['PR Date']||'—'}</td>
+                  <td className="px-3 py-2 text-gray-500" style={{maxWidth:'140px',overflow:'hidden',textOverflow:'ellipsis'}} title={r['Vendor Name']}>{r['Vendor Name']||'—'}</td>
+                  <td className="px-3 py-2 font-mono text-[10px] text-gray-500" style={{maxWidth:'155px',overflow:'hidden',textOverflow:'ellipsis'}} title={r['PO Number']}>{r['PO Number']||'—'}</td>
+                  <td className="px-3 py-2 text-gray-400">{r['PO Date']||'—'}</td>
+                  <td className="px-3 py-2 text-gray-400">{r['Bill received Date']||'—'}</td>
+                  <td className="px-3 py-2"><span className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-semibold ${sm.badgeCls}`}>{sm.label}</span></td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {pages > 1 && (
+        <div className="flex items-center justify-between px-5 py-3 border-t border-gray-100 dark:border-gray-800">
+          <span className="text-xs text-gray-400">Page {page} of {pages}</span>
+          <div className="flex items-center gap-1">
+            <button onClick={()=>setPage(p=>Math.max(1,p-1))} disabled={page===1}
+              className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-white/[0.06] text-gray-500">
+              <Ico n="chL" size={14}/>
+            </button>
+            {Array.from({length:Math.min(7,pages)},(_,i)=>{
+              let p=i+1;
+              if(pages>7){if(page<=4)p=i+1;else if(page>=pages-3)p=pages-6+i;else p=page-3+i;}
+              return <button key={p} onClick={()=>setPage(p)} className={`w-7 h-7 rounded-lg text-xs font-medium transition-colors ${p===page?'bg-[#4736FE] text-white':'hover:bg-gray-100 dark:hover:bg-white/[0.06] text-gray-500'}`}>{p}</button>;
+            })}
+            <button onClick={()=>setPage(p=>Math.min(pages,p+1))} disabled={page===pages}
+              className="w-7 h-7 rounded-lg flex items-center justify-center disabled:opacity-30 hover:bg-gray-100 dark:hover:bg-white/[0.06] text-gray-500">
+              <Ico n="chR" size={14}/>
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Invoicing Pending Tab ─────────────────────────────────────────────────
+
+function InvoicingPending({ rows, fyFilter, fyOptions, onFYChange }) {
+  const today = new Date(); today.setHours(0,0,0,0);
+  const pending = useMemo(() => {
+    let r = rows.filter(row => rowStatus(row) === 'po_issued');
+    if (fyFilter.size > 0) r = r.filter(row => fyFilter.has(getFY(row['PR Date'])));
+    return r.map(row => {
+      const poD = parseDate(row['PO Date']);
+      const daysSincePO = poD ? daysDiff(poD, today) : null;
+      return { ...row, _daysSincePO: daysSincePO };
+    }).sort((a,b) => (b._daysSincePO||0) - (a._daysSincePO||0));
+  }, [rows, fyFilter]);
+
+  const totalPOVal = pending.reduce((s,r)=>s+parseNum(r['PO with GST Value']),0);
+  const oldest = pending.length ? pending[0]._daysSincePO : null;
+
+  const [copied, setCopied] = useState(false);
+  const slackText = `*🧾 Invoicing Pending* — ${today.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}\n${pending.length} POs pending invoicing | Total ${fmtMoney(totalPOVal,true)} | Oldest: ${oldest!=null?oldest+'d':'—'}`;
+
+  function daysBadge(d) {
+    if (d == null) return <span className="text-gray-400">—</span>;
+    const cls = d < 30 ? 'bg-green-500/15 text-green-400' : d <= 60 ? 'bg-amber-500/15 text-amber-400' : 'bg-red-500/15 text-red-400';
+    return <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${cls}`}>{d}d</span>;
   }
 
   return (
-    <div className="flex flex-col min-h-screen">
-      {/* Header */}
-      <header className="sticky top-0 z-30 bg-white/90 dark:bg-[#0f0f0f]/90 backdrop-blur border-b border-gray-200 dark:border-gray-800 px-4 py-2.5 flex items-center gap-3">
-        <a href="/" className="w-8 h-8 rounded-lg bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center text-[#4736FE] hover:bg-[#4736FE]/20 transition-colors">
-          <Ico n="home" size={15}/>
-        </a>
+    <div className="fade-in">
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 mb-4 flex flex-wrap items-center justify-between gap-3">
         <div>
-          <div className="font-bold text-sm leading-tight">PR Approval Tracker</div>
-          <div className="text-[10px] text-gray-400">CARS24 · Expansion &amp; Projects</div>
+          <div className="text-sm font-semibold mb-0.5">Invoicing Pending</div>
+          <div className="text-xs text-gray-400">{pending.length} POs · Total PO value: <span className="font-semibold text-amber-400">{fmtMoney(totalPOVal,true)}</span> · Oldest: <span className="font-semibold text-red-400">{oldest!=null?oldest+'d':'—'}</span></div>
         </div>
+        <div className="flex items-center gap-2">
+          <MultiCheck label="FY" options={fyOptions} selected={fyFilter} onChange={onFYChange}/>
+          <button onClick={()=>navigator.clipboard.writeText(slackText).then(()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);})}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/10 text-purple-400 text-xs font-semibold hover:bg-purple-500/20 border border-purple-500/30 transition-colors">
+            <Ico n={copied?'check':'slack'} size={12}/>{copied?'Copied!':'Slack'}
+          </button>
+        </div>
+      </div>
+      <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[900px]">
+            <thead>
+              <tr className="border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-white/[0.02]">
+                {['#','Location','Cost Center','EMSS POC','Vendor','PO Number','PO Date','PO Value (GST)','PR→PO Days','Days Since PO'].map(h=>(
+                  <th key={h} className="text-left px-3 py-2.5 text-gray-400 font-semibold uppercase tracking-wider text-[10px]">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {pending.map((r,i)=>(
+                <tr key={i} className="border-b border-gray-50 dark:border-gray-800/60 hover:brightness-95 dark:hover:brightness-110 transition-all row-po_issued">
+                  <td className="px-3 py-2.5 text-gray-400">{i+1}</td>
+                  <td className="px-3 py-2.5 font-medium max-w-[160px] truncate" title={r['Location']}>{r['Location']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 font-mono text-[10px]">{r['Cost Center']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500">{r['EMSS POC']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 max-w-[130px] truncate" title={r['Vendor Name']}>{r['Vendor Name']||'—'}</td>
+                  <td className="px-3 py-2.5 font-mono text-[10px] text-[#4736FE]">{r['PO Number']||'—'}</td>
+                  <td className="px-3 py-2.5 text-gray-400">{r['PO Date']||'—'}</td>
+                  <td className="px-3 py-2.5 text-right font-medium">{fmtMoney(parseNum(r['PO with GST Value']),true)}</td>
+                  <td className="px-3 py-2.5 text-gray-400 text-center">{r['Diff.days Between PR & PO']||'—'}</td>
+                  <td className="px-3 py-2.5 text-center">{daysBadge(r._daysSincePO)}</td>
+                </tr>
+              ))}
+              {pending.length === 0 && (
+                <tr><td colSpan="10" className="px-4 py-8 text-center text-gray-400 text-sm">No POs pending invoicing ✓</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-        <div className="ml-auto flex items-center gap-2">
-          {rows.length > 0 && (
-            <span className="text-xs text-gray-400 hidden sm:block">{rows.length} PRs · {fmtMoney(totalAmt)} filtered</span>
-          )}
+// ── Dashboard ─────────────────────────────────────────────────────────────
 
-          {/* Upload */}
-          <div className="relative">
-            <button
-              onClick={() => { if (auth) { setShowUpload(v => !v); } else { setShowLogin(true); setShowUpload(true); } }}
-              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg bg-[#4736FE]/10 border border-[#4736FE]/30 text-[#4736FE] hover:bg-[#4736FE]/20 transition-colors font-semibold">
-              <Ico n="upload" size={13}/> Upload CSV
-            </button>
-            {showUpload && auth && (
-              <div className="absolute right-0 top-full mt-1 bg-white dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-700 rounded-xl shadow-xl p-4 w-56 z-50 fade-in">
-                <p className="text-xs text-gray-500 mb-3">Upload processflows.ai PR export (CSV)</p>
-                <input ref={fileRef} type="file" accept=".csv" className="hidden"
-                  onChange={e => { handleFile(e.target.files[0]); setShowUpload(false); }}/>
-                <button onClick={()=>fileRef.current.click()}
-                  className="w-full py-2 rounded-lg bg-[#4736FE] text-white text-xs font-semibold hover:bg-[#3829CC]">
-                  Choose file…
-                </button>
-                <button onClick={()=>setShowUpload(false)} className="w-full mt-2 py-1.5 text-xs text-gray-400 hover:text-gray-600">Cancel</button>
-              </div>
-            )}
+function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
+  const urlCC = useMemo(()=>new URLSearchParams(window.location.search).get('costCenter')||'', []);
+  const uploadRef = useRef();
+  const approvalUploadRef = useRef();
+
+  const [tab, setTab] = useState('table');
+  const [approvalRows, setApprovalRows] = useState([]);
+  const [search, setSearch] = useState('');
+  const [fTypes, setFTypes]           = useState(new Set());
+  const [fPOCs, setFPOCs]             = useState(new Set());
+  const [fLocations, setFLocations]   = useState(new Set());
+  const [fVendors, setFVendors]       = useState(new Set());
+  const [fStatus, setFStatus]         = useState(new Set());
+  const [fCostCenter, setFCostCenter] = useState(urlCC ? new Set([urlCC]) : new Set());
+  const [fFY, setFFY]                 = useState(new Set());
+  const [detailRow, setDetailRow]     = useState(null);
+  const [uploading, setUploading]     = useState(false);
+
+  const opts = useMemo(() => ({
+    types:       uniq(data.map(r=>(r['CAPEX / OPEX / AMC']||'').split(/[\s,]+/)[0]).filter(Boolean)),
+    pocs:        uniq(data.map(r=>r['EMSS POC'])),
+    locations:   uniq(data.map(r=>r['Location'])),
+    vendors:     uniq(data.map(r=>r['Vendor Name'])),
+    statuses:    ['PR Issued','PO Issued','Invoiced','Cancelled'],
+    costCenters: uniq(data.map(r=>r['Cost Center'])),
+    fyOptions:   [...new Set(data.map(r=>getFY(r['PR Date'])).filter(Boolean))].sort().reverse(),
+  }), [data]);
+
+  const filtered = useMemo(() => {
+    let rows = data;
+    if (fCostCenter.size>0) rows=rows.filter(r=>fCostCenter.has(r['Cost Center']));
+    if (fTypes.size>0) rows=rows.filter(r=>fTypes.has((r['CAPEX / OPEX / AMC']||'').split(/[\s,]+/)[0]));
+    if (fPOCs.size>0) rows=rows.filter(r=>fPOCs.has(r['EMSS POC']));
+    if (fLocations.size>0) rows=rows.filter(r=>fLocations.has(r['Location']));
+    if (fVendors.size>0) rows=rows.filter(r=>fVendors.has(r['Vendor Name']));
+    if (fStatus.size>0) {
+      const m={'PR Issued':'pr_only','PO Issued':'po_issued','Invoiced':'invoiced','Cancelled':'cancelled'};
+      rows=rows.filter(r=>[...fStatus].some(s=>rowStatus(r)===m[s]));
+    }
+    if (fFY.size>0) rows=rows.filter(r=>fFY.has(getFY(r['PR Date'])));
+    if (search.trim()) { const q=search.trim().toLowerCase(); rows=rows.filter(r=>Object.values(r).some(v=>String(v).toLowerCase().includes(q))); }
+    return rows;
+  }, [data,fCostCenter,fTypes,fPOCs,fLocations,fVendors,fStatus,fFY,search]);
+
+  const metrics = useMemo(() => {
+    const active=filtered.filter(r=>rowStatus(r)!=='cancelled');
+    const totalPR=active.reduce((s,r)=>s+parseNum(r['PR Basic Value']),0);
+    const pendingPOs=active.filter(r=>rowStatus(r)==='pr_only').length;
+    const invoicedVal=active.filter(r=>rowStatus(r)==='invoiced').reduce((s,r)=>s+parseNum(r['Bill Basic Value']),0);
+    const tatVals=active.map(r=>parseFloat(r['Diff.days Between PR & PO'])).filter(v=>!isNaN(v)&&v>0&&v<365);
+    const avgTAT=tatVals.length?Math.round(tatVals.reduce((a,b)=>a+b,0)/tatVals.length):0;
+    return {totalPR,pendingPOs,invoicedVal,avgTAT,total:filtered.length};
+  }, [filtered]);
+
+  const pendingL1   = useMemo(()=>data.filter(r=>r['PR Number']&&!(r['L1 Approval']||'').trim()),[data]);
+  const pendingBizFin = useMemo(()=>data.filter(r=>(r['L1 Approval']||'').trim()&&!(r['Bizfin']||'').trim()),[data]);
+
+  const activeFilters = fCostCenter.size+fTypes.size+fPOCs.size+fLocations.size+fVendors.size+fStatus.size+fFY.size;
+
+  function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!auth) { toast('Please log in first', 'err'); e.target.value=''; return; }
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const csvText = ev.target.result;
+      const rows = parseCSVText(csvText);
+      if (!rows) { toast('Could not parse CSV — check format', 'err'); setUploading(false); return; }
+      window.C24Uploader.upload({ csvText, workerUrl: WORKER_URL, toolPath: TOOL_PATH, auth })
+        .then(() => { toast('✓ Data updated — live now', 'ok'); onUploadDone(rows); })
+        .catch(er => {
+          if (er.status===401) { toast('Session expired — log in again', 'err'); onLogout(); }
+          else toast('Upload failed: '+(er.message||er), 'err');
+        })
+        .finally(() => { setUploading(false); e.target.value=''; });
+    };
+    reader.readAsText(file);
+  }
+
+  function handleApprovalUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    file.text().then(text => {
+      const rows = parseProcessflowsCSV(text);
+      if (!rows.length) { toast('Could not parse approval CSV — check format', 'err'); return; }
+      setApprovalRows(rows);
+      toast(`Loaded ${rows.length} PRs for Approval TAT`);
+      setTab('approval');
+    });
+    e.target.value = '';
+  }
+
+  function clearFilters() {
+    setFCostCenter(new Set()); setFTypes(new Set()); setFPOCs(new Set());
+    setFLocations(new Set()); setFVendors(new Set()); setFStatus(new Set()); setFFY(new Set()); setSearch('');
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="flex items-center justify-between px-5 py-3.5 border-b border-gray-200 dark:border-gray-800 sticky top-0 z-20 bg-gray-50/90 dark:bg-[#111]/90 backdrop-blur-md">
+        <div className="flex items-center gap-3">
+          <a href="/" className="flex items-center gap-1.5 text-sm text-gray-400 hover:text-[#4736FE] transition-colors">
+            <Ico n="back" size={14}/> C24 Hub
+          </a>
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"/>
+          <a href="/budget/" className="hidden sm:flex text-sm text-gray-400 hover:text-[#4736FE] transition-colors font-medium">💰 Budget FY 26-27</a>
+          <div className="hidden sm:block w-px h-5 bg-gray-200 dark:bg-gray-700"/>
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-sm">PR / PO Tracker</span>
+            {urlCC && <span className="text-xs px-2 py-0.5 rounded-full bg-[#4736FE]/10 text-[#4736FE] font-medium">{urlCC}</span>}
           </div>
-
-          <button onClick={() => setDark(d => !d)}
-            className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-500 hover:bg-gray-100 dark:hover:bg-white/10 transition-colors">
-            <Ico n={dark ? 'sun' : 'moon'} size={15}/>
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400 hidden sm:block">{data.length.toLocaleString()} records</span>
+          {/* Upload CSVs */}
+          <input ref={uploadRef} type="file" accept=".csv" className="hidden" onChange={handleUpload}/>
+          <input ref={approvalUploadRef} type="file" accept=".csv" className="hidden" onChange={handleApprovalUpload}/>
+          <button onClick={()=>approvalUploadRef.current.click()}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">
+            <Ico n="upload" size={12}/> Approval CSV
+          </button>
+          {auth ? (
+            <>
+              <button onClick={()=>uploadRef.current.click()} disabled={uploading}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4736FE] text-white hover:bg-[#3829CC] disabled:opacity-50 transition-colors">
+                {uploading ? <><Ico n="spin" size={12} cls="spin"/> Uploading…</> : <><Ico n="upload" size={12}/> Update CSV</>}
+              </button>
+              <button onClick={onLogout}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-red-400 hover:border-red-400/50 transition-colors">
+                <Ico n="logout" size={12}/> Logout
+              </button>
+            </>
+          ) : (
+            <button onClick={onLogin}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[#4736FE] hover:text-[#4736FE] transition-colors">
+              <Ico n="lock" size={12}/> Login to upload
+            </button>
+          )}
+          <button onClick={onToggleTheme} className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-[#4736FE] hover:border-[#4736FE] transition-colors">
+            {theme==='dark'?<Ico n="sun" size={14}/>:<Ico n="moon" size={14}/>}
           </button>
         </div>
       </header>
 
-      {/* Filters bar */}
-      <div className="bg-white dark:bg-[#0f0f0f] border-b border-gray-200 dark:border-gray-800 px-4 py-2 flex flex-wrap items-center gap-2">
-        <Ico n="filter" size={13} cls="text-gray-400 shrink-0"/>
-        <div className="relative">
-          <Ico n="search" size={13} cls="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
-          <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search PRs…"
-            className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-[#1a1a1a] focus:outline-none focus:border-[#4736FE] w-44"/>
-        </div>
-        <Sel val={fStatus} setVal={setFStatus} opts={statusOpts} placeholder="All Statuses"/>
-        <Sel val={fCreatedBy} setVal={setFCreatedBy} opts={createdOpts} placeholder="All EMSS POC"/>
-        <Sel val={fPending} setVal={setFPending} opts={pendingOpts} placeholder="All Pending With"/>
-        {(fStatus || fCreatedBy || fPending || search) && (
-          <button onClick={() => { setFStatus(''); setFCreatedBy(''); setFPending(''); setSearch(''); }}
-            className="text-xs text-gray-400 hover:text-red-400 flex items-center gap-1 transition-colors">
-            <Ico n="x" size={12}/> Clear
-          </button>
-        )}
-        <span className="ml-auto text-xs text-gray-400">{filtered.length} rows</span>
-      </div>
-
-      {/* Main content */}
-      <div className="flex flex-1 overflow-hidden">
-
-        {/* Table area */}
-        <div className="flex-1 overflow-auto p-4">
-          {loading && (
-            <div className="flex items-center justify-center gap-2 py-16 text-gray-400 text-sm">
-              <Ico n="spin" size={18} cls="spin"/> Loading from cloud…
-            </div>
-          )}
-
-          {!loading && rows.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
-              <div className="w-16 h-16 rounded-2xl bg-[#4736FE]/10 border border-[#4736FE]/20 flex items-center justify-center">
-                <Ico n="upload" size={28} cls="text-[#4736FE]"/>
-              </div>
-              <div className="text-center">
-                <div className="font-semibold text-base text-gray-600 dark:text-gray-300">No data loaded</div>
-                <div className="text-sm mt-1">Upload a PR CSV export from processflows.ai</div>
-              </div>
-              <button onClick={() => { setShowLogin(true); setShowUpload(true); }}
-                className="px-4 py-2 rounded-xl bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] transition-colors">
-                Upload CSV
-              </button>
-            </div>
-          )}
-
-          {!loading && rows.length > 0 && (
-            <div className="rounded-xl border border-gray-200 dark:border-gray-800 overflow-hidden bg-white dark:bg-[#141414] shadow-sm">
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-amber-400 text-black">
-                      <th className="px-3 py-2.5 text-left font-bold sticky left-0 bg-amber-400">Location</th>
-                      <th className="px-3 py-2.5 text-left font-bold">EMSS POC</th>
-                      <th className="px-3 py-2.5 text-left font-bold">PR Number</th>
-                      <th className="px-3 py-2.5 text-left font-bold">PR Date</th>
-                      <th className="px-3 py-2.5 text-right font-bold">PR Value</th>
-                      <th className="px-3 py-2.5 text-left font-bold">L1 Approval</th>
-                      <th className="px-3 py-2.5 text-left font-bold">BizFin</th>
-                      <th className="px-3 py-2.5 text-left font-bold">Current Pending From</th>
-                      <th className="px-3 py-2.5 text-center font-bold">Aging L1</th>
-                      <th className="px-3 py-2.5 text-center font-bold">Aging BizFin</th>
-                      <th className="px-3 py-2.5 text-center font-bold">Aging SCM</th>
-                      <th className="px-3 py-2.5 text-center font-bold">TAT</th>
-                      <th className="px-3 py-2.5 text-center font-bold">% TAT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filtered.map((r, i) => (
-                      <tr key={r.prCode + i}
-                        className={`border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-white/[0.03] transition-colors ${r.status === 'cancelled' ? 'opacity-50' : ''}`}>
-                        <td className="px-3 py-2 loc-cell sticky left-0 bg-white dark:bg-[#141414] font-medium" title={r.location}>
-                          <span className="block truncate max-w-[200px]">{r.location || '—'}</span>
-                        </td>
-                        <td className="px-3 py-2 text-gray-600 dark:text-gray-400">{r.createdBy || '—'}</td>
-                        <td className="px-3 py-2 font-mono text-[#4736FE] dark:text-[#8B82FF] font-semibold">{r.prCode}</td>
-                        <td className="px-3 py-2 text-gray-500">{fmtDate(r.prDate)}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{fmtMoney(r.amount)}</td>
-                        <td className="px-3 py-2">
-                          {r.l1Date
-                            ? <span className="text-green-600 dark:text-green-400">{r.l1By ? r.l1By.split(' ')[0] : ''} · {fmtDate(r.l1Date)}</span>
-                            : <span className="text-amber-500 font-semibold">{r.l1By || 'Pending'}</span>
-                          }
-                        </td>
-                        <td className="px-3 py-2">
-                          {r.bfDate
-                            ? <span className="text-green-600 dark:text-green-400">{r.bfBy ? r.bfBy.split(' ')[0] : ''} · {fmtDate(r.bfDate)}</span>
-                            : r.l1Date
-                              ? <span className="text-purple-500 font-semibold">{r.bfBy || 'Pending'}</span>
-                              : <span className="text-gray-400">—</span>
-                          }
-                        </td>
-                        <td className="px-3 py-2"><PendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
-                        <AgingCell days={r.agingL1} tat={1}/>
-                        <AgingCell days={r.agingBF} tat={1}/>
-                        <AgingCell days={r.agingSCM} tat={r.pendingStage==='SCM' ? r.tat : null}/>
-                        <td className="px-3 py-2 text-center text-gray-500">{r.tat != null ? r.tat+'d' : '—'}</td>
-                        <TATCell pct={r.pctTAT}/>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+      <main className="flex-1 px-4 sm:px-6 py-5 max-w-screen-2xl mx-auto w-full">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+          <MetricCard label="Total PR Value"  value={fmtMoney(metrics.totalPR,true)}     sub={`${metrics.total} requests`} color="indigo" icon={<Ico n="file"  size={18} cls="text-[#4736FE]"/>}/>
+          <MetricCard label="Pending POs"     value={metrics.pendingPOs}                  sub="PRs awaiting PO"             color="blue"   icon={<Ico n="clock" size={18} cls="text-blue-400"/>}/>
+          <MetricCard label="Total Invoiced"  value={fmtMoney(metrics.invoicedVal,true)} sub="Bills processed"             color="green"  icon={<Ico n="check" size={18} cls="text-green-400"/>}/>
+          <MetricCard label="Avg PR→PO TAT"  value={metrics.avgTAT?`${metrics.avgTAT}d`:'—'} sub="Calendar days"           color="amber"  icon={<Ico n="alert" size={18} cls="text-amber-400"/>}/>
         </div>
 
-        {/* Right sidebar — pivot */}
-        {rows.length > 0 && (
-          <div className="w-64 shrink-0 border-l border-gray-200 dark:border-gray-800 bg-white dark:bg-[#0f0f0f] p-3 overflow-y-auto hidden lg:block">
-            <PivotTable rows={filtered}/>
+        <div className="flex items-center gap-1 mb-5 flex-wrap">
+          {[['table','📊 Dashboard'],['approval','⏱ Approval TAT'],['invoicing','🧾 Invoicing Pending']].map(([t,l])=>(
+            <button key={t} onClick={()=>setTab(t)}
+              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab===t?'bg-[#4736FE] text-white':'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>
+              {l}
+            </button>
+          ))}
+        </div>
 
-            {/* TAT legend */}
-            <div className="mt-4 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-xl p-3 text-[11px]">
-              <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">SCM TAT Rules</div>
-              <div className="space-y-1 text-gray-600 dark:text-gray-400">
-                <div className="flex justify-between"><span>&lt; ₹1 L</span><span className="font-semibold">1 day</span></div>
-                <div className="flex justify-between"><span>₹1 L – ₹5 L</span><span className="font-semibold">6 days</span></div>
-                <div className="flex justify-between"><span>₹5 L – ₹40 L</span><span className="font-semibold">7 days</span></div>
-                <div className="flex justify-between"><span>₹40 L – ₹1 Cr</span><span className="font-semibold">15 days</span></div>
-                <div className="border-t border-gray-200 dark:border-gray-700 pt-1 mt-1">
-                  <div className="flex justify-between"><span>L1 &amp; BizFin TAT</span><span className="font-semibold">1 day each</span></div>
-                </div>
+        {tab==='table' && (
+          <div className="fade-in">
+            <div className="flex flex-wrap items-center gap-2 mb-4">
+              <div className="relative flex-1 min-w-[200px] max-w-xs">
+                <Ico n="search" size={14} cls="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+                <input value={search} onChange={e=>setSearch(e.target.value)} placeholder="Search anything…"
+                  className="w-full pl-9 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] transition-colors"/>
               </div>
+              <MultiCheck label="Type"     options={opts.types}       selected={fTypes}      onChange={setFTypes}/>
+              <MultiCheck label="POC"      options={opts.pocs}        selected={fPOCs}       onChange={setFPOCs}/>
+              <MultiCheck label="Location" options={opts.locations}   selected={fLocations}  onChange={setFLocations}/>
+              <MultiCheck label="Vendor"   options={opts.vendors}     selected={fVendors}    onChange={setFVendors}/>
+              <MultiCheck label="Status"   options={opts.statuses}    selected={fStatus}     onChange={setFStatus}/>
+              <MultiCheck label="Cost Ctr" options={opts.costCenters} selected={fCostCenter} onChange={setFCostCenter}/>
+              <MultiCheck label="FY" options={opts.fyOptions} selected={fFY} onChange={setFFY}/>
+              {activeFilters>0 && (
+                <button onClick={clearFilters}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium text-red-400 border border-red-400/30 hover:bg-red-500/10 transition-colors">
+                  <Ico n="x" size={11}/> Clear ({activeFilters})
+                </button>
+              )}
             </div>
-
-            {/* Color legend */}
-            <div className="mt-3 bg-gray-50 dark:bg-[#1a1a1a] border border-gray-200 dark:border-gray-800 rounded-xl p-3 text-[11px]">
-              <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">% TAT Color</div>
-              <div className="space-y-1">
-                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-green-500/30 inline-block"></span><span className="text-gray-600 dark:text-gray-400">&lt; 70% — On track</span></div>
-                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-amber-500/30 inline-block"></span><span className="text-gray-600 dark:text-gray-400">70–99% — At risk</span></div>
-                <div className="flex items-center gap-2"><span className="w-3 h-3 rounded bg-red-500/30 inline-block"></span><span className="text-gray-600 dark:text-gray-400">≥ 100% — Overdue</span></div>
-              </div>
-            </div>
+            <DataTable rows={filtered} onRowClick={setDetailRow}/>
           </div>
         )}
-      </div>
 
-      {showLogin && !auth && <LoginModal onSuccess={(creds) => { setAuth(creds); setShowLogin(false); }} onClose={() => setShowLogin(false)}/>}
-      <ToastLayer toasts={toasts}/>
+        {tab==='approval' && (
+          <ApprovalTATTab approvalRows={approvalRows} approvalFileRef={approvalUploadRef}/>
+        )}
 
-      {/* Click-outside close for upload dropdown */}
-      {showUpload && auth && <div className="fixed inset-0 z-40" onClick={() => setShowUpload(false)}/>}
+        {tab==='invoicing' && (
+          <InvoicingPending rows={data} fyFilter={fFY} fyOptions={opts.fyOptions} onFYChange={setFFY}/>
+        )}
+      </main>
+
+      {detailRow && <DetailModal row={detailRow} onClose={()=>setDetailRow(null)}/>}
     </div>
+  );
+}
+
+// ── Empty / Loading Screen ────────────────────────────────────────────────
+
+function EmptyScreen({ loading, auth, onLogin, onLogout, theme, onToggleTheme, toast }) {
+  const uploadRef = useRef();
+  const [uploading, setUploading] = useState(false);
+  const [onData, setOnData] = useState(null); // will be set by App
+
+  // Emit data up via a callback the App wires in
+  function handleUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!auth) { toast('Please log in first', 'err'); e.target.value=''; return; }
+    setUploading(true);
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const csvText = ev.target.result;
+      const rows = parseCSVText(csvText);
+      if (!rows) { toast('Could not parse CSV — check format', 'err'); setUploading(false); return; }
+      window.C24Uploader.upload({ csvText, workerUrl: WORKER_URL, toolPath: TOOL_PATH, auth })
+        .then(() => { toast('✓ Data uploaded — refreshing…', 'ok'); window.location.reload(); })
+        .catch(er => { toast('Upload failed: '+(er.message||er), 'err'); })
+        .finally(() => { setUploading(false); e.target.value=''; });
+    };
+    reader.readAsText(file);
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <header className="flex items-center justify-between px-4 sm:px-8 py-3.5 sm:py-5 border-b border-gray-200 dark:border-gray-800">
+        <div className="flex items-center gap-4">
+          <a href="/" className="flex items-center gap-2 text-sm text-gray-400 hover:text-[#4736FE] transition-colors"><Ico n="back" size={14}/> C24 Hub</a>
+          <div className="w-px h-5 bg-gray-200 dark:bg-gray-700"/>
+          <div><div className="font-bold text-sm">PR / PO Tracker</div><div className="text-xs text-gray-400 uppercase tracking-wider">C24 Expansion Hub</div></div>
+        </div>
+        <div className="flex items-center gap-2">
+          {auth
+            ? <button onClick={onLogout} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 dark:border-gray-700 text-gray-400 hover:text-red-400 transition-colors"><Ico n="logout" size={12}/> Logout</button>
+            : <button onClick={onLogin}  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 dark:border-gray-700 text-gray-500 hover:border-[#4736FE] hover:text-[#4736FE] transition-colors"><Ico n="lock" size={12}/> Login</button>}
+          <button onClick={onToggleTheme} className="w-8 h-8 rounded-lg border border-gray-200 dark:border-gray-700 flex items-center justify-center text-gray-400 hover:text-[#4736FE] transition-colors">
+            {theme==='dark'?<Ico n="sun" size={14}/>:<Ico n="moon" size={14}/>}
+          </button>
+        </div>
+      </header>
+      <main className="flex-1 flex flex-col items-center justify-center px-4 py-16">
+        {loading ? (
+          <div className="flex flex-col items-center gap-4 text-gray-400">
+            <Ico n="spin" size={32} cls="spin text-[#4736FE]"/>
+            <p className="text-sm">Loading data from Cloudflare…</p>
+          </div>
+        ) : (
+          <div className="text-center max-w-md">
+            <div className="w-16 h-16 rounded-2xl bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center mx-auto mb-5">
+              <Ico n="file" size={28} cls="text-[#4736FE]"/>
+            </div>
+            <h1 className="text-xl font-bold mb-2">No data yet</h1>
+            <p className="text-gray-400 text-sm mb-6">The PR/PO tracker has no CSV on Cloudflare yet. Log in and upload the first export to go live.</p>
+            {auth ? (
+              <>
+                <input ref={uploadRef} type="file" accept=".csv" className="hidden" onChange={handleUpload}/>
+                <button onClick={()=>uploadRef.current.click()} disabled={uploading}
+                  className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] disabled:opacity-50 transition-colors mx-auto">
+                  {uploading ? <><Ico n="spin" size={14} cls="spin"/> Uploading…</> : <><Ico n="upload" size={14}/> Upload CSV to Cloudflare</>}
+                </button>
+              </>
+            ) : (
+              <button onClick={onLogin} className="flex items-center gap-2 px-5 py-2.5 rounded-xl border border-[#4736FE] text-[#4736FE] text-sm font-semibold hover:bg-[#4736FE]/10 transition-colors mx-auto">
+                <Ico n="lock" size={14}/> Login to upload
+              </button>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
+
+// ── Root App ──────────────────────────────────────────────────────────────
+
+function App() {
+  const [data, setData]         = useState(null);
+  const [loading, setLoading]   = useState(true);
+  const [auth, setAuth]         = useState(null);
+  const [loginOpen, setLoginOpen] = useState(false);
+  const [theme, setTheme]       = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
+  const { toasts, add: toast }  = useToast();
+
+  // Fetch from Cloudflare Worker on mount
+  useEffect(() => {
+    if (location.protocol === 'file:') { setLoading(false); return; }
+    window.C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', { cache: 'no-store' })
+      .then(text => {
+        const rows = parseCSVText(text);
+        if (rows) setData(rows);
+        else toast('No valid data in stored CSV', 'err');
+      })
+      .catch(() => { /* no data yet — show empty state */ })
+      .finally(() => setLoading(false));
+  }, []);
+
+  function toggleTheme() {
+    const next = theme==='dark'?'light':'dark';
+    setTheme(next);
+    try{localStorage.setItem('c24-theme',next);}catch{}
+    if(next==='dark') document.documentElement.classList.add('dark');
+    else document.documentElement.classList.remove('dark');
+  }
+
+  function handleLogin(creds) { setAuth(creds); setLoginOpen(false); toast('✓ Logged in', 'ok'); }
+  function handleLogout() { setAuth(null); toast('Logged out', 'ok'); }
+
+  return (
+    <>
+      {data
+        ? <Dashboard data={data} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
+            onUploadDone={setData} theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
+        : <EmptyScreen loading={loading} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
+            theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
+      }
+      {loginOpen && <LoginModal onSuccess={handleLogin} onClose={()=>setLoginOpen(false)} toast={toast}/>}
+      <ToastLayer toasts={toasts}/>
+    </>
   );
 }
 
