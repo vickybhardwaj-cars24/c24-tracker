@@ -534,12 +534,29 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
     if(!snapRef.current||snapping) return;
     setSnapping(true);
     try {
-      const canvas = await html2canvas(snapRef.current,{
-        backgroundColor: document.documentElement.classList.contains('dark') ? '#111' : '#f9fafb',
+      const el = snapRef.current;
+      // Temporarily expand overflow so html2canvas captures all columns
+      const scrollDiv = el.querySelector('.overflow-x-auto');
+      const prevOverflow = scrollDiv ? scrollDiv.style.overflow : null;
+      const prevTableW = el.querySelector('table') ? el.querySelector('table').style.minWidth : null;
+      if(scrollDiv) scrollDiv.style.overflow = 'visible';
+      const table = el.querySelector('table');
+      if(table) table.style.minWidth = 'none';
+
+      const bg = document.documentElement.classList.contains('dark') ? '#111' : '#f9fafb';
+      const canvas = await html2canvas(el,{
+        backgroundColor: bg,
         scale: 2,
         useCORS: true,
         logging: false,
+        width: el.scrollWidth,
+        windowWidth: el.scrollWidth + 200,
       });
+
+      // Restore
+      if(scrollDiv) scrollDiv.style.overflow = prevOverflow||'';
+      if(table && prevTableW!==null) table.style.minWidth = prevTableW||'';
+
       const link = document.createElement('a');
       const today = new Date().toISOString().slice(0,10);
       link.download = `approval-tat-${today}.png`;
@@ -603,14 +620,11 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
           {snapping?'Exporting…':'Export Image'}
         </button>
       </div>
-      <div ref={snapRef} className="p-2"
-        style={{background: document.documentElement.classList.contains('dark')?'#111':'#f9fafb'}}>
-        <div className="flex items-center justify-between mb-3 px-1">
-          <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Approval TAT — {filtered.length} PRs · {new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
-        </div>
-
       <div className="flex gap-4 items-start">
-        <div className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div ref={snapRef} className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+          <div className="px-4 pt-3 pb-1 border-b border-gray-100 dark:border-gray-800">
+            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Approval TAT — {filtered.length} PRs · {new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[1000px]">
               <thead>
@@ -685,7 +699,6 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
             </div>
           </div>
         </div>
-      </div>
       </div>
     </div>
   );
