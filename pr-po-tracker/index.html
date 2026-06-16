@@ -1188,8 +1188,8 @@ function App() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-    // Load approval CSV independently — silent if not yet uploaded
-    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store' })
+    // Load approval CSV — skeleton:false avoids conflicting with the main fetch overlay
+    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store', skeleton: false })
       .then(text => {
         const rows = parseProcessflowsCSV(text);
         if (rows.length) setApprovalData(rows);
