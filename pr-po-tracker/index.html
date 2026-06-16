@@ -50,6 +50,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 // ── Worker config (same as projects-tracker) ──────────────────────────────
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH  = 'prpo-tracker';
+const APPROVAL_PATH = 'prpo-approval';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -885,6 +886,16 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
 
   const [tab, setTab] = useState('table');
   const [approvalRows, setApprovalRows] = useState([]);
+
+  // Auto-load approval CSV from Cloudflare on mount
+  useEffect(() => {
+    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store' })
+      .then(text => {
+        const rows = parseProcessflowsCSV(text);
+        if (rows.length) { setApprovalRows(rows); toast(`Approval data loaded (${rows.length} PRs)`); }
+      })
+      .catch(() => {}); // silent if not yet uploaded
+  }, []);
   const [search, setSearch] = useState('');
   const [fTypes, setFTypes]           = useState(new Set());
   const [fPOCs, setFPOCs]             = useState(new Set());
@@ -961,13 +972,22 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
   function handleApprovalUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
-    file.text().then(text => {
-      const rows = parseProcessflowsCSV(text);
-      if (!rows.length) { toast('Could not parse approval CSV — check format', 'err'); return; }
+    if (!auth) { toast('Please log in first to upload', 'err'); e.target.value=''; return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const csvText = ev.target.result;
+      const rows = parseProcessflowsCSV(csvText);
+      if (!rows.length) { toast('Could not parse approval CSV — check format', 'err'); e.target.value=''; return; }
       setApprovalRows(rows);
-      toast(`Loaded ${rows.length} PRs for Approval TAT`);
       setTab('approval');
-    });
+      window.C24Uploader.upload({ csvText, workerUrl: WORKER_URL, toolPath: APPROVAL_PATH, auth })
+        .then(() => toast(`✓ ${rows.length} PRs saved to cloud`))
+        .catch(er => {
+          if (er.status===401) { toast('Session expired — log in again', 'err'); onLogout(); }
+          else toast('Cloud save failed: '+(er.message||er), 'err');
+        });
+    };
+    reader.readAsText(file);
     e.target.value = '';
   }
 
@@ -996,7 +1016,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
           {/* Upload CSVs */}
           <input ref={uploadRef} type="file" accept=".csv" className="hidden" onChange={handleUpload}/>
           <input ref={approvalUploadRef} type="file" accept=".csv" className="hidden" onChange={handleApprovalUpload}/>
-          <button onClick={()=>approvalUploadRef.current.click()}
+          <button onClick={()=>{ if(auth) approvalUploadRef.current.click(); else onLogin(); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">
             <Ico n="upload" size={12}/> Approval CSV
           </button>
