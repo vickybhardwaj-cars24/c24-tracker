@@ -879,23 +879,13 @@ function InvoicingPending({ rows, fyFilter, fyOptions, onFYChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 
-function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
+function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
   const urlCC = useMemo(()=>new URLSearchParams(window.location.search).get('costCenter')||'', []);
   const uploadRef = useRef();
   const approvalUploadRef = useRef();
 
   const [tab, setTab] = useState('table');
-  const [approvalRows, setApprovalRows] = useState([]);
-
-  // Auto-load approval CSV from Cloudflare on mount
-  useEffect(() => {
-    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store' })
-      .then(text => {
-        const rows = parseProcessflowsCSV(text);
-        if (rows.length) { setApprovalRows(rows); toast(`Approval data loaded (${rows.length} PRs)`); }
-      })
-      .catch(() => {}); // silent if not yet uploaded
-  }, []);
+  const approvalRows = approvalData;
   const [search, setSearch] = useState('');
   const [fTypes, setFTypes]           = useState(new Set());
   const [fPOCs, setFPOCs]             = useState(new Set());
@@ -978,7 +968,7 @@ function Dashboard({ data, auth, onLogin, onLogout, onUploadDone, theme, onToggl
       const csvText = ev.target.result;
       const rows = parseProcessflowsCSV(csvText);
       if (!rows.length) { toast('Could not parse approval CSV — check format', 'err'); e.target.value=''; return; }
-      setApprovalRows(rows);
+      onApprovalDataChange(rows);
       setTab('approval');
       window.C24Uploader.upload({ csvText, workerUrl: WORKER_URL, toolPath: APPROVAL_PATH, auth })
         .then(() => toast(`✓ ${rows.length} PRs saved to cloud`))
@@ -1179,14 +1169,15 @@ function EmptyScreen({ loading, auth, onLogin, onLogout, theme, onToggleTheme, t
 // ── Root App ──────────────────────────────────────────────────────────────
 
 function App() {
-  const [data, setData]         = useState(null);
-  const [loading, setLoading]   = useState(true);
-  const [auth, setAuth]         = useState(null);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [theme, setTheme]       = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
-  const { toasts, add: toast }  = useToast();
+  const [data, setData]               = useState(null);
+  const [approvalData, setApprovalData] = useState([]);
+  const [loading, setLoading]         = useState(true);
+  const [auth, setAuth]               = useState(null);
+  const [loginOpen, setLoginOpen]     = useState(false);
+  const [theme, setTheme]             = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
+  const { toasts, add: toast }        = useToast();
 
-  // Fetch from Cloudflare Worker on mount
+  // Fetch main CSV + approval CSV from Cloudflare on mount
   useEffect(() => {
     if (location.protocol === 'file:') { setLoading(false); return; }
     window.C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', { cache: 'no-store' })
@@ -1195,8 +1186,15 @@ function App() {
         if (rows) setData(rows);
         else toast('No valid data in stored CSV', 'err');
       })
-      .catch(() => { /* no data yet — show empty state */ })
+      .catch(() => {})
       .finally(() => setLoading(false));
+    // Load approval CSV independently — silent if not yet uploaded
+    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store' })
+      .then(text => {
+        const rows = parseProcessflowsCSV(text);
+        if (rows.length) setApprovalData(rows);
+      })
+      .catch(() => {});
   }, []);
 
   function toggleTheme() {
@@ -1213,7 +1211,8 @@ function App() {
   return (
     <>
       {data
-        ? <Dashboard data={data} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
+        ? <Dashboard data={data} approvalData={approvalData} onApprovalDataChange={setApprovalData}
+            auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
             onUploadDone={setData} theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
         : <EmptyScreen loading={loading} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
             theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
