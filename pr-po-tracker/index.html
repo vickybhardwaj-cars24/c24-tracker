@@ -407,9 +407,9 @@ function SlackPanel({ pendingL1, pendingBizFin }) {
 
 // ── Processflows CSV — column indices (0-based) ───────────────────────────
 const PF_CI = {
-  PR_CODE:    0,  PR_DATE:    1,  STATUS:     2,  SUBJECT:    6,
-  AMOUNT:     17, CREATED_BY: 22, L1_BY:      33, L1_DATE:    34,
-  BF_BY:      38, BF_DATE:    39,
+  PR_CODE:     0,  PR_DATE:    1,  STATUS:     2,  SUBJECT:    6,
+  AMOUNT:     17,  CREATED_BY: 22, CUR_PENDING: 28,
+  L1_BY:      33,  L1_DATE:    34, BF_BY:      38, BF_DATE:    39,
 };
 
 function pfScmTAT(amount) {
@@ -452,11 +452,12 @@ function parseProcessflowsCSV(text) {
       const amount = parseFloat(get(PF_CI.AMOUNT).replace(/[₹,\s]/g,'')) || 0;
       const l1Date = get(PF_CI.L1_DATE), bfDate = get(PF_CI.BF_DATE);
       const l1By = get(PF_CI.L1_BY), bfBy = get(PF_CI.BF_BY);
+      const curPending = get(PF_CI.CUR_PENDING); // name of who currently needs to act
       const prDate = get(PF_CI.PR_DATE);
       let pendingStage, pendingLabel;
-      if (!l1Date)       { pendingStage='L1';     pendingLabel=l1By?`L1 (${l1By})`:'L1'; }
-      else if (!bfDate)  { pendingStage='BizFin';  pendingLabel=bfBy?`Bizfin (${bfBy})`:'Bizfin'; }
-      else               { pendingStage='SCM';     pendingLabel='SCM'; }
+      if (!l1Date)       { pendingStage='L1';    const nm=curPending||l1By; pendingLabel=nm?`L1 (${nm})`:'L1'; }
+      else if (!bfDate)  { pendingStage='BizFin'; const nm=curPending||bfBy; pendingLabel=nm?`Bizfin (${nm})`:'Bizfin'; }
+      else               { pendingStage='SCM';    pendingLabel='SCM'; }
       const agingL1  = !l1Date ? pfDaysSince(prDate) : null;
       const agingBF  = l1Date && !bfDate ? pfDaysSince(l1Date) : null;
       const agingSCM = l1Date && bfDate  ? pfDaysSince(bfDate) : null;
