@@ -41,6 +41,9 @@
   td,th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
   .spin{animation:spin 1s linear infinite}
   @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  /* When exporting to image, show full cell content (no truncation) */
+  .snap-export td,.snap-export th{max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap}
+  .snap-export tbody tr{height:auto}
 </style>
 </head>
 <body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
@@ -440,6 +443,9 @@ function pfFmtDate(v) {
   const s = String(v).trim();
   const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
   if (m1) return new Date(+m1[3], +m1[2]-1, +m1[1]).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  // Fall back to native parsing for long timestamps (e.g. "Mon Jun 15 2026 18:25:54 GMT+0530")
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
   return s;
 }
 
@@ -545,23 +551,31 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
         scrollOverflow: scrollDiv ? scrollDiv.style.overflow : null,
         tableMinW: table ? table.style.minWidth : null,
       };
+      // Render light-mode for a clean export regardless of current theme
+      const wasDark = document.documentElement.classList.contains('dark');
+      if(wasDark) document.documentElement.classList.remove('dark');
       el.style.overflow = 'visible';
       el.style.width = fullW + 'px';
       if(scrollDiv) scrollDiv.style.overflow = 'visible';
-      if(table) table.style.minWidth = fullW + 'px';
+      if(table) table.style.minWidth = 'max-content';
+      el.classList.add('snap-export');
+      // Allow layout to settle after un-truncating cells
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const renderW = Math.max(fullW, el.scrollWidth, table?table.scrollWidth:0);
 
-      const bg = document.documentElement.classList.contains('dark') ? '#111' : '#f9fafb';
       const canvas = await html2canvas(el,{
-        backgroundColor: bg,
-        scale: 2,
+        backgroundColor: '#ffffff',
+        scale: 3,
         useCORS: true,
         logging: false,
-        width: fullW,
+        width: renderW,
         height: el.scrollHeight,
-        windowWidth: fullW + 100,
+        windowWidth: renderW + 80,
       });
 
       // Restore
+      el.classList.remove('snap-export');
+      if(wasDark) document.documentElement.classList.add('dark');
       el.style.overflow = saved.cardOverflow||'';
       el.style.width = saved.cardWidth||'';
       if(scrollDiv) scrollDiv.style.overflow = saved.scrollOverflow||'';
@@ -632,8 +646,18 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
       </div>
       <div className="flex flex-col gap-4">
         <div ref={snapRef} className="w-full min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
-          <div className="px-4 pt-3 pb-1 border-b border-gray-100 dark:border-gray-800">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Approval TAT — {filtered.length} PRs · {new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})}</span>
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-[#4736FE]/[0.07] to-transparent">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-7 rounded-full bg-[#4736FE]"></span>
+              <div>
+                <div className="text-sm font-extrabold text-gray-800 dark:text-gray-100 tracking-tight">Approval TAT Tracker</div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">CARS24 · Expansion &amp; Projects</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-base font-extrabold text-[#4736FE] leading-none">{filtered.length}<span className="text-[10px] font-bold text-gray-400 ml-1">PRs</span></div>
+              <div className="text-[10px] font-semibold text-gray-400 mt-0.5">{new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+            </div>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[1000px]">
