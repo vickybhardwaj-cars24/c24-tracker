@@ -1466,7 +1466,12 @@ function pd(s) {
     const mk=ml[p.toLowerCase().substring(0,3)];
     if(mk!==undefined) mo=mk;
   });
-  if(day===null||mo===null) return null;
+  if(day===null||mo===null){
+    // Fallback for long timestamps (e.g. "Fri Jan 23 2026 00:00:00 GMT+0530 (India Standard Time)")
+    var nd=new Date(s);
+    if(!isNaN(nd.getTime())) return new Date(nd.getFullYear(),nd.getMonth(),nd.getDate());
+    return null;
+  }
   if(yr===null){
     const today=new Date(); today.setHours(0,0,0,0);
     if(today.getFullYear()===2026){
@@ -1945,8 +1950,8 @@ function renderTable(){
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:110px">'+esc(r.Vendor||'—')+'</td>',
       '<td>'+(function(){var _snp=(r['Site Name']||'').trim();var _llp=SCHED_DATA[_snp]||[];var _totalp=0,_donep=0;_llp.forEach(function(b){_totalp+=(b.tasks||[]).length;_donep+=(b.tasks||[]).filter(function(t){return t.done;}).length;});var schedChip=_llp.length?'<button onclick="event.stopPropagation();openModalToSchedule('+idx+')" title="Open project tasks" style="display:flex;align-items:center;gap:3px;margin-top:3px;background:#f0f9ff;border:1px solid #bae6fd;color:#0369a1;border-radius:4px;padding:2px 5px;font-size:9px;font-weight:600;cursor:pointer;line-height:1.2">📋 '+_donep+'/'+_totalp+' tasks</button>':'';return (!isNaN(pctN)?'<div style="display:flex;align-items:center;gap:4px"><div style="flex:1;height:4px;background:var(--surface);border-radius:2px;overflow:hidden;min-width:30px"><div style="height:100%;width:'+Math.min(pctN,100)+'%;background:'+pctColor+';border-radius:2px"></div></div><span style="font-size:10px;font-weight:700;color:'+pctColor+';white-space:nowrap">'+pctN+'%</span></div>':'<span style="color:var(--muted);font-size:11px">—</span>')+schedChip;})()+'</td>',
       '<td><span class="badge '+sCls(r.Status)+'">'+esc(r.Status||'—')+'</span></td>',
-      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+(r['PO Date']||'—')+'</td>',
-      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+(r['Kickoff Date']||'—')+'</td>',
+      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+fmtRaw(r['PO Date'])+'</td>',
+      '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+fmtRaw(r['Kickoff Date'])+'</td>',
       '<td style="font-size:11px;color:var(--muted);white-space:nowrap">'+fmtRaw(r['Work Start Date'])+'</td>',
       '<td style="font-size:11px;white-space:nowrap">'+fmtRaw(r['SAT Date'])+'</td>',
       '<td style="font-size:11px;'+(isUatWarn?'color:#d97706;font-weight:600':'color:var(--muted)')+';white-space:nowrap">'+fmtRaw(r['UAT DATE'])+'</td>',
@@ -2484,9 +2489,9 @@ function renderSatUat(){
           +'<td style="padding:7px 10px;text-align:center"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;'+typeBg+'">'+ps.type+'</span></td>'
           +'<td style="padding:7px 10px;text-align:center;font-weight:700">'+dlStr+'</td>'
           +'<td style="padding:7px 10px;text-align:center;font-weight:800;color:'+dColor+'">'+ps.daysLeft+'d</td>'
-          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+esc(ps.r['PO Date']||'—')+'</td>'
-          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+esc(ps.r['Kickoff Date']||'—')+'</td>'
-          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+esc(ps.r['Work Start Date']||'—')+'</td>'
+          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+fmtRaw(ps.r['PO Date'])+'</td>'
+          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+fmtRaw(ps.r['Kickoff Date'])+'</td>'
+          +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+fmtRaw(ps.r['Work Start Date'])+'</td>'
           +'<td style="padding:7px 10px;text-align:center">'
           +'<a href="'+handoverUrgencyMail(ps.r)+'" target="_blank" onclick="event.stopPropagation()" '
           +'style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;text-decoration:none;background:#f97316;color:#fff;white-space:nowrap">📨 Handover Email</a>'
@@ -3811,8 +3816,8 @@ function openModal(idx){
   const pctV=pct(r);
   const metaF=[
     ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
-    ['PO Date',r['PO Date']||'—'],['Kickoff Date',r['Kickoff Date']||'—'],['Work Start',r['Work Start Date']||'—'],
-    ['Cost Center',r['Cost Center']||''],['SAT Date',r['SAT Date']||'—'],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||''],
+    ['PO Date',fmtRaw(r['PO Date'])],['Kickoff Date',fmtRaw(r['Kickoff Date'])],['Work Start',fmtRaw(r['Work Start Date'])],
+    ['Cost Center',r['Cost Center']||''],['SAT Date',fmtRaw(r['SAT Date'])],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',fmtRaw(r['Planned Completion'])],['Revised',r['Revised Completion']?fmtRaw(r['Revised Completion']):''],
     ['Reason for Delay',r['Reason for Delay']||'']
   ];
   const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';

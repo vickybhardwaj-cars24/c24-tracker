@@ -18,6 +18,7 @@
 <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
 <script src="https://unpkg.com/@babel/standalone@7.23.10/babel.min.js"></script>
 <script src="https://unpkg.com/papaparse@5.4.1/papaparse.min.js"></script>
+<script src="https://unpkg.com/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   *{box-sizing:border-box}
@@ -40,6 +41,9 @@
   td,th{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:220px}
   .spin{animation:spin 1s linear infinite}
   @keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}
+  /* When exporting to image, show full cell content (no truncation) */
+  .snap-export td,.snap-export th{max-width:none!important;overflow:visible!important;text-overflow:clip!important;white-space:nowrap}
+  .snap-export tbody tr{height:auto}
 </style>
 </head>
 <body class="bg-gray-50 dark:bg-[#111] text-gray-900 dark:text-gray-100 min-h-screen">
@@ -167,6 +171,8 @@ function Ico({ n, size=16, cls='' }) {
     logout:   <><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></>,
     refresh:  <><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></>,
     spin:     <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
+    image:    <><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></>,
+    loader:   <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/>,
   };
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
@@ -437,6 +443,9 @@ function pfFmtDate(v) {
   const s = String(v).trim();
   const m1 = s.match(/^(\d{1,2})[\-\/](\d{1,2})[\-\/](\d{4})$/);
   if (m1) return new Date(+m1[3], +m1[2]-1, +m1[1]).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  // Fall back to native parsing for long timestamps (e.g. "Mon Jun 15 2026 18:25:54 GMT+0530")
+  const d = new Date(s);
+  if (!isNaN(d.getTime())) return d.toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
   return s;
 }
 
@@ -524,6 +533,62 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
   const [fCreatedBy,setFCreatedBy]=useState(new Set());
   const [fPending,setFPending]=useState(new Set());
   const [search,setSearch]=useState('');
+  const [snapping,setSnapping]=useState(false);
+  const snapRef=useRef(null);
+
+  const takeScreenshot = useCallback(async()=>{
+    if(!snapRef.current||snapping) return;
+    setSnapping(true);
+    try {
+      const el = snapRef.current;
+      // Temporarily expand the card + inner scroll area so html2canvas
+      // captures every column without clipping the edges.
+      const scrollDiv = el.querySelector('.overflow-x-auto');
+      const table = el.querySelector('table');
+      const fullW = table ? table.scrollWidth : el.scrollWidth;
+      const saved = {
+        cardOverflow: el.style.overflow, cardWidth: el.style.width,
+        scrollOverflow: scrollDiv ? scrollDiv.style.overflow : null,
+        tableMinW: table ? table.style.minWidth : null,
+      };
+      // Render light-mode for a clean export regardless of current theme
+      const wasDark = document.documentElement.classList.contains('dark');
+      if(wasDark) document.documentElement.classList.remove('dark');
+      el.style.overflow = 'visible';
+      el.style.width = fullW + 'px';
+      if(scrollDiv) scrollDiv.style.overflow = 'visible';
+      if(table) table.style.minWidth = 'max-content';
+      el.classList.add('snap-export');
+      // Allow layout to settle after un-truncating cells
+      await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+      const renderW = Math.max(fullW, el.scrollWidth, table?table.scrollWidth:0);
+
+      const canvas = await html2canvas(el,{
+        backgroundColor: '#ffffff',
+        scale: 3,
+        useCORS: true,
+        logging: false,
+        width: renderW,
+        height: el.scrollHeight,
+        windowWidth: renderW + 80,
+      });
+
+      // Restore
+      el.classList.remove('snap-export');
+      if(wasDark) document.documentElement.classList.add('dark');
+      el.style.overflow = saved.cardOverflow||'';
+      el.style.width = saved.cardWidth||'';
+      if(scrollDiv) scrollDiv.style.overflow = saved.scrollOverflow||'';
+      if(table) table.style.minWidth = saved.tableMinW||'';
+
+      const link = document.createElement('a');
+      const today = new Date().toISOString().slice(0,10);
+      link.download = `approval-tat-${today}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch(e){ console.error(e); }
+    setSnapping(false);
+  },[snapping]);
 
   const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
   const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
@@ -572,10 +637,28 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
             <Ico n="x" size={11}/> Clear {activeFilters>0?`(${activeFilters+( search?1:0)})`:''}</button>
         )}
         <span className="text-xs text-gray-400 ml-auto">{filtered.length} rows</span>
+        <button onClick={takeScreenshot} disabled={snapping}
+          title="Export as PNG image"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4736FE]/10 hover:bg-[#4736FE]/20 text-[#4736FE] text-xs font-semibold transition-colors disabled:opacity-50">
+          <Ico n={snapping?'loader':'image'} size={13} cls={snapping?'spin':''}/>
+          {snapping?'Exporting…':'Export Image'}
+        </button>
       </div>
-
-      <div className="flex gap-4 items-start">
-        <div className="flex-1 min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+      <div className="flex flex-col gap-4">
+        <div ref={snapRef} className="w-full min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-[#4736FE]/[0.07] to-transparent">
+            <div className="flex items-center gap-2.5">
+              <span className="w-2 h-7 rounded-full bg-[#4736FE]"></span>
+              <div>
+                <div className="text-sm font-extrabold text-gray-800 dark:text-gray-100 tracking-tight">Approval TAT Tracker</div>
+                <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">CARS24 · Expansion &amp; Projects</div>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-base font-extrabold text-[#4736FE] leading-none">{filtered.length}<span className="text-[10px] font-bold text-gray-400 ml-1">PRs</span></div>
+              <div className="text-[10px] font-semibold text-gray-400 mt-0.5">{new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+            </div>
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-xs min-w-[1000px]">
               <thead>
@@ -587,7 +670,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
                   <th className="px-3 py-2.5 text-right font-bold">PR Value</th>
                   <th className="px-3 py-2.5 text-left font-bold">L1 Approval</th>
                   <th className="px-3 py-2.5 text-left font-bold">BizFin</th>
-                  <th className="px-3 py-2.5 text-left font-bold">Current Pending From</th>
+                  <th className="px-3 py-2.5 text-center font-bold">Current Pending From</th>
                   <th className="px-3 py-2.5 text-center font-bold">Aging L1</th>
                   <th className="px-3 py-2.5 text-center font-bold">Aging BizFin</th>
                   <th className="px-3 py-2.5 text-center font-bold">Aging SCM</th>
@@ -616,7 +699,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
                           ? <span className="text-purple-500 font-semibold">{r.bfBy||'Pending'}</span>
                           : <span className="text-gray-400">—</span>}
                     </td>
-                    <td className="px-3 py-2.5"><PFPendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
+                    <td className="px-3 py-2.5 text-center"><PFPendingBadge label={r.pendingLabel} stage={r.pendingStage}/></td>
                     <PFAgingCell days={r.agingL1} tat={1}/>
                     <PFAgingCell days={r.agingBF} tat={1}/>
                     <PFAgingCell days={r.agingSCM} tat={r.pendingStage==='SCM'?r.tat:null}/>
@@ -629,7 +712,7 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
           </div>
         </div>
 
-        <div className="shrink-0 flex flex-col gap-3">
+        <div className="flex flex-wrap gap-3 items-start">
           <PFPivotTable rows={filtered}/>
           <div className="bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl p-4 text-[11px] w-64">
             <div className="font-bold text-gray-500 uppercase tracking-wide mb-2">SCM TAT Rules</div>
