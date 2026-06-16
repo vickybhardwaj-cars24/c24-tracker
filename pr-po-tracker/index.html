@@ -454,8 +454,8 @@ function parseProcessflowsCSV(text) {
       const l1By = get(PF_CI.L1_BY), bfBy = get(PF_CI.BF_BY);
       const prDate = get(PF_CI.PR_DATE);
       let pendingStage, pendingLabel;
-      if (!l1Date)       { pendingStage='L1';     pendingLabel=l1By?`L1 (${l1By.split(' ')[0]})`:'L1'; }
-      else if (!bfDate)  { pendingStage='BizFin';  pendingLabel=bfBy?`Bizfin (${bfBy.split(' ')[0]})`:'Bizfin'; }
+      if (!l1Date)       { pendingStage='L1';     pendingLabel=l1By?`L1 (${l1By})`:'L1'; }
+      else if (!bfDate)  { pendingStage='BizFin';  pendingLabel=bfBy?`Bizfin (${bfBy})`:'Bizfin'; }
       else               { pendingStage='SCM';     pendingLabel='SCM'; }
       const agingL1  = !l1Date ? pfDaysSince(prDate) : null;
       const agingBF  = l1Date && !bfDate ? pfDaysSince(l1Date) : null;
