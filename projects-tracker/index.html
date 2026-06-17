@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.87</title>
+<title>Cars24 Projects Tracker v4.88</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -605,31 +605,65 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <input class="search" id="search" type="text" placeholder="Search sites, owners, blockers…" oninput="applyFilters()">
   </div>
   <div class="chk-dd" id="status-dd">
-    <button class="chk-btn" id="status-btn" onclick="toggleStatusDd(event)">
+    <button class="chk-btn" id="status-btn" onclick="toggleDd(event,'status-list')">
       <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
       <span id="status-lbl">Status</span>
     </button>
-    <div class="chk-list" id="status-list">
-      <div class="chk-list-hdr">
-        <span id="status-hdr-lbl">Status</span>
-        <button onclick="clearStatusFilter()" id="status-clear" style="display:none">Clear</button>
-      </div>
+    <div class="chk-list" id="status-list" onclick="event.stopPropagation()">
+      <div class="chk-list-hdr"><span>Status</span><button onclick="clearFilter('status-boxes','status-lbl','status-btn','status-clear')" id="status-clear" style="display:none">Clear</button></div>
       <div id="status-boxes"></div>
     </div>
   </div>
-  <select class="sel" id="f-owner" onchange="applyFilters()"><option value="">All Owners</option></select>
-  <select class="sel" id="f-vendor" onchange="applyFilters()"><option value="">All Vendors</option></select>
-  <select class="sel" id="f-zone" onchange="applyFilters()"><option value="">All Zones</option></select>
-  <select class="sel" id="f-bu" onchange="applyFilters()"><option value="">All BUs</option></select>
-  <select class="sel" id="f-blocker" onchange="applyFilters()">
-    <option value="">All Blockers</option>
-    <option value="BD">BD</option>
-    <option value="Design">Design</option>
-    <option value="HEM">HEM</option>
-    <option value="Branding">Branding</option>
-    <option value="Commercial">Commercial</option>
-    <option value="Ops">Ops</option>
-  </select>
+  <div class="chk-dd" id="owner-dd">
+    <button class="chk-btn" id="owner-btn" onclick="toggleDd(event,'owner-list')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+      <span id="owner-lbl">Owner</span>
+    </button>
+    <div class="chk-list" id="owner-list" onclick="event.stopPropagation()">
+      <div class="chk-list-hdr"><span>Owner</span><button onclick="clearFilter('owner-boxes','owner-lbl','owner-btn','owner-clear')" id="owner-clear" style="display:none">Clear</button></div>
+      <div id="owner-boxes"></div>
+    </div>
+  </div>
+  <div class="chk-dd" id="vendor-dd">
+    <button class="chk-btn" id="vendor-btn" onclick="toggleDd(event,'vendor-list')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+      <span id="vendor-lbl">Vendor</span>
+    </button>
+    <div class="chk-list" id="vendor-list" onclick="event.stopPropagation()">
+      <div class="chk-list-hdr"><span>Vendor</span><button onclick="clearFilter('vendor-boxes','vendor-lbl','vendor-btn','vendor-clear')" id="vendor-clear" style="display:none">Clear</button></div>
+      <div id="vendor-boxes"></div>
+    </div>
+  </div>
+  <div class="chk-dd" id="zone-dd">
+    <button class="chk-btn" id="zone-btn" onclick="toggleDd(event,'zone-list')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+      <span id="zone-lbl">Zone</span>
+    </button>
+    <div class="chk-list" id="zone-list" onclick="event.stopPropagation()">
+      <div class="chk-list-hdr"><span>Zone</span><button onclick="clearFilter('zone-boxes','zone-lbl','zone-btn','zone-clear')" id="zone-clear" style="display:none">Clear</button></div>
+      <div id="zone-boxes"></div>
+    </div>
+  </div>
+  <div class="chk-dd" id="bu-dd">
+    <button class="chk-btn" id="bu-btn" onclick="toggleDd(event,'bu-list')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+      <span id="bu-lbl">BU</span>
+    </button>
+    <div class="chk-list" id="bu-list" onclick="event.stopPropagation()">
+      <div class="chk-list-hdr"><span>BU</span><button onclick="clearFilter('bu-boxes','bu-lbl','bu-btn','bu-clear')" id="bu-clear" style="display:none">Clear</button></div>
+      <div id="bu-boxes"></div>
+    </div>
+  </div>
+  <div class="chk-dd" id="blocker-dd">
+    <button class="chk-btn" id="blocker-btn" onclick="toggleDd(event,'blocker-list')">
+      <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="16" y2="12"/><line x1="11" y1="18" x2="13" y2="18"/></svg>
+      <span id="blocker-lbl">Blocker</span>
+    </button>
+    <div class="chk-list" id="blocker-list" onclick="event.stopPropagation()">
+      <div class="chk-list-hdr"><span>Blocker</span><button onclick="clearFilter('blocker-boxes','blocker-lbl','blocker-btn','blocker-clear')" id="blocker-clear" style="display:none">Clear</button></div>
+      <div id="blocker-boxes"></div>
+    </div>
+  </div>
   <div class="vtabs">
     <button class="vtab active" onclick="setView('tv',this)">Table</button>
     <button class="vtab" onclick="setView('suv',this)">🚦 SAT→UAT</button>
@@ -954,17 +988,8 @@ function applyRoleBasedView() {
   if (__sbRole === 'pm' && __sbProfile) {
     var ownerName = __sbProfile.full_name || '';
     if (ownerName) {
-      var sel = document.getElementById('f-owner');
-      if (sel) {
-        // Find matching option
-        for (var i = 0; i < sel.options.length; i++) {
-          if (sel.options[i].value.toLowerCase().includes(ownerName.split(' ')[0].toLowerCase())) {
-            sel.value = sel.options[i].value;
-            break;
-          }
-        }
-        applyFilters();
-      }
+      setChkFilterMatch('owner-boxes','owner-lbl','owner-btn','owner-clear',ownerName.split(' ')[0]);
+      applyFilters();
     }
   }
 }
@@ -1618,72 +1643,106 @@ function getUatWarnings(){
 // ═══════════════════════════════════════════════════════════════
 // FILTERS
 // ═══════════════════════════════════════════════════════════════
-function buildFilters(){
-  const uniq=k=>[...new Set(allData.map(r=>r[k]).filter(Boolean))].sort();
-  const ow=document.getElementById('f-owner');
-  const owv=ow.value;
-  ow.innerHTML='<option value="">All Owners</option>'+uniq('Owner').map(v=>`<option value="${v}">${v}</option>`).join('');
-  if(uniq('Owner').includes(owv)) ow.value=owv;
-  const ve=document.getElementById('f-vendor');
-  const vev=ve.value;
-  ve.innerHTML='<option value="">All Vendors</option>'+uniq('Vendor').map(v=>`<option value="${v}">${v}</option>`).join('');
-  if(uniq('Vendor').includes(vev)) ve.value=vev;
-  const zn=document.getElementById('f-zone');
-  if(zn){const znv=zn.value;zn.innerHTML='<option value="">All Zones</option>'+uniq('Zone').map(v=>'<option value="'+v+'"'+(v===znv?' selected':'')+'>'+v+'</option>').join('');if(uniq('Zone').includes(znv))zn.value=znv;}
-  const bu2=document.getElementById('f-bu');
-  if(bu2){const buv=bu2.value;bu2.innerHTML='<option value="">All BUs</option>'+uniq('BU').map(v=>'<option value="'+v+'"'+(v===buv?' selected':'')+'>'+v+'</option>').join('');if(uniq('BU').includes(buv))bu2.value=buv;}
-  const box=document.getElementById('status-boxes');
-  if(box){const prev=getSelectedStatuses();box.innerHTML=uniq('Status').map(s=>{const sid='chk_'+s.replace(/[^a-zA-Z0-9]/g,'_');const chk=prev.length===0||prev.includes(s)?'checked':'';return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+s+'" '+chk+' onchange="onChkChange()"><span>'+s+'</span></label>';}).join('');updateStatusLbl();}
+// ── Generic multi-checkbox filter helpers ──────────────────────────────────
+function buildChkBox(boxId,values,lbl,btn,clr){
+  const box=document.getElementById(boxId);if(!box)return;
+  const prev=getChkSel(boxId);
+  box.innerHTML=values.map(s=>{
+    const sid=boxId+'_'+s.replace(/[^a-zA-Z0-9]/g,'_');
+    const chk=prev.length===0||prev.includes(s)?'checked':'';
+    return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+s+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+s+'</span></label>';
+  }).join('');
+  updateChkLbl(boxId,lbl,btn,clr);
 }
-
-function getSelectedStatuses(){
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-  if(!all.length) return [];
+function getChkSel(boxId){
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  if(!all.length)return[];
   const sel=all.filter(c=>c.checked);
-  return (sel.length===all.length)?[]:sel.map(c=>c.value);
+  return(sel.length===all.length)?[]:sel.map(c=>c.value);
 }
-function updateStatusLbl(){
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
+function updateChkLbl(boxId,lblId,btnId,clrId){
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
   const sel=all.filter(c=>c.checked);
-  const lbl=document.getElementById('status-lbl');
-  const btn=document.getElementById('status-btn');
-  const clr=document.getElementById('status-clear');
   const count=sel.length<all.length?sel.length:0;
-  if(lbl) lbl.textContent='Status'+(count>0?' ('+count+')':'');
-  if(btn){btn.classList.toggle('active',count>0);}
-  if(clr) clr.style.display=count>0?'':'none';
+  const lbl=document.getElementById(lblId);
+  const btn=document.getElementById(btnId);
+  const clr=document.getElementById(clrId);
+  const base=lblId.replace('-lbl','').replace('-',' ').replace(/\b\w/g,c=>c.toUpperCase());
+  if(lbl)lbl.textContent=base+(count>0?' ('+count+')':'');
+  if(btn)btn.classList.toggle('active',count>0);
+  if(clr)clr.style.display=count>0?'':'none';
 }
-function onChkChange(){updateStatusLbl();applyFilters();}
-function clearStatusFilter(){
-  document.querySelectorAll('#status-boxes input[type=checkbox]').forEach(c=>c.checked=true);
-  updateStatusLbl();applyFilters();
+function onChkChange(boxId,lblId,btnId,clrId){updateChkLbl(boxId,lblId,btnId,clrId);applyFilters();}
+function clearFilter(boxId,lblId,btnId,clrId){
+  document.querySelectorAll('#'+boxId+' input[type=checkbox]').forEach(c=>c.checked=true);
+  updateChkLbl(boxId,lblId,btnId,clrId);applyFilters();
 }
-function toggleStatusDd(e){
+function toggleDd(e,listId){
   e.stopPropagation();
-  const list=document.getElementById('status-list');
-  list.classList.toggle('open');
+  const allLists=document.querySelectorAll('.chk-list');
+  allLists.forEach(l=>{if(l.id!==listId)l.classList.remove('open');});
+  document.getElementById(listId).classList.toggle('open');
 }
 document.addEventListener('click',function(){
-  const sl=document.getElementById('status-list');
-  if(sl) sl.classList.remove('open');
+  document.querySelectorAll('.chk-list').forEach(l=>l.classList.remove('open'));
 });
+
+function buildFilters(){
+  const uniq=k=>[...new Set(allData.map(r=>r[k]).filter(Boolean))].sort();
+  buildChkBox('status-boxes', uniq('Status'),  'status-lbl',  'status-btn',  'status-clear');
+  buildChkBox('owner-boxes',  uniq('Owner'),   'owner-lbl',   'owner-btn',   'owner-clear');
+  buildChkBox('vendor-boxes', uniq('Vendor'),  'vendor-lbl',  'vendor-btn',  'vendor-clear');
+  buildChkBox('zone-boxes',   uniq('Zone'),    'zone-lbl',    'zone-btn',    'zone-clear');
+  buildChkBox('bu-boxes',     uniq('BU'),      'bu-lbl',      'bu-btn',      'bu-clear');
+  buildChkBox('blocker-boxes',['BD','Design','HEM','Branding','Commercial','Ops'],
+                                               'blocker-lbl', 'blocker-btn', 'blocker-clear');
+}
+
+// legacy shims used elsewhere
+function getSelectedStatuses(){return getChkSel('status-boxes');}
+function updateStatusLbl(){updateChkLbl('status-boxes','status-lbl','status-btn','status-clear');}
+function clearStatusFilter(){clearFilter('status-boxes','status-lbl','status-btn','status-clear');}
+function toggleStatusDd(e){toggleDd(e,'status-list');}
+
+// Set a single-value exclusive selection on a chk-box group (used by insight clicks etc.)
+function setChkFilter(boxId,lblId,btnId,clrId,val){
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  if(!val){all.forEach(c=>c.checked=true);}
+  else{
+    all.forEach(c=>c.checked=false);
+    const opt=all.find(c=>c.value===val||c.value.toLowerCase()===val.toLowerCase());
+    if(opt)opt.checked=true;
+  }
+  updateChkLbl(boxId,lblId,btnId,clrId);
+}
+// Set by partial match (for blocker/zone lookups)
+function setChkFilterMatch(boxId,lblId,btnId,clrId,val){
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  if(!val){all.forEach(c=>c.checked=true);}
+  else{
+    all.forEach(c=>c.checked=false);
+    const opt=all.find(c=>c.value.toLowerCase().includes(val.toLowerCase()));
+    if(opt)opt.checked=true;
+  }
+  updateChkLbl(boxId,lblId,btnId,clrId);
+}
 
 function applyFilters(){
   const q=document.getElementById('search').value.toLowerCase();
-  const sels=getSelectedStatuses();
-  const ow=document.getElementById('f-owner').value.toLowerCase();
-  const ve=document.getElementById('f-vendor').value.toLowerCase();
-  const bl=document.getElementById('f-blocker').value;
-  const zf=(document.getElementById('f-zone')||{}).value||'';
-  const bf=(document.getElementById('f-bu')||{}).value||'';
+  const selStatus  =getChkSel('status-boxes');
+  const selOwner   =getChkSel('owner-boxes');
+  const selVendor  =getChkSel('vendor-boxes');
+  const selZone    =getChkSel('zone-boxes');
+  const selBU      =getChkSel('bu-boxes');
+  const selBlocker =getChkSel('blocker-boxes');
   filteredData=allData.filter(r=>{
     if(q&&!Object.values(r).some(v=>String(v).toLowerCase().includes(q))) return false;
-    if(ow&&(r.Owner||''). toLowerCase()!==ow) return false;
-    if(ve&&!(r.Vendor||''). toLowerCase().includes(ve)) return false;
-    if(sels.length&&!sels.includes((r.Status||''))) return false;
-    if(bl&&!extractBlockers(getLatestUpdate(r)).includes(bl)) return false;
-    if(zf&&(r.Zone||'').toLowerCase()!==zf.toLowerCase()) return false;
-    if(bf&&(r.BU||'').toLowerCase()!==bf.toLowerCase()) return false;
+    if(selStatus.length&&!selStatus.includes(r.Status||'')) return false;
+    if(selOwner.length&&!selOwner.includes(r.Owner||'')) return false;
+    if(selVendor.length&&!selVendor.some(v=>(r.Vendor||'').toLowerCase().includes(v.toLowerCase()))) return false;
+    if(selZone.length&&!selZone.includes(r.Zone||'')) return false;
+    if(selBU.length&&!selBU.includes(r.BU||'')) return false;
+    if(selBlocker.length){const bl=extractBlockers(getLatestUpdate(r));if(!selBlocker.some(b=>bl.includes(b)))return false;}
     return true;
   });
   document.getElementById('cchip').textContent=filteredData.length+' of '+allData.length+' sites';
@@ -1733,12 +1792,12 @@ function kpiFlt(val){
 
 function clickInsight(type,val){
   if(type==='status') kpiFlt(val);
-  else if(type==='owner'){document.getElementById('f-owner').value=val;applyFilters();}
-  else if(type==='vendor'){document.getElementById('f-vendor').value=val;applyFilters();}
+  else if(type==='owner'){setChkFilter('owner-boxes','owner-lbl','owner-btn','owner-clear',val);applyFilters();}
+  else if(type==='vendor'){setChkFilter('vendor-boxes','vendor-lbl','vendor-btn','vendor-clear',val);applyFilters();}
   setView('tv',document.querySelector('.vtab'));
 }
 function filterByBlocker(p){
-  document.getElementById('f-blocker').value=p;
+  setChkFilter('blocker-boxes','blocker-lbl','blocker-btn','blocker-clear',p);
   applyFilters();
   setView('tv',document.querySelector('.vtab'));
 }
@@ -4499,8 +4558,8 @@ function filterByOwner(oi){
   var owners=[...new Set(allData.map(r=>r.Owner).filter(Boolean))].sort();
   var o=owners[oi];
   if(!o) return;
-  var el=document.getElementById('f-owner');
-  if(el){el.value=o;applyFilters();setView('tv',document.querySelector('.vtab'));}
+  setChkFilter('owner-boxes','owner-lbl','owner-btn','owner-clear',o);
+  applyFilters();setView('tv',document.querySelector('.vtab'));
 }
 
 
@@ -4847,8 +4906,8 @@ function filterByDelayReason(reason){
   var map={'Permission/BD':'BD','Vendor':'HEM','Design':'Design','Branding':'Branding','Legal/Finance':'Legal','Ops/IT':'Ops'};
   var prefix=map[reason];
   if(!prefix) return;
-  var bl=document.getElementById('f-blocker');
-  if(bl){bl.value=prefix;applyFilters();setView('tv',document.querySelector('.vtab'));}
+  setChkFilter('blocker-boxes','blocker-lbl','blocker-btn','blocker-clear',prefix);
+  applyFilters();setView('tv',document.querySelector('.vtab'));
 }
 
 
@@ -6901,29 +6960,18 @@ function renderRegional() {
 }
 
 function filterByZone(z) {
-  const el = document.getElementById('f-zone');
-  if (el) el.value = z;
-  applyFilters();
-  setView('tv', document.querySelector('.vtab'));
+  setChkFilter('zone-boxes','zone-lbl','zone-btn','zone-clear',z);
+  applyFilters();setView('tv',document.querySelector('.vtab'));
 }
 function filterByBU(b) {
-  const el = document.getElementById('f-bu');
-  if (el) el.value = b;
-  applyFilters();
-  setView('tv', document.querySelector('.vtab'));
+  setChkFilter('bu-boxes','bu-lbl','bu-btn','bu-clear',b);
+  applyFilters();setView('tv',document.querySelector('.vtab'));
 }
 function filterByZoneBU(z, b, status) {
-  const ze = document.getElementById('f-zone'); if(ze) ze.value = z;
-  const be = document.getElementById('f-bu');   if(be&&b) be.value = b;
-  if (status) {
-    const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-    all.forEach(c=>c.checked=false);
-    const opt=all.find(c=>c.value.toLowerCase().includes(status.toLowerCase()));
-    if(opt) opt.checked=true;
-    updateStatusLbl();
-  }
-  applyFilters();
-  setView('tv', document.querySelector('.vtab'));
+  setChkFilter('zone-boxes','zone-lbl','zone-btn','zone-clear',z);
+  if(b) setChkFilter('bu-boxes','bu-lbl','bu-btn','bu-clear',b);
+  if(status) setChkFilterMatch('status-boxes','status-lbl','status-btn','status-clear',status);
+  applyFilters();setView('tv',document.querySelector('.vtab'));
 }
 
 // ═══════════════════════════════════════════════════════════════
