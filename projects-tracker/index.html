@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.88</title>
+<title>Cars24 Projects Tracker v4.89</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1647,34 +1647,46 @@ function getUatWarnings(){
 function buildChkBox(boxId,values,lbl,btn,clr){
   const box=document.getElementById(boxId);if(!box)return;
   const prev=getChkSel(boxId);
-  box.innerHTML=values.map(s=>{
-    const sid=boxId+'_'+s.replace(/[^a-zA-Z0-9]/g,'_');
-    const chk=prev.length===0||prev.includes(s)?'checked':'';
-    return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+s+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+s+'</span></label>';
-  }).join('');
+  const allChk=prev.length===0?'checked':'';
+  const saId=boxId+'_sel_all';
+  box.innerHTML='<label class="chk-item" style="border-bottom:1px solid var(--border);margin-bottom:4px;padding-bottom:8px"><input type="checkbox" id="'+saId+'" '+allChk+' onchange="toggleSelAll(\''+boxId+'\',\''+saId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span style="font-weight:600">Select All</span></label>'
+    +values.map(s=>{
+      const sid=boxId+'_'+s.replace(/[^a-zA-Z0-9]/g,'_');
+      const chk=prev.length===0||prev.includes(s)?'checked':'';
+      return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+s+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+s+'</span></label>';
+    }).join('');
   updateChkLbl(boxId,lbl,btn,clr);
 }
 function getChkSel(boxId){
-  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox][value]')];
   if(!all.length)return[];
   const sel=all.filter(c=>c.checked);
-  return(sel.length===all.length)?[]:sel.map(c=>c.value);
+  // none checked OR all checked = no filter
+  return(sel.length===0||sel.length===all.length)?[]:sel.map(c=>c.value);
 }
 function updateChkLbl(boxId,lblId,btnId,clrId){
-  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox][value]')];
   const sel=all.filter(c=>c.checked);
-  const count=sel.length<all.length?sel.length:0;
+  const saEl=document.getElementById(boxId+'_sel_all');
+  if(saEl) saEl.checked=sel.length===all.length;
+  const active=sel.length>0&&sel.length<all.length;
+  const count=active?sel.length:0;
   const lbl=document.getElementById(lblId);
   const btn=document.getElementById(btnId);
   const clr=document.getElementById(clrId);
-  const base=lblId.replace('-lbl','').replace('-',' ').replace(/\b\w/g,c=>c.toUpperCase());
+  const base=lblId.replace('-lbl','').replace(/-/g,' ').replace(/\b\w/g,c=>c.toUpperCase());
   if(lbl)lbl.textContent=base+(count>0?' ('+count+')':'');
-  if(btn)btn.classList.toggle('active',count>0);
-  if(clr)clr.style.display=count>0?'':'none';
+  if(btn)btn.classList.toggle('active',active);
+  if(clr)clr.style.display=active?'':'none';
 }
 function onChkChange(boxId,lblId,btnId,clrId){updateChkLbl(boxId,lblId,btnId,clrId);applyFilters();}
+function toggleSelAll(boxId,saId,lblId,btnId,clrId){
+  const checked=document.getElementById(saId).checked;
+  document.querySelectorAll('#'+boxId+' input[type=checkbox][value]').forEach(c=>c.checked=checked);
+  updateChkLbl(boxId,lblId,btnId,clrId);applyFilters();
+}
 function clearFilter(boxId,lblId,btnId,clrId){
-  document.querySelectorAll('#'+boxId+' input[type=checkbox]').forEach(c=>c.checked=true);
+  document.querySelectorAll('#'+boxId+' input[type=checkbox][value]').forEach(c=>c.checked=false);
   updateChkLbl(boxId,lblId,btnId,clrId);applyFilters();
 }
 function toggleDd(e,listId){
@@ -1706,7 +1718,7 @@ function toggleStatusDd(e){toggleDd(e,'status-list');}
 
 // Set a single-value exclusive selection on a chk-box group (used by insight clicks etc.)
 function setChkFilter(boxId,lblId,btnId,clrId,val){
-  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox][value]')];
   if(!val){all.forEach(c=>c.checked=true);}
   else{
     all.forEach(c=>c.checked=false);
@@ -1717,7 +1729,7 @@ function setChkFilter(boxId,lblId,btnId,clrId,val){
 }
 // Set by partial match (for blocker/zone lookups)
 function setChkFilterMatch(boxId,lblId,btnId,clrId,val){
-  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox]')];
+  const all=[...document.querySelectorAll('#'+boxId+' input[type=checkbox][value]')];
   if(!val){all.forEach(c=>c.checked=true);}
   else{
     all.forEach(c=>c.checked=false);
@@ -1750,7 +1762,7 @@ function applyFilters(){
 }
 
 function kpiFlt(val){
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
+  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox][value]')];
   if(val==='__active__'){
     all.forEach(c=>{const s=c.value.toLowerCase();c.checked=s.includes('wip')||s.includes('additional')||s.includes('to be start')||s==='design'||s==='boq';});
     updateStatusLbl();applyFilters();return;
