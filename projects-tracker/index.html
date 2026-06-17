@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.85</title>
+<title>Cars24 Projects Tracker v4.86</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -598,20 +598,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
     <input class="search" id="search" type="text" placeholder="Search sites, owners, blockers…" oninput="applyFilters()">
   </div>
-  <div class="chk-dd" id="status-dd">
-    <div class="chk-btn" id="status-btn" onclick="toggleStatusDd(event)">
-      <span id="status-lbl">All Statuses</span>
-      <span class="chk-arr" id="status-arr">▼</span>
-    </div>
-    <div class="chk-list" id="status-list">
-      <div class="chk-item">
-        <input type="checkbox" id="chk-all" checked onchange="toggleAll(this)">
-        <label for="chk-all" style="cursor:pointer;font-weight:600">Select All / View All</label>
-      </div>
-      <div class="chk-div"></div>
-      <div id="status-boxes"></div>
-    </div>
-  </div>
+  <select class="sel" id="f-status" onchange="applyFilters()"><option value="">All Statuses</option></select>
   <select class="sel" id="f-owner" onchange="applyFilters()"><option value="">All Owners</option></select>
   <select class="sel" id="f-vendor" onchange="applyFilters()"><option value="">All Vendors</option></select>
   <select class="sel" id="f-zone" onchange="applyFilters()"><option value="">All Zones</option></select>
@@ -1627,61 +1614,15 @@ function buildFilters(){
   if(zn){const znv=zn.value;zn.innerHTML='<option value="">All Zones</option>'+uniq('Zone').map(v=>'<option value="'+v+'"'+(v===znv?' selected':'')+'>'+v+'</option>').join('');if(uniq('Zone').includes(znv))zn.value=znv;}
   const bu2=document.getElementById('f-bu');
   if(bu2){const buv=bu2.value;bu2.innerHTML='<option value="">All BUs</option>'+uniq('BU').map(v=>'<option value="'+v+'"'+(v===buv?' selected':'')+'>'+v+'</option>').join('');if(uniq('BU').includes(buv))bu2.value=buv;}
-  const box=document.getElementById('status-boxes');
-  const prev=getSelectedStatuses();
-  box.innerHTML=uniq('Status').map(s=>{
-    const sid='chk_'+s.replace(/[^a-zA-Z0-9]/g,'_');
-    const chk=prev.length===0||prev.includes(s.toLowerCase())?'checked':'';
-    return `<div class="chk-item"><input type="checkbox" id="${sid}" value="${s}" ${chk} onchange="onChkChange()"><label for="${sid}" style="cursor:pointer">${s}</label></div>`;
-  }).join('');
-  updateStatusLbl();
+  const fst=document.getElementById('f-status');
+  if(fst){const prev=fst.value;fst.innerHTML='<option value="">All Statuses</option>'+uniq('Status').map(s=>'<option value="'+s+'"'+(s===prev?' selected':'')+'>'+s+'</option>').join('');}
 }
 
-function toggleStatusDd(e){
-  e.stopPropagation();
-  const list=document.getElementById('status-list');
-  const arr=document.getElementById('status-arr');
-  const btn=document.getElementById('status-btn');
-  const open=list.classList.toggle('open');
-  btn.style.borderColor=open?'var(--accent)':'';
-  arr.style.transform=open?'rotate(180deg)':'';
-}
-document.addEventListener('click',()=>{
-  const sl=document.getElementById('status-list');
-  if(sl) sl.classList.remove('open');
-  const sb=document.getElementById('status-btn');
-  if(sb) sb.style.borderColor='';
-  const sa=document.getElementById('status-arr');
-  if(sa) sa.style.transform='';
-});
-
-function toggleAll(cb){
-  document.querySelectorAll('#status-boxes input[type=checkbox]').forEach(c=>c.checked=cb.checked);
-  updateStatusLbl(); applyFilters();
-}
-function onChkChange(){
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-  const chkAll=document.getElementById('chk-all');
-  if(chkAll) chkAll.checked=all.every(c=>c.checked);
-  updateStatusLbl(); applyFilters();
-}
-function updateStatusLbl(){
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-  const sel=all.filter(c=>c.checked);
-  const lbl=document.getElementById('status-lbl');
-  if(!lbl) return;
-  lbl.textContent=(!sel.length||sel.length===all.length)?'All Statuses':sel.length+' Status'+(sel.length>1?'es':'');' Selected';
-}
-function getSelectedStatuses(){
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-  if(!all.length) return [];
-  const sel=all.filter(c=>c.checked);
-  return (sel.length===all.length)?[]:sel.map(c=>c.value.toLowerCase());
-}
 
 function applyFilters(){
   const q=document.getElementById('search').value.toLowerCase();
-  const sels=getSelectedStatuses();
+  const fstEl=document.getElementById('f-status');
+  const fstVal=(fstEl?fstEl.value:'').toLowerCase();
   const ow=document.getElementById('f-owner').value.toLowerCase();
   const ve=document.getElementById('f-vendor').value.toLowerCase();
   const bl=document.getElementById('f-blocker').value;
@@ -1691,7 +1632,7 @@ function applyFilters(){
     if(q&&!Object.values(r).some(v=>String(v).toLowerCase().includes(q))) return false;
     if(ow&&(r.Owner||''). toLowerCase()!==ow) return false;
     if(ve&&!(r.Vendor||''). toLowerCase().includes(ve)) return false;
-    if(sels.length&&!sels.some(st=>(r.Status||''). toLowerCase().includes(st))) return false;
+    if(fstVal&&(r.Status||'').toLowerCase()!==fstVal) return false;
     if(bl&&!extractBlockers(getLatestUpdate(r)).includes(bl)) return false;
     if(zf&&(r.Zone||'').toLowerCase()!==zf.toLowerCase()) return false;
     if(bf&&(r.BU||'').toLowerCase()!==bf.toLowerCase()) return false;
@@ -1702,26 +1643,21 @@ function applyFilters(){
 }
 
 function kpiFlt(val){
+  const fst=document.getElementById('f-status');
   if(val==='__active__'){
-    const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-    all.forEach(c=>c.checked=false);
-    all.forEach(c=>{const s=c.value.toLowerCase();if(s.includes('wip')||s.includes('additional')||s.includes('to be start')||s==='design'||s==='boq')c.checked=true;});
-    document.getElementById('chk-all').checked=false;
-    updateStatusLbl();applyFilters();return;
+    if(fst) fst.value='';
+    applyFilters();
+    // manually filter to active statuses
+    filteredData=filteredData.filter(r=>{const s=(r.Status||'').toLowerCase();return s.includes('wip')||s.includes('additional')||s.includes('to be start')||s==='design'||s==='boq';});
+    document.getElementById('cchip').textContent=filteredData.length+' of '+allData.length+' sites';
+    renderAll();return;
   }
   document.querySelectorAll('.kpi').forEach(k=>k.classList.remove('active'));
-  const all=[...document.querySelectorAll('#status-boxes input[type=checkbox]')];
   if(!val){
-    all.forEach(c=>c.checked=true);
-    const ca=document.getElementById('chk-all');
-    if(ca) ca.checked=true;
+    if(fst) fst.value='';
   } else if(val==='__ov__'){
-    // show overdue - use search
     document.getElementById('search').value='';
-    all.forEach(c=>c.checked=true);
-    const ca=document.getElementById('chk-all');
-    if(ca) ca.checked=true;
-    updateStatusLbl();
+    if(fst) fst.value='';
     const today=new Date(); today.setHours(0,0,0,0);
     filteredData=allData.filter(r=>{
       const d=pd(r['Planned Completion']);
@@ -1734,10 +1670,7 @@ function kpiFlt(val){
     return;
   } else if(val==='__due__'){
     document.getElementById('search').value='';
-    all.forEach(c=>c.checked=true);
-    const caD=document.getElementById('chk-all');
-    if(caD) caD.checked=true;
-    updateStatusLbl();
+    if(fst) fst.value='';
     const todayD=new Date(); todayD.setHours(0,0,0,0);
     const in7D=new Date(todayD); in7D.setDate(todayD.getDate()+7);
     filteredData=allData.filter(r=>{
@@ -1751,13 +1684,9 @@ function kpiFlt(val){
     setView('tv',document.querySelector('.vtab'));
     return;
   } else {
-    all.forEach(c=>c.checked=false);
-    const opt=all.find(c=>c.value===val||c.value.toLowerCase()===val.toLowerCase());
-    if(opt) opt.checked=true;
-    const ca=document.getElementById('chk-all');
-    if(ca) ca.checked=false;
+    if(fst){const opt=[...fst.options].find(o=>o.value===val||o.value.toLowerCase()===val.toLowerCase());fst.value=opt?opt.value:'';}
   }
-  updateStatusLbl(); applyFilters();
+  applyFilters();
   const kpis=document.querySelectorAll('.kpi');
   if(val) kpis.forEach(k=>{if(k.dataset.val===val) k.classList.add('active');});
   setView('tv',document.querySelector('.vtab'));
@@ -6948,11 +6877,8 @@ function filterByZoneBU(z, b, status) {
   const ze = document.getElementById('f-zone'); if(ze) ze.value = z;
   const be = document.getElementById('f-bu');   if(be&&b) be.value = b;
   if (status) {
-    const all = [...document.querySelectorAll('#status-boxes input[type=checkbox]')];
-    all.forEach(c => c.checked = false);
-    const opt = all.find(c => c.value.toLowerCase().includes(status.toLowerCase()));
-    if (opt) opt.checked = true;
-    updateStatusLbl();
+    const fst=document.getElementById('f-status');
+    if(fst){const opt=[...fst.options].find(o=>o.value.toLowerCase().includes(status.toLowerCase()));fst.value=opt?opt.value:'';}
   }
   applyFilters();
   setView('tv', document.querySelector('.vtab'));
