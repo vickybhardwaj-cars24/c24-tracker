@@ -480,7 +480,8 @@ function renderWins(today) {
   ];
   document.getElementById('wins-grid').innerHTML=cards.map(c=>{
     const zc='z'+(zoneCode(c.zone)||'N');
-    return `<div class="win-card ${c.type}"><div class="win-type ${c.type}">${c.label}</div><div class="win-name">${esc(c.name||'—')}</div><div class="win-meta">${c.bu?`<span style="font-size:9px;font-weight:700;color:var(--muted)">${esc(c.bu)}</span>`:''} ${c.zone?`<span class="zone-pill ${zc}">${esc(c.zone)}</span>`:''}</div>${c.date?`<div class="win-date ${c.type}">${esc(c.date)}</div>`:''}</div>`;
+    const dFmt=c.date?fmtD(pd(c.date)):null;
+    return `<div class="win-card ${c.type}"><div class="win-type ${c.type}">${c.label}</div><div class="win-name">${esc(c.name||'—')}</div><div class="win-meta">${c.bu?`<span style="font-size:9px;font-weight:700;color:var(--muted)">${esc(c.bu)}</span>`:''} ${c.zone?`<span class="zone-pill ${zc}">${esc(c.zone)}</span>`:''}</div>${dFmt&&dFmt!=='—'?`<div class="win-date ${c.type}">${esc(dFmt)}</div>`:''}</div>`;
   }).join('');
 }
 
@@ -499,7 +500,8 @@ function renderUpcoming(today) {
     const dayLbl=r._diff===0?'Today':r._diff===1?'Tomorrow':'In '+r._diff+'d';
     const dayCol=r._diff<=3?'color:var(--blue)':'color:var(--muted)';
     const isRev=!!(r['Revised Completion']&&r['Revised Completion'].trim());
-    return `<div class="up-card ${r._diff<=3?'soon':''}"><div><div class="up-name">${esc(r['Site Name']||'—')}</div><div class="up-meta">${esc(r.BU||'')} · <span class="zone-pill ${zc}">${esc(r.Zone||'')}</span></div></div><div><div class="up-date" style="${isRev?'color:var(--amber)':''}">${esc(r._tgt||'—')}</div><div class="up-days" style="${dayCol}">${dayLbl}</div></div></div>`;
+    const tgtFmt=fmtD(pd(r._tgt));
+    return `<div class="up-card ${r._diff<=3?'soon':''}"><div><div class="up-name">${esc(r['Site Name']||'—')}</div><div class="up-meta">${esc(r.BU||'')} · <span class="zone-pill ${zc}">${esc(r.Zone||'')}</span></div></div><div><div class="up-date" style="${isRev?'color:var(--amber)':''}">${esc(tgtFmt||'—')}</div><div class="up-days" style="${dayCol}">${dayLbl}</div></div></div>`;
   }).join('');
 }
 
