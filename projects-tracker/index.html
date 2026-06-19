@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.92</title>
+<title>Cars24 Projects Tracker v4.93</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -3519,22 +3519,42 @@ function toggleProcureStatus(siteName,itemIdx,field,idx){
   refreshProcureSection(idx);
 }
 
-function procureDelayMail(r,item){
+function procureDelayMail(r,problemItems){
   var site=(r['Site Name']||'Site').trim();
   var owner=r['Owner']||'PM';
-  var subj='⚠ Procurement Delay: '+item.item+' — '+site;
-  var body='Hi '+owner+',\n\nPlease note that the following procurement item is delayed for the '+site+' project.\n\n'
-    +'━━━━━━━━━━━━━━━━━━\n'
-    +'Site: '+site+'\n'
-    +'Item: '+item.item+'\n'
-    +'Order Date: '+(item.orderDate||'—')+'\n'
-    +'Committed Delivery Date: '+(item.deliveryDate||'—')+'\n'
-    +'Dependency: '+(item.dependency||'—')+'\n'
-    +'Status: '+(item.partiallyDelivered?'Partially Delivered':item.ordered?'Ordered — Not Delivered':'Not Yet Ordered')+'\n'
-    +'━━━━━━━━━━━━━━━━━━\n\n'
-    +'Request you to expedite and share a revised delivery commitment at the earliest to avoid impact on site handover.\n\n'
-    +'Regards,\n'+owner+'\nCARS24 Projects Team';
-  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+  var overdue=problemItems.filter(function(it){var dd=pd(it.deliveryDate);var today=new Date();today.setHours(0,0,0,0);return !it.delivered&&dd&&dd<today;});
+  var partial=problemItems.filter(function(it){return it.partiallyDelivered&&!it.delivered;});
+  var subj='⚠ Procurement Delay Notice — '+site+' ('+problemItems.length+' item'+(problemItems.length>1?'s':'')+' delayed)';
+  var lines=['Hi '+owner+',','','Please find below the procurement delay summary for the '+site+' project. Immediate action is required to avoid impact on site handover.',''];
+  if(overdue.length){
+    lines.push('🔴 OVERDUE DELIVERIES ('+overdue.length+' item'+(overdue.length>1?'s':'')+'):');
+    lines.push('─────────────────────────────');
+    overdue.forEach(function(it,i){
+      lines.push((i+1)+'. '+it.item);
+      lines.push('   Order Date    : '+(it.orderDate||'—'));
+      lines.push('   Delivery Due  : '+(it.deliveryDate||'—'));
+      lines.push('   Dependency    : '+(it.dependency||'—'));
+      lines.push('   Status        : '+(it.ordered?'Ordered — Delivery Pending':'Not Yet Ordered'));
+      lines.push('');
+    });
+  }
+  if(partial.length){
+    lines.push('🟡 PARTIALLY DELIVERED ('+partial.length+' item'+(partial.length>1?'s':'')+'):');
+    lines.push('─────────────────────────────');
+    partial.forEach(function(it,i){
+      lines.push((i+1)+'. '+it.item);
+      lines.push('   Delivery Due  : '+(it.deliveryDate||'—'));
+      lines.push('   Dependency    : '+(it.dependency||'—'));
+      lines.push('   Status        : Partially Delivered — Balance pending');
+      lines.push('');
+    });
+  }
+  lines.push('Request you to share a revised delivery timeline for each item above at the earliest.');
+  lines.push('');
+  lines.push('Regards,');
+  lines.push(owner);
+  lines.push('CARS24 Projects Team');
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(lines.join('\n'));
 }
 
 function deleteProcureItem(siteName,itemIdx,idx){
@@ -3556,9 +3576,19 @@ function renderProcureSection(r,idx){
     if(it.partiallyDelivered&&!it.delivered) partial++;
     if(!it.delivered&&it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) overdue++;}
   });
+  var problemItems=items.filter(function(it){
+    if(it.delivered) return false;
+    if(it.partiallyDelivered) return true;
+    if(it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) return true;}
+    return false;
+  });
   var uploadId='procure-inp-'+idx;
   var uploadBtn='<label class="btn btn-o btn-sm" for="'+uploadId+'" style="cursor:pointer;font-size:11px">+ Upload CSV</label>'
     +'<input type="file" id="'+uploadId+'" accept=".csv" style="display:none" onchange="handleProcureUpload(event,\''+siteNameEsc+'\','+idx+')">';
+  var delayMailBtn=problemItems.length
+    ?('<a href="'+procureDelayMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="procure_delay" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Delay Notice ('+problemItems.length+')</a>'
+      +emailLogBadge(siteName,'procure_delay'))
+    :'';
   var statsHtml='';
   if(total){
     var pctDel=Math.round(delivered/total*100);
@@ -3593,7 +3623,6 @@ function renderProcureSection(r,idx){
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Ordered</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Part. Del</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delivered</th>'
-      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delay Mail</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase"></th>'
       +'</tr></thead><tbody>'
       +items.map(function(it,i){
@@ -3603,13 +3632,6 @@ function renderProcureSection(r,idx){
         var rowBg=isOverdue?'background:#fef2f2':it.delivered?'background:#f0fdf4':isPartial?'background:#fffbeb':'';
         var delStyle=isOverdue?'font-weight:700;color:#dc2626':it.delivered?'color:#15803d':'';
         var itemIcon=isOverdue?'🔴 ':it.delivered?'✅ ':isPartial?'🟡 ':'';
-        var elogType='procure_delay_'+encodeURIComponent(it.item.toLowerCase().replace(/\s+/g,'_'));
-        var delayMailCell=(isOverdue||isPartial)
-          ?('<td style="padding:5px 8px;text-align:center">'
-            +'<a href="'+procureDelayMail(r,it)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="'+esc(elogType)+'" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Delay</a>'
-            +emailLogBadge(siteName,elogType)
-            +'</td>')
-          :'<td style="padding:5px 8px"></td>';
         return '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
           +'<td style="padding:5px 8px;color:var(--muted)">'+esc(it.sno)+'</td>'
           +'<td style="padding:5px 8px;font-weight:600">'+itemIcon+esc(it.item)+'</td>'
@@ -3622,7 +3644,6 @@ function renderProcureSection(r,idx){
           +'<input type="checkbox" '+(isPartial?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'partiallyDelivered\','+idx+')" style="cursor:pointer;accent-color:#d97706"></td>'
           +'<td style="padding:5px 8px;text-align:center">'
           +'<input type="checkbox" '+(it.delivered?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'delivered\','+idx+')" style="cursor:pointer"></td>'
-          +delayMailCell
           +'<td style="padding:5px 8px;text-align:center">'
           +'<button onclick="deleteProcureItem(\''+siteNameEsc+'\','+i+','+idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px" title="Remove">✕</button>'
           +'</td></tr>';
@@ -3635,7 +3656,10 @@ function renderProcureSection(r,idx){
     +'<div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">📦 Procurement Plan</div>'
     +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(total?total+' items · track order & delivery status':'Upload CSV to track procurement for this site')+'</div>'
     +'</div>'
+    +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+    +delayMailBtn
     +uploadBtn
+    +'</div>'
     +'</div>'
     +statsHtml
     +(total?tableHtml:'<div style="font-size:11px;color:var(--muted);padding:4px 0">No procurement plan uploaded yet. CSV format: <code>S.No., Item, Order Date, Delivery Date, Dependency</code></div>')
