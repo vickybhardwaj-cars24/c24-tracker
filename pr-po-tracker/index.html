@@ -468,14 +468,31 @@ function parsePORequestCSV(text) {
     });
 }
 
+function SortIcon({ col, sortCol, sortDir }) {
+  const active = col === sortCol;
+  return (
+    <span className={`inline-flex flex-col ml-1 leading-none align-middle ${active ? 'opacity-100' : 'opacity-30'}`} style={{fontSize:7,gap:1}}>
+      <span style={{color: active && sortDir==='asc'  ? '#000' : 'inherit'}}>▲</span>
+      <span style={{color: active && sortDir==='desc' ? '#000' : 'inherit'}}>▼</span>
+    </span>
+  );
+}
+
 function PORequestStatusTab({ rows, fileRef }) {
   const [search, setSearch] = useState('');
   const [fStatus, setFStatus] = useState(new Set());
   const [fSupplier, setFSupplier] = useState(new Set());
   const [fCreatedBy, setFCreatedBy] = useState(new Set());
   const [fPending, setFPending] = useState(new Set());
+  const [sortCol, setSortCol] = useState('pctTAT');
+  const [sortDir, setSortDir] = useState('desc');
   const [snapping, setSnapping] = useState(false);
   const snapRef = useRef(null);
+
+  function toggleSort(col) {
+    setSortDir(d => sortCol === col ? (d === 'desc' ? 'asc' : 'desc') : 'desc');
+    setSortCol(col);
+  }
 
   const statusOpts   = useMemo(() => [...new Set(rows.map(r => r.status).filter(Boolean))].sort(), [rows]);
   const supplierOpts   = useMemo(() => [...new Set(rows.map(r => r.supplier).filter(Boolean))].sort(), [rows]);
@@ -493,8 +510,16 @@ function PORequestStatusTab({ rows, fileRef }) {
       out = out.filter(r => r.poCode.toLowerCase().includes(q) || r.poSubject.toLowerCase().includes(q) ||
         r.supplier.toLowerCase().includes(q) || r.curPending.toLowerCase().includes(q) || r.createdBy.toLowerCase().includes(q));
     }
+    // sort
+    out = [...out].sort((a, b) => {
+      let av = a[sortCol], bv = b[sortCol];
+      if (av == null) av = sortDir === 'asc' ? Infinity : -Infinity;
+      if (bv == null) bv = sortDir === 'asc' ? Infinity : -Infinity;
+      if (typeof av === 'string') return sortDir === 'asc' ? av.localeCompare(bv) : bv.localeCompare(av);
+      return sortDir === 'asc' ? av - bv : bv - av;
+    });
     return out;
-  }, [rows, fStatus, fSupplier, fCreatedBy, fPending, search]);
+  }, [rows, fStatus, fSupplier, fCreatedBy, fPending, search, sortCol, sortDir]);
 
   const exportCSV = useCallback(() => {
     const headers = ['PO Code','PO Updated Date','PO Subject','Supplier','PO Total','Current Pending','L1 Approved By','L1 Date','L1 App','BizFin Approved By','BizFin Date','Bizfin App','TAT','TAT%'];
@@ -614,17 +639,16 @@ function PORequestStatusTab({ rows, fileRef }) {
           <table className="w-full text-xs min-w-[1100px]">
             <thead>
               <tr className="bg-amber-400 text-black">
-                <th className="px-3 py-2.5 text-left font-bold">PO Code</th>
-                <th className="px-3 py-2.5 text-left font-bold">PO Updated Date</th>
-                <th className="px-3 py-2.5 text-left font-bold">PO Subject</th>
-                <th className="px-3 py-2.5 text-left font-bold">Supplier Name</th>
-                <th className="px-3 py-2.5 text-right font-bold">PO Total in base</th>
-                <th className="px-3 py-2.5 text-left font-bold">Current pending</th>
-                <th className="px-3 py-2.5 text-left font-bold">Approved/Rejected</th>
-                <th className="px-3 py-2.5 text-center font-bold">L1 App</th>
-                <th className="px-3 py-2.5 text-center font-bold">Bizfin App</th>
-                <th className="px-3 py-2.5 text-center font-bold">TAT</th>
-                <th className="px-3 py-2.5 text-center font-bold">TAT%</th>
+                {[['poCode','PO Code','left'],['poUpdated','PO Updated Date','left'],['poSubject','PO Subject','left'],
+                  ['supplier','Supplier Name','left'],['poTotal','PO Total in base','right'],
+                  ['curPending','Current pending','left'],['l1Date','Approved/Rejected','left'],
+                  ['l1App','L1 App','center'],['bfApp','Bizfin App','center'],
+                  ['tat','TAT','center'],['pctTAT','TAT%','center']].map(([col,label,align])=>(
+                  <th key={col} onClick={()=>toggleSort(col)}
+                    className={`px-3 py-2.5 text-${align} font-bold cursor-pointer select-none hover:bg-amber-500/30 transition-colors whitespace-nowrap`}>
+                    {label}<SortIcon col={col} sortCol={sortCol} sortDir={sortDir}/>
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
@@ -798,8 +822,15 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
   const [fCreatedBy,setFCreatedBy]=useState(new Set());
   const [fPending,setFPending]=useState(new Set());
   const [search,setSearch]=useState('');
+  const [sortCol,setSortCol]=useState('pctTAT');
+  const [sortDir,setSortDir]=useState('desc');
   const [snapping,setSnapping]=useState(false);
   const snapRef=useRef(null);
+
+  function toggleSort(col) {
+    setSortDir(d => sortCol===col ? (d==='desc'?'asc':'desc') : 'desc');
+    setSortCol(col);
+  }
 
   const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
   const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
@@ -810,8 +841,15 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
     if(fCreatedBy.size>0) out=out.filter(r=>fCreatedBy.has(r.createdBy));
     if(fPending.size>0)   out=out.filter(r=>fPending.has(r.pendingStage));
     if(search){const q=search.toLowerCase();out=out.filter(r=>r.location.toLowerCase().includes(q)||r.prCode.toLowerCase().includes(q)||r.createdBy.toLowerCase().includes(q)||r.pendingLabel.toLowerCase().includes(q));}
+    out=[...out].sort((a,b)=>{
+      let av=a[sortCol], bv=b[sortCol];
+      if(av==null) av=sortDir==='asc'?Infinity:-Infinity;
+      if(bv==null) bv=sortDir==='asc'?Infinity:-Infinity;
+      if(typeof av==='string') return sortDir==='asc'?av.localeCompare(bv):bv.localeCompare(av);
+      return sortDir==='asc'?av-bv:bv-av;
+    });
     return out;
-  },[approvalRows,fStatus,fCreatedBy,fPending,search]);
+  },[approvalRows,fStatus,fCreatedBy,fPending,search,sortCol,sortDir]);
 
   const exportCSV = useCallback(()=>{
     const headers = ['Location','EMSS POC','PR Number','PR Date','PR Value','L1 Approval','L1 Date','BizFin','BizFin Date','Current Pending From','Aging L1','Aging BizFin','Aging SCM','TAT','% TAT'];
@@ -949,19 +987,18 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
             <table className="w-full text-xs min-w-[1000px]">
               <thead>
                 <tr className="bg-amber-400 text-black">
-                  <th className="px-3 py-2.5 text-left font-bold">Location</th>
-                  <th className="px-3 py-2.5 text-left font-bold">EMSS POC</th>
-                  <th className="px-3 py-2.5 text-left font-bold">PR Number</th>
-                  <th className="px-3 py-2.5 text-left font-bold">PR Date</th>
-                  <th className="px-3 py-2.5 text-right font-bold">PR Value</th>
-                  <th className="px-3 py-2.5 text-left font-bold">L1 Approval</th>
-                  <th className="px-3 py-2.5 text-left font-bold">BizFin</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Current Pending From</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Aging L1</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Aging BizFin</th>
-                  <th className="px-3 py-2.5 text-center font-bold">Aging SCM</th>
-                  <th className="px-3 py-2.5 text-center font-bold">TAT</th>
-                  <th className="px-3 py-2.5 text-center font-bold">% TAT</th>
+                  {[['location','Location','left'],['createdBy','EMSS POC','left'],
+                    ['prCode','PR Number','left'],['prDate','PR Date','left'],
+                    ['amount','PR Value','right'],['l1By','L1 Approval','left'],
+                    ['bfBy','BizFin','left'],['pendingLabel','Current Pending From','center'],
+                    ['agingL1','Aging L1','center'],['agingBF','Aging BizFin','center'],
+                    ['agingSCM','Aging SCM','center'],['tat','TAT','center'],
+                    ['pctTAT','% TAT','center']].map(([col,label,align])=>(
+                    <th key={col} onClick={()=>toggleSort(col)}
+                      className={`px-3 py-2.5 text-${align} font-bold cursor-pointer select-none hover:bg-amber-500/30 transition-colors whitespace-nowrap`}>
+                      {label}<SortIcon col={col} sortCol={sortCol} sortDir={sortDir}/>
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
