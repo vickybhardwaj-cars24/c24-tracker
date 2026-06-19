@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.89</title>
+<title>Cars24 Projects Tracker v4.90</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2312,8 +2312,8 @@ function renderSatUat(){
       +arr.map(u=>'<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="openModal('+u.idx3+')">'
         +'<td style="padding:6px 10px;font-weight:600">'+esc(u.r['Site Name']||'—')+'</td>'
         +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['SAT Date']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['UAT DATE']||'—')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center">'+fmtRaw(u.r['SAT Date']||'')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center">'+fmtRaw(u.r['UAT DATE']||'')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+(u.gap>10?'#dc2626':u.gap>7?'#d97706':'#16a34a')+'">'+(u.gap||u.dt||0)+'d</td>'
         +'</tr>').join('')
       +'</tbody></table>';
@@ -2344,7 +2344,7 @@ function renderSatUat(){
     return '<tr style="border-bottom:1px solid var(--border)">'
       +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'--')+rb+'</td>'
       +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'--')+'</td>'
-      +'<td style="padding:6px 10px;text-align:center">'+esc(u.r['SAT Date']||'--')+'</td>'
+      +'<td style="padding:6px 10px;text-align:center">'+fmtRaw(u.r['SAT Date']||'')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600;color:#7c3aed">'+(revUAT!='--'?revUAT:'<span style="color:var(--muted);font-size:10px">None</span>')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'</td>':'<td></td>')
