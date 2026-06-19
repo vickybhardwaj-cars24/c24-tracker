@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.90</title>
+<title>Cars24 Projects Tracker v4.93</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1176,7 +1176,14 @@ async function loadSupabaseSiteFields() {
       if (!row) return;
       var fn = (sfo.field_name||'').trim();
       var v  = (sfo.field_value||'').trim();
+      if (fn === 'uat_exemption') {
+        try { UAT_EXEMPTIONS[(sfo.site_name||'').trim()] = JSON.parse(v); } catch(e2) {}
+        return;
+      }
+      if (!row) return;
       if (fn && v && v !== 'null') {
+        var META_DATE_FIELDS=['SAT Date','UAT DATE','PO Date','Kickoff Date','Work Start Date','Planned Completion','Revised Completion'];
+        if(META_DATE_FIELDS.indexOf(fn)!==-1){var _pd=pd(v);if(_pd) v=_pd.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][_pd.getMonth()]+' '+_pd.getFullYear();}
         row[fn] = v;
         if (fn === 'Cost Center') CC_MAP[sn] = v;
       }
@@ -2467,8 +2474,8 @@ function renderSatUat(){
       return '<tr style="border-bottom:1px solid var(--border)">'
         +'<td style="padding:6px 10px;font-weight:600;cursor:pointer" onclick="openModal('+u.idx3+')">'+esc(u.r['Site Name']||'—')+'</td>'
         +'<td style="padding:6px 10px">'+esc(u.r['Owner']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+esc(u.r['Planned Completion']||'—')+'</td>'
-        +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+esc(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+fmtRaw(u.r['Planned Completion'])+'</td>'
+        +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+fmtRaw(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
         +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'</td>'
         +'</tr>';
@@ -2695,8 +2702,16 @@ function confirmExemption(siteName){
   var sel=document.getElementById('exempt-reason-sel');
   var notes=(document.getElementById('exempt-notes')||{}).value||'';
   var reason=sel?sel.value:'Other';
-  UAT_EXEMPTIONS[siteName]={reason:reason+(notes?' — '+notes:''),by:(__sbProfile&&__sbProfile.full_name)||'user',at:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
+  var byName=(__sbProfile&&__sbProfile.full_name)||(__sbUser&&__sbUser.email)||'user';
+  var exemption={reason:reason+(notes?' — '+notes:''),by:byName,at:new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'})};
+  UAT_EXEMPTIONS[siteName]=exemption;
   try { localStorage.setItem('uat_exemptions',JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
+  if(__sbClient&&__sbUser){
+    __sbClient.from('site_field_overrides').upsert(
+      {site_name:siteName,field_name:'uat_exemption',field_value:JSON.stringify(exemption),updated_by_name:byName,updated_at:new Date().toISOString()},
+      {onConflict:'site_name,field_name'}
+    ).then(function(r){if(r.error) console.warn('UAT exemption save failed:',r.error);});
+  }
   document.getElementById('overlay').classList.remove('open');
   toast('⏭ '+siteName+' exempted from UAT warnings','ok');
   renderWarnings();
@@ -2707,6 +2722,13 @@ function confirmExemption(siteName){
 function removeUatExemption(siteName){
   delete UAT_EXEMPTIONS[siteName];
   try { localStorage.setItem('uat_exemptions',JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
+  if(__sbClient&&__sbUser){
+    __sbClient.from('site_field_overrides')
+      .delete()
+      .eq('site_name',siteName)
+      .eq('field_name','uat_exemption')
+      .then(function(r){if(r.error) console.warn('UAT exemption delete failed:',r.error);});
+  }
   toast('✅ '+siteName+' restored to warning list','ok');
   renderWarnings();
   var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
@@ -3302,7 +3324,7 @@ function _meDatePick(label, val, idx, dataKey, key, canEdit) {
   if (d && !isNaN(d)) isoVal = d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate();
   return '<div class="mi"><div class="ml">'+esc(label)+'</div><div class="mv">'
     + '<div id="dp-disp-'+key+'-'+idx+'" style="display:flex;align-items:center;gap:6px;'+(canEdit?'cursor:pointer;':'')+'">'
-    + '<span id="dp-val-'+key+'-'+idx+'" style="font-weight:600">'+esc(val||'—')+'</span>'
+    + '<span id="dp-val-'+key+'-'+idx+'" style="font-weight:600">'+fmtRaw(val)+'</span>'
     + (canEdit ? '<span onclick="openDP(\''+key+'\','+idx+')" style="font-size:10px;color:#0369a1;background:#f0f9ff;padding:1px 7px;border-radius:4px;border:1px solid #bae6fd;font-weight:600;cursor:pointer">✎</span>' : '')
     + '</div>'
     + '<div id="dp-panel-'+key+'-'+idx+'" style="display:none;margin-top:8px;background:#f8faff;border:1px solid #bae6fd;border-radius:8px;padding:10px">'
@@ -3464,7 +3486,7 @@ function parseProcurementCSV(text){
   if(/s\.?\s*no/i.test(lines[0].split(',')[0])) start=1;
   return lines.slice(start).map(function(line){
     var cols=line.split(',').map(function(c){return c.trim();});
-    return {sno:cols[0]||'',item:cols[1]||'',orderDate:cols[2]||'',deliveryDate:cols[3]||'',dependency:cols[4]||'',ordered:false,delivered:false};
+    return {sno:cols[0]||'',item:cols[1]||'',orderDate:cols[2]||'',deliveryDate:cols[3]||'',dependency:cols[4]||'',ordered:false,partiallyDelivered:false,delivered:false};
   }).filter(function(x){return x.item;});
 }
 
@@ -3491,9 +3513,48 @@ function handleProcureUpload(event,siteName,idx){
 function toggleProcureStatus(siteName,itemIdx,field,idx){
   var items=PROCURE_DATA[siteName]; if(!items||!items[itemIdx]) return;
   items[itemIdx][field]=!items[itemIdx][field];
-  if(field==='delivered'&&items[itemIdx].delivered) items[itemIdx].ordered=true;
+  if(field==='delivered'&&items[itemIdx].delivered){items[itemIdx].ordered=true;items[itemIdx].partiallyDelivered=false;}
+  if(field==='partiallyDelivered'&&items[itemIdx].partiallyDelivered){items[itemIdx].ordered=true;items[itemIdx].delivered=false;}
   saveProcureData();
   refreshProcureSection(idx);
+}
+
+function procureDelayMail(r,problemItems){
+  var site=(r['Site Name']||'Site').trim();
+  var owner=r['Owner']||'PM';
+  var overdue=problemItems.filter(function(it){var dd=pd(it.deliveryDate);var today=new Date();today.setHours(0,0,0,0);return !it.delivered&&dd&&dd<today;});
+  var partial=problemItems.filter(function(it){return it.partiallyDelivered&&!it.delivered;});
+  var subj='⚠ Procurement Delay Notice — '+site+' ('+problemItems.length+' item'+(problemItems.length>1?'s':'')+' delayed)';
+  var lines=['Hi '+owner+',','','Please find below the procurement delay summary for the '+site+' project. Immediate action is required to avoid impact on site handover.',''];
+  if(overdue.length){
+    lines.push('🔴 OVERDUE DELIVERIES ('+overdue.length+' item'+(overdue.length>1?'s':'')+'):');
+    lines.push('─────────────────────────────');
+    overdue.forEach(function(it,i){
+      lines.push((i+1)+'. '+it.item);
+      lines.push('   Order Date    : '+(it.orderDate||'—'));
+      lines.push('   Delivery Due  : '+(it.deliveryDate||'—'));
+      lines.push('   Dependency    : '+(it.dependency||'—'));
+      lines.push('   Status        : '+(it.ordered?'Ordered — Delivery Pending':'Not Yet Ordered'));
+      lines.push('');
+    });
+  }
+  if(partial.length){
+    lines.push('🟡 PARTIALLY DELIVERED ('+partial.length+' item'+(partial.length>1?'s':'')+'):');
+    lines.push('─────────────────────────────');
+    partial.forEach(function(it,i){
+      lines.push((i+1)+'. '+it.item);
+      lines.push('   Delivery Due  : '+(it.deliveryDate||'—'));
+      lines.push('   Dependency    : '+(it.dependency||'—'));
+      lines.push('   Status        : Partially Delivered — Balance pending');
+      lines.push('');
+    });
+  }
+  lines.push('Request you to share a revised delivery timeline for each item above at the earliest.');
+  lines.push('');
+  lines.push('Regards,');
+  lines.push(owner);
+  lines.push('CARS24 Projects Team');
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(lines.join('\n'));
 }
 
 function deleteProcureItem(siteName,itemIdx,idx){
@@ -3508,15 +3569,26 @@ function renderProcureSection(r,idx){
   var siteNameEsc=siteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
   var items=PROCURE_DATA[siteName]||[];
   var today=new Date();today.setHours(0,0,0,0);
-  var total=items.length,ordered=0,delivered=0,overdue=0;
+  var total=items.length,ordered=0,delivered=0,partial=0,overdue=0;
   items.forEach(function(it){
     if(it.ordered) ordered++;
     if(it.delivered) delivered++;
+    if(it.partiallyDelivered&&!it.delivered) partial++;
     if(!it.delivered&&it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) overdue++;}
+  });
+  var problemItems=items.filter(function(it){
+    if(it.delivered) return false;
+    if(it.partiallyDelivered) return true;
+    if(it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) return true;}
+    return false;
   });
   var uploadId='procure-inp-'+idx;
   var uploadBtn='<label class="btn btn-o btn-sm" for="'+uploadId+'" style="cursor:pointer;font-size:11px">+ Upload CSV</label>'
     +'<input type="file" id="'+uploadId+'" accept=".csv" style="display:none" onchange="handleProcureUpload(event,\''+siteNameEsc+'\','+idx+')">';
+  var delayMailBtn=problemItems.length
+    ?('<a href="'+procureDelayMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="procure_delay" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Delay Notice ('+problemItems.length+')</a>'
+      +emailLogBadge(siteName,'procure_delay'))
+    :'';
   var statsHtml='';
   if(total){
     var pctDel=Math.round(delivered/total*100);
@@ -3528,6 +3600,8 @@ function renderProcureSection(r,idx){
       +'<div style="font-size:18px;font-weight:800;color:#15803d">'+ordered+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Ordered</div></div>'
       +'<div style="background:#ede9fe;border:1px solid #ddd6fe;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
       +'<div style="font-size:18px;font-weight:800;color:#7c3aed">'+delivered+'</div><div style="font-size:9px;color:#6b7280;text-transform:uppercase">Delivered</div></div>'
+      +(partial?'<div style="background:#fffbeb;border:1px solid #fde68a;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
+      +'<div style="font-size:18px;font-weight:800;color:#d97706">'+partial+'</div><div style="font-size:9px;color:#d97706;text-transform:uppercase">Partial</div></div>':'')
       +(overdue?'<div style="background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:6px 10px;min-width:80px;text-align:center">'
       +'<div style="font-size:18px;font-weight:800;color:#dc2626">'+overdue+'</div><div style="font-size:9px;color:#dc2626;text-transform:uppercase">Overdue</div></div>':'')
       +'</div>'
@@ -3547,22 +3621,27 @@ function renderProcureSection(r,idx){
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delivery Date</th>'
       +'<th style="padding:5px 8px;text-align:left;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Dependency</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Ordered</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Part. Del</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delivered</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase"></th>'
       +'</tr></thead><tbody>'
       +items.map(function(it,i){
         var dd=pd(it.deliveryDate);
         var isOverdue=!it.delivered&&dd&&dd<today;
-        var rowBg=isOverdue?'background:#fef2f2':it.delivered?'background:#f0fdf4':'';
+        var isPartial=!!(it.partiallyDelivered&&!it.delivered);
+        var rowBg=isOverdue?'background:#fef2f2':it.delivered?'background:#f0fdf4':isPartial?'background:#fffbeb':'';
         var delStyle=isOverdue?'font-weight:700;color:#dc2626':it.delivered?'color:#15803d':'';
+        var itemIcon=isOverdue?'🔴 ':it.delivered?'✅ ':isPartial?'🟡 ':'';
         return '<tr style="border-bottom:1px solid var(--border);'+rowBg+'">'
           +'<td style="padding:5px 8px;color:var(--muted)">'+esc(it.sno)+'</td>'
-          +'<td style="padding:5px 8px;font-weight:600">'+(isOverdue?'🔴 ':it.delivered?'✅ ':'')+esc(it.item)+'</td>'
+          +'<td style="padding:5px 8px;font-weight:600">'+itemIcon+esc(it.item)+'</td>'
           +'<td style="padding:5px 8px;text-align:center;color:var(--muted)">'+esc(it.orderDate||'—')+'</td>'
           +'<td style="padding:5px 8px;text-align:center;'+delStyle+'">'+esc(it.deliveryDate||'—')+(isOverdue?' ⚠':'')+'</td>'
           +'<td style="padding:5px 8px;color:var(--muted);font-size:10px">'+esc(it.dependency||'—')+'</td>'
           +'<td style="padding:5px 8px;text-align:center">'
           +'<input type="checkbox" '+(it.ordered?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'ordered\','+idx+')" style="cursor:pointer"></td>'
+          +'<td style="padding:5px 8px;text-align:center">'
+          +'<input type="checkbox" '+(isPartial?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'partiallyDelivered\','+idx+')" style="cursor:pointer;accent-color:#d97706"></td>'
           +'<td style="padding:5px 8px;text-align:center">'
           +'<input type="checkbox" '+(it.delivered?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'delivered\','+idx+')" style="cursor:pointer"></td>'
           +'<td style="padding:5px 8px;text-align:center">'
@@ -3577,7 +3656,10 @@ function renderProcureSection(r,idx){
     +'<div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">📦 Procurement Plan</div>'
     +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(total?total+' items · track order & delivery status':'Upload CSV to track procurement for this site')+'</div>'
     +'</div>'
+    +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
+    +delayMailBtn
     +uploadBtn
+    +'</div>'
     +'</div>'
     +statsHtml
     +(total?tableHtml:'<div style="font-size:11px;color:var(--muted);padding:4px 0">No procurement plan uploaded yet. CSV format: <code>S.No., Item, Order Date, Delivery Date, Dependency</code></div>')
@@ -3859,7 +3941,7 @@ function openModal(idx){
     ['Cost Center',r['Cost Center']||''],['SAT Date',fmtRaw(r['SAT Date'])],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',fmtRaw(r['Planned Completion'])],['Revised',r['Revised Completion']?fmtRaw(r['Revised Completion']):''],
     ['Reason for Delay',r['Reason for Delay']||'']
   ];
-  const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${esc(r['UAT DATE'])}</span>`:'';
+  const uatBadge=r['UAT DATE']?`<span style="display:inline-flex;align-items:center;gap:5px;background:#f0fdf4;border:1px solid #bbf7d0;color:#15803d;font-size:11px;font-weight:600;padding:4px 10px;border-radius:20px;margin-bottom:10px">✅ UAT Completed — ${fmtRaw(r['UAT DATE'])}</span>`:'';
   const sortedCols=[...DATE_COLS].reverse().filter(d=>(r[d]||'').length>2);
   const updates=sortedCols.map((d,i)=>{
     const k=d.replace(/ /g,'_');
@@ -4025,7 +4107,7 @@ function openModal(idx){
     ${renderHemSection(r,idx)}
     ${renderProcureSection(r,idx)}
     <div id="modal-date-strip-${idx}" style="position:sticky;top:64px;z-index:4;background:var(--white);border:1px solid var(--border);border-radius:7px;padding:8px 12px;margin-bottom:10px;display:flex;gap:10px;flex-wrap:wrap;align-items:center;box-shadow:0 2px 6px rgba(0,0,0,.07)">
-      ${[['Planned',r['Planned Completion']||'—'],['Revised',r['Revised Completion']||'—'],['SAT',r['SAT Date']||'—'],['UAT',r['UAT DATE']||'—'],['Owner',r['Owner']||'—'],['Status',(r['Status']||'').toUpperCase()||'—']].map(([l,v])=>`<div style="display:flex;flex-direction:column;min-width:60px"><span style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${l}</span><span style="font-size:11px;font-weight:700;color:var(--text)">${esc(v)}</span></div>`).join('<div style="width:1px;background:var(--border);align-self:stretch"></div>')}
+      ${[['Planned',fmtRaw(r['Planned Completion'])],['Revised',fmtRaw(r['Revised Completion'])],['SAT',fmtRaw(r['SAT Date'])],['UAT',fmtRaw(r['UAT DATE'])],['Owner',r['Owner']||'—'],['Status',(r['Status']||'').toUpperCase()||'—']].map(([l,v])=>`<div style="display:flex;flex-direction:column;min-width:60px"><span style="font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.04em">${l}</span><span style="font-size:11px;font-weight:700;color:var(--text)">${esc(v)}</span></div>`).join('<div style="width:1px;background:var(--border);align-self:stretch"></div>')}
     </div>
     <div class="msec"><div class="mst">Daily Updates</div>${uatBadge}${updates}
       <div style="margin-top:9px"><div style="font-size:10px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase">Add New Update</div>
@@ -5267,6 +5349,72 @@ function hasProcurementPlan(r){
     if(rx.test(upd)) return true;
   }
   return false;
+}
+
+function pendingDocReminderMail(r, missingDocs){
+  var site=(r['Site Name']||'Site').trim();
+  var owner=r['Owner']||'PM';
+  var status=r['Status']||'WIP';
+  var cd=committedDate(r);
+  var cdStr=cd?cd.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var docList=missingDocs.map(function(d,i){return (i+1)+'. '+d;}).join('\n');
+  var subj='📋 Pending Docs Required: '+site+' — '+missingDocs.join(', ');
+  var body='Hi '+owner+',\n\nRequest you to share the following pending documents for the '+site+' project at the earliest.\n\n'
+    +'━━━━━━━━━━━━━━━━━━\nSite: '+site+'\nStatus: '+status+'\nTarget Date: '+cdStr+'\n━━━━━━━━━━━━━━━━━━\n\n'
+    +'Pending Documents:\n'+docList+'\n\n'
+    +'These documents are required for project tracking and milestone monitoring. Request you to upload / share by end of day.\n\n'
+    +'Regards,\nVicky Bhardwaj\nCARS24 Projects Team';
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+
+function renderPendingDocsTracker(){
+  var WIP_STATUSES=['wip','hold','tbs','sat done'];
+  var rows=allData.filter(function(r){
+    var st=(r['Status']||'').trim().toLowerCase();
+    return WIP_STATUSES.some(function(s){return st.includes(s)||st===s;});
+  });
+  if(!rows.length) return '<div style="color:var(--muted);font-size:12px;padding:10px">No active sites.</div>';
+
+  var html='<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:12px">'
+    +'<thead><tr style="background:var(--surface)">'
+    +'<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase;white-space:nowrap">Site</th>'
+    +'<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">PM</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Schedule</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">LL Scope</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Procurement</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;font-weight:600;color:var(--muted);text-transform:uppercase">Action</th>'
+    +'</tr></thead><tbody>';
+
+  rows.forEach(function(r){
+    var siteName=(r['Site Name']||'').trim();
+    var hasSched=!!(SCHED_DATA[siteName]&&SCHED_DATA[siteName].length);
+    var hasLL=!!(LL_SCOPE_DATA[siteName]&&LL_SCOPE_DATA[siteName].length);
+    var hasProcure=!!(PROCURE_DATA[siteName]&&PROCURE_DATA[siteName].length);
+    var missing=[];
+    if(!hasSched) missing.push('Schedule');
+    if(!hasLL) missing.push('LL Scope');
+    if(!hasProcure) missing.push('Procurement Plan');
+    if(!missing.length) return;
+    var chip=function(ok,label){
+      return ok
+        ?'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;border-radius:12px;font-size:10px;font-weight:600">✓ '+label+'</span>'
+        :'<span style="display:inline-flex;align-items:center;gap:3px;padding:2px 7px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:12px;font-size:10px;font-weight:600">✗ Missing</span>';
+    };
+    var elogType='pending_docs_'+encodeURIComponent(siteName.toLowerCase().replace(/\s+/g,'_'));
+    html+='<tr style="border-bottom:1px solid var(--border)">'
+      +'<td style="padding:7px 10px;font-weight:600;cursor:pointer" onclick="openModal('+allData.indexOf(r)+')" title="Open site">'+esc(siteName)+'</td>'
+      +'<td style="padding:7px 10px;color:var(--muted)">'+esc(r['Owner']||'—')+'</td>'
+      +'<td style="padding:7px 10px;text-align:center">'+chip(hasSched,'Schedule')+'</td>'
+      +'<td style="padding:7px 10px;text-align:center">'+chip(hasLL,'LL Scope')+'</td>'
+      +'<td style="padding:7px 10px;text-align:center">'+chip(hasProcure,'Procurement')+'</td>'
+      +'<td style="padding:7px 10px;text-align:center">'
+      +'<a href="'+pendingDocReminderMail(r,missing)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="'+esc(elogType)+'" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Remind</a>'
+      +emailLogBadge(siteName,elogType)
+      +'</td>'
+      +'</tr>';
+  });
+  html+='</tbody></table></div>';
+  return html;
 }
 
 function savePO(site, val){
@@ -7056,6 +7204,8 @@ async function loadSupabaseUpdates(){
     var col=m[1].trim(); var val=m[2].trim();
     var row=allData.find(function(r){ return (r['Site Name']||'').trim()===sn; });
     if(!row) return;
+    var META_DATE_COLS=['SAT Date','UAT DATE','PO Date','Kickoff Date','Work Start Date','Planned Completion','Revised Completion'];
+    if(META_DATE_COLS.indexOf(col)!==-1){var _pd2=pd(val);if(_pd2) val=_pd2.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][_pd2.getMonth()]+' '+_pd2.getFullYear();}
     if(!DATE_COLS.includes(col)) DATE_COLS.push(col);
     row[col]=val;
     HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{};
@@ -7571,6 +7721,16 @@ function _renderAdminTabInner(el) {
   el.innerHTML = '<div style="max-width:900px;margin:0 auto">'
     + '<div style="font-size:16px;font-weight:700;margin-bottom:4px">⚙ Admin Panel</div>'
     + '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Manage team logins, view edit history, control access</div>'
+    // Pending docs tracker
+    + '<div style="background:var(--white);border:1px solid #fde68a;border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:12px">'
+    + '<div>'
+    + '<div style="font-size:13px;font-weight:700">📋 Pending Docs Tracker</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">WIP sites missing Schedule, LL Scope of Work, or Procurement Plan — send reminder to PM</div>'
+    + '</div>'
+    + '</div>'
+    + renderPendingDocsTracker()
+    + '</div>'
     // System status bar
     + '<div id="sys-status" style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px"></div>'
     // Data sync card
