@@ -56,6 +56,7 @@ const { useState, useEffect, useRef, useMemo, useCallback } = React;
 const WORKER_URL = 'https://c24-tracker.vicky-bhardwaj.workers.dev/';
 const TOOL_PATH  = 'prpo-tracker';
 const APPROVAL_PATH = 'prpo-approval';
+const PORQ_PATH = 'porq-tracker';
 
 // ── Helpers ───────────────────────────────────────────────────────────────
 
@@ -410,6 +411,247 @@ function SlackPanel({ pendingL1, pendingBizFin }) {
         </button>
       </div>
       <pre className="text-xs text-gray-600 dark:text-gray-300 bg-gray-50 dark:bg-black/30 rounded-xl p-4 overflow-x-auto whitespace-pre-wrap leading-relaxed font-mono">{text}</pre>
+    </div>
+  );
+}
+
+// ── PO Request CSV parser (processflows.ai PO export) ────────────────────
+const PORQ_CI = {
+  PO_CODE: 0, PO_UPDATED: 6, PO_SUBJECT: 8, CREATED_BY: 9,
+  SUPPLIER: 11, STATUS: 22, PO_TOTAL: 42, CUR_PENDING: 53,
+  L1_RESULT: 59, L1_BY: 60, L1_DATE: 61,
+  BF_RESULT: 64, BF_BY: 65, BF_DATE: 66,
+};
+
+function parsePORequestCSV(text) {
+  const res = Papa.parse(text, { skipEmptyLines: true });
+  if (!res.data || res.data.length < 2) return [];
+  let startIdx = 0;
+  for (let i = 0; i < Math.min(5, res.data.length); i++) {
+    if (String(res.data[i][0] || '').trim() === 'PO Code') { startIdx = i + 1; break; }
+  }
+  return res.data.slice(startIdx)
+    .filter(row => row.length > 5 && String(row[PORQ_CI.PO_CODE] || '').trim().startsWith('PO-'))
+    .map(row => {
+      const get = i => String(row[i] || '').trim();
+      const poTotal = parseFloat(get(PORQ_CI.PO_TOTAL).replace(/[₹,\s]/g,'')) || 0;
+      const poUpdated = get(PORQ_CI.PO_UPDATED);
+      const l1Result = get(PORQ_CI.L1_RESULT).toLowerCase();
+      const bfResult = get(PORQ_CI.BF_RESULT).toLowerCase();
+      const l1App = l1Result === 'approved' ? 1 : 0;
+      const bfApp = bfResult === 'approved' ? 1 : 0;
+      const l1Date = get(PORQ_CI.L1_DATE);
+      const bfDate = get(PORQ_CI.BF_DATE);
+      // Fractional days since PO Updated for TAT%
+      const agingFrac = pfDaysSinceFrac(poUpdated);
+      const tat = 1;
+      const pctTAT = agingFrac != null ? Math.round((agingFrac / tat) * 100) : null;
+      return {
+        poCode: get(PORQ_CI.PO_CODE),
+        poUpdated,
+        poSubject: get(PORQ_CI.PO_SUBJECT),
+        createdBy: get(PORQ_CI.CREATED_BY),
+        supplier: get(PORQ_CI.SUPPLIER),
+        status: get(PORQ_CI.STATUS),
+        poTotal,
+        curPending: get(PORQ_CI.CUR_PENDING),
+        l1By: get(PORQ_CI.L1_BY),
+        l1Date,
+        l1App,
+        bfBy: get(PORQ_CI.BF_BY),
+        bfDate,
+        bfApp,
+        tat,
+        pctTAT,
+        agingFrac,
+      };
+    });
+}
+
+function PORequestStatusTab({ rows, fileRef }) {
+  const [search, setSearch] = useState('');
+  const [fStatus, setFStatus] = useState(new Set());
+  const [fSupplier, setFSupplier] = useState(new Set());
+  const [fPending, setFPending] = useState(new Set());
+  const [snapping, setSnapping] = useState(false);
+  const snapRef = useRef(null);
+
+  const statusOpts   = useMemo(() => [...new Set(rows.map(r => r.status).filter(Boolean))].sort(), [rows]);
+  const supplierOpts = useMemo(() => [...new Set(rows.map(r => r.supplier).filter(Boolean))].sort(), [rows]);
+  const pendingOpts  = useMemo(() => [...new Set(rows.map(r => r.curPending).filter(Boolean))].sort(), [rows]);
+
+  const filtered = useMemo(() => {
+    let out = rows;
+    if (fStatus.size > 0)   out = out.filter(r => fStatus.has(r.status));
+    if (fSupplier.size > 0) out = out.filter(r => fSupplier.has(r.supplier));
+    if (fPending.size > 0)  out = out.filter(r => fPending.has(r.curPending));
+    if (search) {
+      const q = search.toLowerCase();
+      out = out.filter(r => r.poCode.toLowerCase().includes(q) || r.poSubject.toLowerCase().includes(q) ||
+        r.supplier.toLowerCase().includes(q) || r.curPending.toLowerCase().includes(q) || r.createdBy.toLowerCase().includes(q));
+    }
+    return out;
+  }, [rows, fStatus, fSupplier, fPending, search]);
+
+  const exportCSV = useCallback(() => {
+    const headers = ['PO Code','PO Updated Date','PO Subject','Supplier','PO Total','Current Pending','L1 Approved By','L1 Date','L1 App','BizFin Approved By','BizFin Date','Bizfin App','TAT','TAT%'];
+    const dataRows = filtered.map(r => [
+      r.poCode, r.poUpdated, r.poSubject, r.supplier,
+      r.poTotal ? '₹'+(r.poTotal/100000).toFixed(2)+'L' : '',
+      r.curPending, r.l1By, r.l1Date, r.l1App, r.bfBy, r.bfDate, r.bfApp,
+      r.tat + 'd', r.pctTAT != null ? r.pctTAT + '%' : '',
+    ].map(v => '"' + String(v || '').replace(/"/g, '""') + '"'));
+    const csv = [headers.map(h => '"' + h + '"').join(',')].concat(dataRows.map(r => r.join(','))).join('\n');
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv' }));
+    a.download = `po-request-status-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click();
+  }, [filtered]);
+
+  const takeScreenshot = useCallback(async () => {
+    if (!snapRef.current || snapping) return;
+    setSnapping(true);
+    try {
+      const el = snapRef.current;
+      const scrollDiv = el.querySelector('.overflow-x-auto');
+      const table = el.querySelector('table');
+      const fullW = table ? table.scrollWidth : el.scrollWidth;
+      const wasDark = document.documentElement.classList.contains('dark');
+      if (wasDark) document.documentElement.classList.remove('dark');
+      el.style.overflow = 'visible'; el.style.width = fullW + 'px';
+      if (scrollDiv) scrollDiv.style.overflow = 'visible';
+      if (table) table.style.minWidth = 'max-content';
+      el.classList.add('snap-export');
+      await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+      const renderW = Math.max(fullW, el.scrollWidth, table ? table.scrollWidth : 0);
+      const canvas = await html2canvas(el, { backgroundColor:'#ffffff', scale:3, useCORS:true, logging:false, width:renderW, height:el.scrollHeight, windowWidth:renderW+80 });
+      el.classList.remove('snap-export');
+      if (wasDark) document.documentElement.classList.add('dark');
+      el.style.overflow = ''; el.style.width = '';
+      if (scrollDiv) scrollDiv.style.overflow = '';
+      if (table) table.style.minWidth = '';
+      const link = document.createElement('a');
+      link.download = `po-request-status-${new Date().toISOString().slice(0,10)}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    } catch(e) { console.error(e); }
+    setSnapping(false);
+  }, [snapping]);
+
+  const activeFilters = fStatus.size + fSupplier.size + fPending.size;
+
+  if (rows.length === 0) return (
+    <div className="fade-in flex flex-col items-center justify-center py-20 gap-4 text-gray-400">
+      <div className="w-16 h-16 rounded-2xl bg-[#4736FE]/10 border border-[#4736FE]/30 flex items-center justify-center">
+        <Ico n="upload" size={28} cls="text-[#4736FE]"/>
+      </div>
+      <div className="text-center">
+        <div className="font-semibold text-base text-gray-600 dark:text-gray-300">No PO Request data loaded</div>
+        <div className="text-sm mt-1">Upload the Daily Purchase Requisitions CSV from processflows.ai</div>
+      </div>
+      <button onClick={() => fileRef.current && fileRef.current.click()}
+        className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-[#4736FE] text-white text-sm font-semibold hover:bg-[#3829CC] transition-colors">
+        <Ico n="upload" size={14}/> Upload PO CSV
+      </button>
+    </div>
+  );
+
+  function tatPctCell(pct) {
+    if (pct == null) return <td className="px-3 py-2.5 text-center text-gray-400">—</td>;
+    const bg = pct >= 100 ? 'tat-overdue' : '';
+    const color = pct >= 100 ? 'text-red-500 font-bold' : pct >= 70 ? 'text-amber-500 font-semibold' : 'text-green-600 font-semibold';
+    const bgBadge = pct >= 100 ? 'bg-red-100 dark:bg-red-500/20' : pct >= 70 ? 'bg-amber-100 dark:bg-amber-500/20' : 'bg-green-100 dark:bg-green-500/20';
+    return <td className={`px-3 py-2.5 text-center text-xs ${bg}`}><span className={`inline-block px-2 py-0.5 rounded font-bold ${color} ${bgBadge}`}>{pct}%</span></td>;
+  }
+
+  return (
+    <div className="fade-in">
+      <div className="flex flex-wrap items-center gap-2 mb-4">
+        <div className="relative">
+          <Ico n="search" size={13} cls="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"/>
+          <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search POs…"
+            className="pl-8 pr-3 py-1.5 text-xs rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-white/[0.04] focus:outline-none focus:border-[#4736FE] w-44"/>
+        </div>
+        <MultiCheck label="Status"       options={statusOpts}   selected={fStatus}   onChange={setFStatus}/>
+        <MultiCheck label="Supplier"     options={supplierOpts} selected={fSupplier} onChange={setFSupplier}/>
+        <MultiCheck label="Pending With" options={pendingOpts}  selected={fPending}  onChange={setFPending}/>
+        {(activeFilters > 0 || search) && (
+          <button onClick={() => { setFStatus(new Set()); setFSupplier(new Set()); setFPending(new Set()); setSearch(''); }}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-400 transition-colors">
+            <Ico n="x" size={11}/> Clear {activeFilters > 0 ? `(${activeFilters + (search ? 1 : 0)})` : ''}
+          </button>
+        )}
+        <span className="text-xs text-gray-400 ml-auto">{filtered.length} rows</span>
+        <button onClick={exportCSV} title="Export as CSV"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold transition-colors border border-emerald-200">
+          <Ico n="download" size={13}/>Export CSV
+        </button>
+        <button onClick={takeScreenshot} disabled={snapping} title="Export as PNG"
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#4736FE]/10 hover:bg-[#4736FE]/20 text-[#4736FE] text-xs font-semibold transition-colors disabled:opacity-50">
+          <Ico n={snapping ? 'loader' : 'image'} size={13} cls={snapping ? 'spin' : ''}/>{snapping ? 'Exporting…' : 'Export Image'}
+        </button>
+      </div>
+
+      <div ref={snapRef} className="w-full min-w-0 bg-white dark:bg-white/[0.03] border border-gray-100 dark:border-gray-800 rounded-2xl overflow-hidden">
+        <div className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-gray-100 dark:border-gray-800 bg-gradient-to-r from-[#4736FE]/[0.07] to-transparent">
+          <div className="flex items-center gap-2.5">
+            <span className="w-2 h-7 rounded-full bg-[#4736FE]"></span>
+            <div>
+              <div className="text-sm font-extrabold text-gray-800 dark:text-gray-100 tracking-tight">PO Request Status</div>
+              <div className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">CARS24 · Expansion &amp; Projects</div>
+            </div>
+          </div>
+          <div className="text-right">
+            <div className="text-base font-extrabold text-[#4736FE] leading-none">{filtered.length}<span className="text-[10px] font-bold text-gray-400 ml-1">POs</span></div>
+            <div className="text-[10px] font-semibold text-gray-400 mt-0.5">{new Date().toLocaleDateString('en-IN',{weekday:'short',day:'numeric',month:'short',year:'numeric'})}</div>
+          </div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-xs min-w-[1100px]">
+            <thead>
+              <tr className="bg-amber-400 text-black">
+                <th className="px-3 py-2.5 text-left font-bold">PO Code</th>
+                <th className="px-3 py-2.5 text-left font-bold">PO Updated Date</th>
+                <th className="px-3 py-2.5 text-left font-bold">PO Subject</th>
+                <th className="px-3 py-2.5 text-left font-bold">Supplier Name</th>
+                <th className="px-3 py-2.5 text-right font-bold">PO Total in base</th>
+                <th className="px-3 py-2.5 text-left font-bold">Current pending</th>
+                <th className="px-3 py-2.5 text-left font-bold">Approved/Rejected</th>
+                <th className="px-3 py-2.5 text-center font-bold">L1 App</th>
+                <th className="px-3 py-2.5 text-center font-bold">Bizfin App</th>
+                <th className="px-3 py-2.5 text-center font-bold">TAT</th>
+                <th className="px-3 py-2.5 text-center font-bold">TAT%</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((r, i) => (
+                <tr key={r.poCode + i}
+                  className="border-b border-gray-50 dark:border-gray-800/60 hover:brightness-95 dark:hover:brightness-110 transition-all">
+                  <td className="px-3 py-2.5 font-mono text-[10px] text-[#4736FE] whitespace-nowrap">{r.poCode}</td>
+                  <td className="px-3 py-2.5 text-gray-400 whitespace-nowrap">{pfFmtDate(r.poUpdated)}</td>
+                  <td className="px-3 py-2.5 font-medium max-w-[240px] truncate" title={r.poSubject}>{r.poSubject || '—'}</td>
+                  <td className="px-3 py-2.5 text-gray-500 max-w-[160px] truncate" title={r.supplier}>{r.supplier || '—'}</td>
+                  <td className="px-3 py-2.5 text-right font-medium">{r.poTotal ? r.poTotal.toLocaleString('en-IN', {maximumFractionDigits:2}) : '—'}</td>
+                  <td className="px-3 py-2.5">
+                    {r.curPending
+                      ? <span className="text-amber-600 dark:text-amber-400 font-semibold">{r.curPending}</span>
+                      : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 whitespace-nowrap">
+                    {r.l1Date
+                      ? <span className="text-green-600 dark:text-green-400 text-[10px]">{r.l1Date}</span>
+                      : <span className="text-gray-400">—</span>}
+                  </td>
+                  <td className="px-3 py-2.5 text-center font-bold">{r.l1App}</td>
+                  <td className="px-3 py-2.5 text-center font-bold">{r.bfApp}</td>
+                  <td className="px-3 py-2.5 text-center text-gray-500">{r.tat}d</td>
+                  {tatPctCell(r.pctTAT)}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -1003,10 +1245,11 @@ function InvoicingPending({ rows, fyFilter, fyOptions, onFYChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 
-function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
+function Dashboard({ data, approvalData, onApprovalDataChange, poRequestData, onPORequestDataChange, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
   const urlCC = useMemo(()=>new URLSearchParams(window.location.search).get('costCenter')||'', []);
   const uploadRef = useRef();
   const approvalUploadRef = useRef();
+  const poRequestUploadRef = useRef();
 
   const [tab, setTab] = useState('table');
   const approvalRows = approvalData;
@@ -1083,6 +1326,28 @@ function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, on
     reader.readAsText(file);
   }
 
+  function handlePORequestUpload(e) {
+    const file = e.target.files[0];
+    if (!file) return;
+    if (!auth) { toast('Please log in first to upload', 'err'); e.target.value = ''; return; }
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const csvText = ev.target.result;
+      const rows = parsePORequestCSV(csvText);
+      if (!rows.length) { toast('Could not parse PO CSV — check format', 'err'); e.target.value = ''; return; }
+      onPORequestDataChange(rows);
+      setTab('po-request');
+      window.C24Uploader.upload({ csvText, workerUrl: WORKER_URL, toolPath: PORQ_PATH, auth })
+        .then(() => toast(`✓ ${rows.length} POs saved to cloud`))
+        .catch(er => {
+          if (er.status === 401) { toast('Session expired — log in again', 'err'); onLogout(); }
+          else toast('Cloud save failed: ' + (er.message || er), 'err');
+        });
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  }
+
   function handleApprovalUpload(e) {
     const file = e.target.files[0];
     if (!file) return;
@@ -1130,6 +1395,11 @@ function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, on
           {/* Upload CSVs */}
           <input ref={uploadRef} type="file" accept=".csv" className="hidden" onChange={handleUpload}/>
           <input ref={approvalUploadRef} type="file" accept=".csv" className="hidden" onChange={handleApprovalUpload}/>
+          <input ref={poRequestUploadRef} type="file" accept=".csv" className="hidden" onChange={handlePORequestUpload}/>
+          <button onClick={()=>{ if(auth) poRequestUploadRef.current.click(); else onLogin(); }}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-[#4736FE]/10 text-[#4736FE] border border-[#4736FE]/30 hover:bg-[#4736FE]/20 transition-colors">
+            <Ico n="upload" size={12}/> PO CSV
+          </button>
           <button onClick={()=>{ if(auth) approvalUploadRef.current.click(); else onLogin(); }}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30 hover:bg-amber-500/25 transition-colors">
             <Ico n="upload" size={12}/> Approval CSV
@@ -1166,7 +1436,7 @@ function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, on
         </div>
 
         <div className="flex items-center gap-1 mb-5 flex-wrap">
-          {[['table','📊 Dashboard'],['approval','⏱ Approval TAT'],['invoicing','🧾 Invoicing Pending']].map(([t,l])=>(
+          {[['table','📊 Dashboard'],['approval','⏱ Approval TAT'],['invoicing','🧾 Invoicing Pending'],['po-request','📋 PO Request Status']].map(([t,l])=>(
             <button key={t} onClick={()=>setTab(t)}
               className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${tab===t?'bg-[#4736FE] text-white':'text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-white/[0.05]'}`}>
               {l}
@@ -1206,6 +1476,10 @@ function Dashboard({ data, approvalData, onApprovalDataChange, auth, onLogin, on
 
         {tab==='invoicing' && (
           <InvoicingPending rows={data} fyFilter={fFY} fyOptions={opts.fyOptions} onFYChange={setFFY}/>
+        )}
+
+        {tab==='po-request' && (
+          <PORequestStatusTab rows={poRequestData} fileRef={poRequestUploadRef}/>
         )}
       </main>
 
@@ -1295,6 +1569,7 @@ function EmptyScreen({ loading, auth, onLogin, onLogout, theme, onToggleTheme, t
 function App() {
   const [data, setData]               = useState(null);
   const [approvalData, setApprovalData] = useState([]);
+  const [poRequestData, setPORequestData] = useState([]);
   const [loading, setLoading]         = useState(true);
   const [auth, setAuth]               = useState(null);
   const [loginOpen, setLoginOpen]     = useState(false);
@@ -1312,6 +1587,13 @@ function App() {
       })
       .catch(() => {})
       .finally(() => setLoading(false));
+    // Load PO Request CSV
+    window.C24Uploader.fetchText(WORKER_URL + PORQ_PATH + '.csv', { cache: 'no-store', skeleton: false })
+      .then(text => {
+        const rows = parsePORequestCSV(text);
+        if (rows.length) setPORequestData(rows);
+      })
+      .catch(() => {});
     // Load approval CSV — skeleton:false avoids conflicting with the main fetch overlay
     window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store', skeleton: false })
       .then(text => {
@@ -1339,7 +1621,7 @@ function App() {
   return (
     <>
       {data
-        ? <Dashboard data={data} approvalData={approvalData} onApprovalDataChange={setApprovalData}
+        ? <Dashboard data={data} approvalData={approvalData} onApprovalDataChange={setApprovalData} poRequestData={poRequestData} onPORequestDataChange={setPORequestData}
             auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
             onUploadDone={setData} theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
         : <EmptyScreen loading={loading} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
