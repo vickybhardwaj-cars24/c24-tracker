@@ -555,6 +555,18 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
   const [snapping,setSnapping]=useState(false);
   const snapRef=useRef(null);
 
+  const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
+  const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
+
+  const filtered = useMemo(()=>{
+    let out=approvalRows;
+    if(fStatus.size>0)    out=out.filter(r=>fStatus.has(r.status));
+    if(fCreatedBy.size>0) out=out.filter(r=>fCreatedBy.has(r.createdBy));
+    if(fPending.size>0)   out=out.filter(r=>fPending.has(r.pendingStage));
+    if(search){const q=search.toLowerCase();out=out.filter(r=>r.location.toLowerCase().includes(q)||r.prCode.toLowerCase().includes(q)||r.createdBy.toLowerCase().includes(q)||r.pendingLabel.toLowerCase().includes(q));}
+    return out;
+  },[approvalRows,fStatus,fCreatedBy,fPending,search]);
+
   const exportCSV = useCallback(()=>{
     const headers = ['Location','EMSS POC','PR Number','PR Date','PR Value','L1 Approval','L1 Date','BizFin','BizFin Date','Current Pending From','Aging L1','Aging BizFin','Aging SCM','TAT','% TAT'];
     const rows = filtered.map(r=>[
@@ -581,8 +593,6 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
     setSnapping(true);
     try {
       const el = snapRef.current;
-      // Temporarily expand the card + inner scroll area so html2canvas
-      // captures every column without clipping the edges.
       const scrollDiv = el.querySelector('.overflow-x-auto');
       const table = el.querySelector('table');
       const fullW = table ? table.scrollWidth : el.scrollWidth;
@@ -591,7 +601,6 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
         scrollOverflow: scrollDiv ? scrollDiv.style.overflow : null,
         tableMinW: table ? table.style.minWidth : null,
       };
-      // Render light-mode for a clean export regardless of current theme
       const wasDark = document.documentElement.classList.contains('dark');
       if(wasDark) document.documentElement.classList.remove('dark');
       el.style.overflow = 'visible';
@@ -599,7 +608,6 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
       if(scrollDiv) scrollDiv.style.overflow = 'visible';
       if(table) table.style.minWidth = 'max-content';
       el.classList.add('snap-export');
-      // Allow layout to settle after un-truncating cells
       await new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
       const renderW = Math.max(fullW, el.scrollWidth, table?table.scrollWidth:0);
 
@@ -613,7 +621,6 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
         windowWidth: renderW + 80,
       });
 
-      // Restore
       el.classList.remove('snap-export');
       if(wasDark) document.documentElement.classList.add('dark');
       el.style.overflow = saved.cardOverflow||'';
@@ -629,18 +636,6 @@ function ApprovalTATTab({ approvalRows, approvalFileRef }) {
     } catch(e){ console.error(e); }
     setSnapping(false);
   },[snapping]);
-
-  const statusOpts  = useMemo(()=>[...new Set(approvalRows.map(r=>r.status).filter(Boolean))].sort(),[approvalRows]);
-  const createdOpts = useMemo(()=>[...new Set(approvalRows.map(r=>r.createdBy).filter(Boolean))].sort(),[approvalRows]);
-
-  const filtered = useMemo(()=>{
-    let out=approvalRows;
-    if(fStatus.size>0)    out=out.filter(r=>fStatus.has(r.status));
-    if(fCreatedBy.size>0) out=out.filter(r=>fCreatedBy.has(r.createdBy));
-    if(fPending.size>0)   out=out.filter(r=>fPending.has(r.pendingStage));
-    if(search){const q=search.toLowerCase();out=out.filter(r=>r.location.toLowerCase().includes(q)||r.prCode.toLowerCase().includes(q)||r.createdBy.toLowerCase().includes(q)||r.pendingLabel.toLowerCase().includes(q));}
-    return out;
-  },[approvalRows,fStatus,fCreatedBy,fPending,search]);
 
   const activeFilters = fStatus.size+fCreatedBy.size+fPending.size;
 
