@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.93</title>
+<title>Cars24 Projects Tracker v4.94</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -921,8 +921,9 @@ function onSbLoginSuccess() {
         if (c) c.textContent = allData.length + ' sites';
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
-          .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
-          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){ console.warn('loadHemDelaysFromSupabase failed:', e3); }); })
+          .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e2){ console.warn('loadUatExemptions failed:', e2); }); })
+          .then(function(){ return loadSupabaseUpdates().catch(function(e3){ console.warn('loadSupabaseUpdates failed:', e3); }); })
+          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){ console.warn('loadHemDelaysFromSupabase failed:', e4); }); })
           .then(function(){ buildFilters(); renderKPIs(); applyFilters(); try{var _sk='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _sv={};allData.forEach(function(r){if(r['Site Name'])_sv[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_sk,JSON.stringify(_sv));}catch(_){} });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
@@ -1177,7 +1178,7 @@ async function loadSupabaseSiteFields() {
       var fn = (sfo.field_name||'').trim();
       var v  = (sfo.field_value||'').trim();
       if (fn === 'uat_exemption') {
-        try { UAT_EXEMPTIONS[(sfo.site_name||'').trim()] = JSON.parse(v); } catch(e2) {}
+        // migrated to uat_warning_exceptions table — skip legacy entries
         return;
       }
       if (!row) return;
@@ -1189,6 +1190,33 @@ async function loadSupabaseSiteFields() {
       }
     });
   } catch(e) { console.warn('loadSupabaseSiteFields apply error:', e); }
+}
+
+// ── UAT Warning Exceptions — dedicated Supabase table ──────────────
+// SQL to create table (run once in Supabase SQL Editor):
+//   create table if not exists uat_warning_exceptions (
+//     id         bigint generated always as identity primary key,
+//     site_name  text not null unique,
+//     reason     text,
+//     logged_by  text,
+//     logged_at  text,
+//     created_at timestamptz default now()
+//   );
+//   alter table uat_warning_exceptions enable row level security;
+//   create policy "public read"  on uat_warning_exceptions for select using (true);
+//   create policy "auth write"   on uat_warning_exceptions for all using (auth.role() = 'authenticated');
+async function loadUatExemptionsFromSupabase() {
+  if (!__sbClient) return;
+  var r;
+  try { r = await __sbClient.from('uat_warning_exceptions').select('site_name,reason,logged_by,logged_at'); }
+  catch(e) { console.warn('loadUatExemptions error:', e); return; }
+  if (!r || r.error || !r.data || !r.data.length) return;
+  r.data.forEach(function(row) {
+    var sn = (row.site_name||'').trim();
+    if (!sn) return;
+    UAT_EXEMPTIONS[sn] = { reason: row.reason||'', by: row.logged_by||'', at: row.logged_at||'' };
+  });
+  try { localStorage.setItem('uat_exemptions', JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
 }
 
 async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
@@ -2707,9 +2735,9 @@ function confirmExemption(siteName){
   UAT_EXEMPTIONS[siteName]=exemption;
   try { localStorage.setItem('uat_exemptions',JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
   if(__sbClient&&__sbUser){
-    __sbClient.from('site_field_overrides').upsert(
-      {site_name:siteName,field_name:'uat_exemption',field_value:JSON.stringify(exemption),updated_by_name:byName,updated_at:new Date().toISOString()},
-      {onConflict:'site_name,field_name'}
+    __sbClient.from('uat_warning_exceptions').upsert(
+      {site_name:siteName,reason:exemption.reason,logged_by:byName,logged_at:exemption.at},
+      {onConflict:'site_name'}
     ).then(function(r){if(r.error) console.warn('UAT exemption save failed:',r.error);});
   }
   document.getElementById('overlay').classList.remove('open');
@@ -2723,10 +2751,9 @@ function removeUatExemption(siteName){
   delete UAT_EXEMPTIONS[siteName];
   try { localStorage.setItem('uat_exemptions',JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
   if(__sbClient&&__sbUser){
-    __sbClient.from('site_field_overrides')
+    __sbClient.from('uat_warning_exceptions')
       .delete()
       .eq('site_name',siteName)
-      .eq('field_name','uat_exemption')
       .then(function(r){if(r.error) console.warn('UAT exemption delete failed:',r.error);});
   }
   toast('✅ '+siteName+' restored to warning list','ok');
@@ -4341,7 +4368,8 @@ function handleCSV(event){
       toast('✓ Loaded '+allData.length+' sites','ok');
       loadSupabaseSiteFields()
         .catch(function(e2){console.warn('loadSupabaseSiteFields failed:',e2);})
-        .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){console.warn('loadHemDelaysFromSupabase failed:',e3);}); })
+        .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e3){console.warn('loadUatExemptions failed:',e3);}); })
+        .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){console.warn('loadHemDelaysFromSupabase failed:',e4);}); })
         .then(function(){buildFilters();renderKPIs();applyFilters();});
     }catch(err){console.error(err);toast('Parse error: '+err.message,'err');}
   };
@@ -7383,8 +7411,9 @@ initSupabase();
         if (c) c.textContent = allData.length + ' sites';
         loadSupabaseSiteFields()
           .catch(function(e){ console.warn('loadSupabaseSiteFields failed:', e); })
-          .then(function(){ return loadSupabaseUpdates().catch(function(e2){ console.warn('loadSupabaseUpdates failed:', e2); }); })
-          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e3){ console.warn('loadHemDelaysFromSupabase failed:', e3); }); })
+          .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e2){ console.warn('loadUatExemptions failed:', e2); }); })
+          .then(function(){ return loadSupabaseUpdates().catch(function(e3){ console.warn('loadSupabaseUpdates failed:', e3); }); })
+          .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){ console.warn('loadHemDelaysFromSupabase failed:', e4); }); })
           .then(function(){
             buildFilters();
             renderKPIs();
