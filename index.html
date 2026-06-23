@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
-<title>C24 Expansion Hub</title>
+<title>C24 Expansion Hub v3.47</title>
 <meta name="theme-color" content="#4736FE">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
@@ -370,6 +370,26 @@
       });
     });
   }
+
+  // Supabase activity ping — keeps project from pausing due to inactivity
+  (function logActivity() {
+    var SUPA_URL = 'https://fnvylizldarvqejsfkbn.supabase.co';
+    var SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZudnlsaXpsZGFydnFlanNma2JuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODgzMDgsImV4cCI6MjA5NTA2NDMwOH0.YQwAIwpZCQGOev5kAABMSVFqdf36cZLwnrwPVFrhNfY';
+    fetch(SUPA_URL + '/rest/v1/activity_log', {
+      method: 'POST',
+      headers: {
+        'apikey': SUPA_KEY,
+        'Authorization': 'Bearer ' + SUPA_KEY,
+        'Content-Type': 'application/json',
+        'Prefer': 'return=minimal'
+      },
+      body: JSON.stringify({
+        page_url: location.href,
+        referrer: document.referrer || null,
+        user_agent: navigator.userAgent
+      })
+    }).catch(function(){});
+  })();
 </script>
 </body>
 </html>
