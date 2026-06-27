@@ -418,7 +418,7 @@ td{padding:7px 12px;vertical-align:middle}
 
 .col-chk-item{display:flex;align-items:center;gap:8px;padding:5px 12px;font-size:12px;cursor:pointer;transition:background .1s}
 .col-chk-item:hover{background:var(--surface)}
-/* ── Summary v3.8 ── */
+/* ── Summary v3.9 ── */
 .sw-wins{background:linear-gradient(135deg,#f0fdf4,#faf5ff);border:1px solid #bbf7d0;border-radius:var(--r);padding:12px 16px;margin-bottom:12px}
 .sw-wins-hdr{font-size:10px;font-weight:700;color:#166534;text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
 .sw-wins-row{display:flex;gap:6px;flex-wrap:wrap}
@@ -3731,13 +3731,20 @@ function handoverUrgencyMail(r){
 
 // ── HEM Delay helpers ────────────────────────────────────────────
 function calcAutoHemDays(entry,r){
-  if(!entry.auto||!entry.committedDate) return parseInt(entry.days,10)||0;
+  if(!entry.auto) return parseInt(entry.days,10)||0;
+  var done=entry.type==='UAT'?pd((r||{})['UAT DATE']):pd((r||{})['SAT Date']);
+  if(done){
+    // SAT/UAT completed — freeze delay from when it was first logged to actual completion date
+    var logged=pd(entry.loggedOn);
+    if(!logged) return 0;
+    done.setHours(0,0,0,0);logged.setHours(0,0,0,0);
+    return Math.max(0,Math.round((done-logged)/86400000));
+  }
+  // Still pending — running count from committed date to today
   var committed=pd(entry.committedDate);
   if(!committed) return 0;
-  var done=entry.type==='UAT'?pd((r||{})['UAT DATE']):pd((r||{})['SAT Date']);
-  var ref=done?new Date(done.getTime()):new Date();
-  ref.setHours(0,0,0,0);committed.setHours(0,0,0,0);
-  return Math.max(0,Math.round((ref-committed)/86400000));
+  var today=new Date();today.setHours(0,0,0,0);committed.setHours(0,0,0,0);
+  return Math.max(0,Math.round((today-committed)/86400000));
 }
 function getHemDelayTotal(siteName){
   var r=allData.find(function(x){return (x['Site Name']||'').trim()===siteName;});
@@ -3842,7 +3849,7 @@ function renderHemSection(r,idx){
         +(e.auto?'<span style="font-size:10px;background:#fef3c7;color:#92400e;padding:1px 5px;border-radius:4px;margin-left:5px;font-weight:600">'+esc(e.type)+' delay</span>':'')
         +(e.reason?'<span style="font-size:11px;color:#78350f;margin-left:6px">— '+esc(e.reason)+'</span>':'')
         +'<div style="font-size:10px;color:#a16207;margin-top:1px">'
-        +(e.auto?'Committed: '+esc(e.committedDate)+' · '+statusLabel:'Logged: '+esc(e.loggedOn))
+        +(e.auto?(isDone?'Logged: '+esc(e.loggedOn)+' → '+esc(e.type)+' done · '+statusLabel:'Committed: '+esc(e.committedDate)+' · '+statusLabel):'Logged: '+esc(e.loggedOn))
         +'</div>'
         +'</div>'
         +'<button onclick="deleteHemDelay(\''+esc(siteName).replace(/'/g,"\\'")+'\','+i+');refreshHemSection('+idx+')" '
@@ -3985,8 +3992,8 @@ function openModal(idx){
   let llHtml='';
   (function(){
     // Overall totals across all POs
-    var totalTasks=0,doneTasks=0;
-    _llArr.forEach(function(block){totalTasks+=(block.tasks||[]).length;doneTasks+=(block.tasks||[]).filter(function(t){return t.done;}).length;});
+    var totalTasks=0,doneTasks=0,wipTasks=0;
+    _llArr.forEach(function(block){totalTasks+=(block.tasks||[]).length;doneTasks+=(block.tasks||[]).filter(function(t){return t.done;}).length;wipTasks+=(block.tasks||[]).filter(function(t){return !t.done&&t.wip;}).length;});
     var overallPct=totalTasks?Math.round(doneTasks/totalTasks*100):0;
     var overallBarColor=overallPct===100?'#16a34a':overallPct>=60?'#2563eb':'#f59e0b';
 
@@ -4017,7 +4024,7 @@ function openModal(idx){
       +'<div style="height:10px;background:#dbeafe;border-radius:5px;overflow:hidden">'
       +'<div id="ll-bar-fill" style="height:100%;width:'+overallPct+'%;background:'+overallBarColor+';border-radius:5px;transition:width .3s"></div>'
       +'</div>'
-      +'<div id="ll-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+doneTasks+' of '+totalTasks+' tasks completed across all POs — <span style="color:#0369a1;font-weight:600">auto-updates HOTP % Completion</span></div>'
+      +'<div id="ll-done-count" style="font-size:10px;color:var(--muted);margin-top:3px">'+doneTasks+' of '+totalTasks+' tasks completed'+(wipTasks?' · <span style="color:#2563eb;font-weight:600">'+wipTasks+' WIP</span>':'')+' — <span style="color:#0369a1;font-weight:600">auto-updates HOTP % Completion</span></div>'
       +'</div>';
 
     // Per-PO blocks
@@ -4029,17 +4036,20 @@ function openModal(idx){
       var _dinStyle='box-sizing:border-box;border:1px solid var(--border2);border-radius:4px;padding:3px 6px;font-size:10px;width:88px;font-family:Inter,sans-serif;background:var(--white)';
       var poRows=tasks.map(function(t,ti){
         var isDone=t.done;
-        return '<div id="ll-row-'+pi+'-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);opacity:'+(isDone?'0.5':'1')+'">'
+        var isWip=!isDone&&!!t.wip;
+        var rowBg=isDone?'':'background:'+(isWip?'#eff6ff':'');
+        return '<div id="ll-row-'+pi+'-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid var(--border);opacity:'+(isDone?'0.5':'1')+';'+rowBg+'">'
           +'<input type="checkbox" id="ll-cb-'+pi+'-'+ti+'" '+(isDone?'checked':'')+' onchange="toggleLLTask(\''+_llSN+'\','+pi+','+ti+')" style="width:15px;height:15px;cursor:pointer;flex-shrink:0;margin-top:2px">'
           +'<span style="font-size:10px;color:var(--muted);flex-shrink:0;min-width:16px;padding-top:2px">'+esc(t.sno)+'</span>'
           +'<div style="flex:1;min-width:0">'
-          +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
+          +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';color:'+(isWip?'#2563eb':'inherit')+';word-break:break-word;line-height:1.4">'+esc(t.task)+(isWip?' <span style="font-size:9px;background:#2563eb;color:#fff;padding:1px 5px;border-radius:3px;font-weight:700;vertical-align:middle">WIP</span>':'')+'</div>'
           +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
           +'<span style="font-size:10px;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px">'+esc(t.vendor)+'</span>'
           +'<span style="font-size:10px;color:var(--muted)">Start:</span>'
           +'<input type="text" value="'+esc(t.startDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'startDate\',this.value)">'
           +'<span style="font-size:10px;color:var(--muted)">End:</span>'
           +'<input type="text" value="'+esc(t.endDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'endDate\',this.value)">'
+          +(!isDone?'<button id="ll-wip-'+pi+'-'+ti+'" onclick="toggleLLTaskWip(\''+_llSN+'\','+pi+','+ti+')" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid '+(isWip?'#2563eb':'#e2e8f0')+';background:'+(isWip?'#2563eb':'#f1f5f9')+';color:'+(isWip?'#fff':'#64748b')+';cursor:pointer;margin-left:2px" title="'+(isWip?'Unmark WIP':'Mark as WIP')+'">'+(isWip?'● WIP':'○ WIP')+'</button>':'')
           +'</div>'
           +'</div>'
           +'</div>';
@@ -5882,6 +5892,35 @@ function toggleLLTask(siteName,poIdx,taskIdx){
   if(row) row.style.opacity=arr[poIdx].tasks[taskIdx].done?'0.5':'1';
   var cb=document.getElementById('ll-cb-'+poIdx+'-'+taskIdx);
   if(cb) cb.checked=arr[poIdx].tasks[taskIdx].done;
+  // If marking done, also clear WIP
+  if(arr[poIdx].tasks[taskIdx].done){
+    arr[poIdx].tasks[taskIdx].wip=false;
+    var wipBtn=document.getElementById('ll-wip-'+poIdx+'-'+taskIdx);
+    if(wipBtn) wipBtn.remove();
+    var row2=document.getElementById('ll-row-'+poIdx+'-'+taskIdx);
+    if(row2) row2.style.background='';
+  }
+}
+
+function toggleLLTaskWip(siteName,poIdx,taskIdx){
+  var arr=SCHED_DATA[siteName];
+  if(!arr||!arr[poIdx]) return;
+  var t=arr[poIdx].tasks[taskIdx];
+  if(t.done) return;
+  t.wip=!t.wip;
+  saveSchedData();
+  var row=document.getElementById('ll-row-'+poIdx+'-'+taskIdx);
+  if(row) row.style.background=t.wip?'#eff6ff':'';
+  var btn=document.getElementById('ll-wip-'+poIdx+'-'+taskIdx);
+  if(btn){
+    btn.style.background=t.wip?'#2563eb':'#f1f5f9';
+    btn.style.color=t.wip?'#fff':'#64748b';
+    btn.style.borderColor=t.wip?'#2563eb':'#e2e8f0';
+    btn.textContent=t.wip?'● WIP':'○ WIP';
+    btn.title=t.wip?'Unmark WIP':'Mark as WIP';
+  }
+  var nameEl=row&&row.querySelector('div>div');
+  if(nameEl){nameEl.style.color=t.wip?'#2563eb':'inherit';}
 }
 
 function saveLLDate(siteName,poIdx,taskIdx,field,value){
