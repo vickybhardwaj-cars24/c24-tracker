@@ -476,7 +476,19 @@ async function handlePostLegacy(request, env) {
   }
 }
 
+const SUPABASE_URL      = 'https://fnvylizldarvqejsfkbn.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZudnlsaXpsZGFydnFlanNma2JuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzk0ODgzMDgsImV4cCI6MjA5NTA2NDMwOH0.YQwAIwpZCQGOev5kAABMSVFqdf36cZLwnrwPVFrhNfY';
+
 export default {
+  async scheduled(event, env, ctx) {
+    // Keep Supabase free-tier project alive — fires every 3 days via cron
+    try {
+      await fetch(`${SUPABASE_URL}/rest/v1/sites?select=id&limit=1`, {
+        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+      });
+    } catch(e) { console.error('Supabase ping failed:', e); }
+  },
+
   async fetch(request, env) {
     if (request.method === 'OPTIONS') {
       return new Response(null, { status: 204, headers: CORS_HEADERS });
