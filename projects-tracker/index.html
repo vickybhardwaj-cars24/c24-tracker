@@ -8628,7 +8628,6 @@ function handleLiveCSV(event){
     })
     .then(function(){
       toast('✓ Data updated — live now', 'ok');
-      if (__sbClient) __sbClient.from('sites').select('id').limit(1).then(function(){}).catch(function(){});
       try {
         allData = parseCSV(csvText).filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
