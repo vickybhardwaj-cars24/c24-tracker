@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.95</title>
+<title>Cars24 Projects Tracker v4.96</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -813,6 +813,15 @@ function initSupabase() {
         loadSbProfile(r.data.session.user.id);
       }
     });
+    // Ping DB every 4 days to prevent free-tier project from pausing due to inactivity
+    (function scheduleActivityPing() {
+      function pingDb() {
+        if (!__sbClient) return;
+        __sbClient.from('sites').select('id').limit(1).then(function(){}).catch(function(){});
+      }
+      pingDb(); // once on init
+      setInterval(pingDb, 4 * 24 * 60 * 60 * 1000); // every 4 days
+    })();
   } catch(e) { console.warn('Supabase init failed:', e); }
 }
 
@@ -8619,6 +8628,7 @@ function handleLiveCSV(event){
     })
     .then(function(){
       toast('✓ Data updated — live now', 'ok');
+      if (__sbClient) __sbClient.from('sites').select('id').limit(1).then(function(){}).catch(function(){});
       try {
         allData = parseCSV(csvText).filter(function(r){ return (r['Site Name']||'').trim(); });
         filteredData = [...allData];
