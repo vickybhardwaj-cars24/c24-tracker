@@ -20,6 +20,65 @@ Follow these steps once to activate all features. Takes ~15 minutes.
 
 ---
 
+## Step 1b — Run Migration v9 (2 min) — REQUIRED for HEM/UAT logging to be shared
+
+1. Go to https://supabase.com → your project (`fnvylizldarvqejsfkbn`) → **SQL Editor** → **New Query**
+2. Open `supabase-migration-v9.sql` from this repo and paste the entire contents
+3. Click **Run**
+
+**What this fixes:** the `uat_warning_exceptions` table did not exist in the
+database even though the app code referenced it — every UAT exemption a PM
+logged was silently failing to save to Supabase and only existed in that one
+browser's local storage, invisible to everyone else and to that same person on
+a different device. Without this migration, "Exempt from UAT Warning" never
+persists for the team.
+
+---
+
+## ⚠ Why some logs are only visible to one person
+
+The app now shows a clear "— synced ✓" or "— ⚠ NOT synced, sign in to save
+for your team" suffix on every save toast (site field edits, daily updates,
+HEM delay entries, UAT exemptions). If you or a teammate ever see the "NOT
+synced" warning, the entry only exists in that browser and will not be seen
+by anyone else — including you, on a different device.
+
+This happens in two situations, both fixable:
+
+1. **The person used "legacy login"** (the CSV-upload-only fallback) instead
+   of signing in with a real Supabase account. Legacy login never establishes
+   a Supabase session, so every save from that session is local-only. Every
+   team member should have a Supabase account created via **Admin → Add Team
+   Member** (Step 4 below) and should always sign in with email + password,
+   not the legacy option.
+2. **Migration v9 above hasn't been run yet**, so UAT exemption writes fail
+   even for properly signed-in users.
+
+As a safety net, the moment a user signs in with a real Supabase account, the
+app automatically pushes any HEM delays or UAT exemptions that were stuck
+in that browser's local storage up to Supabase (no button needed). Admins can
+also manually trigger this from **Admin → Migrate HEM Delays / Migrate UAT
+Exemptions** for any device that hasn't logged in in a while.
+
+---
+
+## Step 1c — Run Migration v10 (2 min) — REQUIRED for email-sent tracking to be shared
+
+1. Go to https://supabase.com → your project (`fnvylizldarvqejsfkbn`) → **SQL Editor** → **New Query**
+2. Open `supabase-migration-v10.sql` from this repo and paste the entire contents
+3. Click **Run**
+
+**What this fixes:** the "📧 Sent ✓" badges on SAT/UAT communication cards,
+HEM + Design emails, vendor delay notices, and procurement reminders were
+stored as a single whole-file blob in Cloudflare R2 — every save overwrote
+the entire file, so two people logging different sites' emails around the
+same time could silently erase each other's entries. This migration adds a
+proper `email_log` table (one row per site + email type) so concurrent
+logging never collides. Admin → **Migrate Email Log** pushes any history
+still only sitting in the old R2 blob into the new table.
+
+---
+
 ## Step 2 — Disable Email Confirmation (1 min)
 
 1. Supabase → **Authentication** → **Providers** → **Email**
