@@ -403,8 +403,31 @@ async function postSlackMessage(env, channel, text) {
 
 // POST /slack/send — { mode:'channel'|'dm', email?, text }. Same auth gate as
 // /upload so only logged-in dashboard users can trigger a send.
+const SLACK_ALLOWED_EMAIL = 'vicky.bhardwaj@cars24.com';
+
+// Extracts the `email` claim from a Supabase Bearer JWT, if present. Basic
+// auth (the shared upload credential) carries no per-user identity, so it
+// can't prove who's calling — returns null for it, which handleSlackSend
+// treats as not-authorized-for-Slack.
+function getBearerEmail(request) {
+  const h = request.headers.get('Authorization') || '';
+  if (!h.startsWith('Bearer ')) return null;
+  try {
+    const parts = h.slice(7).trim().split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return (payload.email || '').trim().toLowerCase() || null;
+  } catch (_) { return null; }
+}
+
+// Slack alerts are restricted to a single user — the frontend also hides the
+// buttons for everyone else, but that's UI-only, so enforce it here too in
+// case someone calls this endpoint directly.
 async function handleSlackSend(request, env) {
   if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Invalid credentials' });
+  if (getBearerEmail(request) !== SLACK_ALLOWED_EMAIL) {
+    return json(403, { success: false, error: 'Slack alerts are restricted to ' + SLACK_ALLOWED_EMAIL });
+  }
 
   let body;
   try { body = await request.json(); } catch (_e) { return json(400, { success: false, error: 'Invalid JSON body' }); }

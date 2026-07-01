@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.7</title>
+<title>Cars24 Projects Tracker v5.8</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -704,7 +704,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div style="font-size:14px;font-weight:700">👤 PM Scorecard</div>
     <div style="font-size:11px;color:var(--muted)">Click a row to filter table by PM</div>
-    <button class="btn btn-o btn-sm" onclick="sendPmDigestsToSlack(this)" style="font-size:11px">📣 Send PM Updates to Slack</button>
+    <button class="btn btn-o btn-sm" data-vicky-only="true" onclick="sendPmDigestsToSlack(this)" style="font-size:11px;display:none">📣 Send PM Updates to Slack</button>
   </div>
   <table class="pm-tbl"><thead><tr>
     <th>PM</th><th>Sites</th><th>WIP</th><th>SAT</th><th>UAT</th><th>Overdue</th><th>Stale</th><th>Avg%</th><th>📈 WoW Δ</th><th>Blkrs</th><th>⏱ OTD</th><th>🔒 UAT%</th><th>🔧 Snag</th><th>Health</th>
@@ -1017,6 +1017,12 @@ function sendToSlack(mode, email, text, btn) {
   .then(function() { if (btn) { btn.disabled = false; btn.textContent = origLabel; } });
 }
 
+// Slack alert buttons are visible only to Vicky — checked again server-side
+// in worker.js's handleSlackSend, so hiding the button isn't the only gate.
+function isVicky() {
+  return !!(__sbUser && (__sbUser.email || '').trim().toLowerCase() === 'vicky.bhardwaj@cars24.com');
+}
+
 // PM Scorecard "📣 Send PM Updates to Slack" button — DMs each PM their own
 // site-update digest and posts a combined roll-up to the team channel.
 function sendPmDigestsToSlack(btn){
@@ -1075,6 +1081,10 @@ function applyRoleBasedView() {
   // Hide admin-only tabs from non-admin users
   document.querySelectorAll('[data-admin-only="true"]').forEach(function(el) {
     el.style.display = isAdmin ? '' : 'none';
+  });
+  // Slack alert buttons are visible only to Vicky (also enforced server-side)
+  document.querySelectorAll('[data-vicky-only="true"]').forEach(function(el) {
+    el.style.display = isVicky() ? '' : 'none';
   });
   // If PM is currently viewing attendance tab, redirect to table
   if (!isAdmin) {
@@ -2487,7 +2497,7 @@ function renderSatUat(){
       +'<td style="padding:6px 10px;text-align:center">'+fmtRaw(u.r['SAT Date']||'')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600;color:#7c3aed">'+(revUAT!='--'?revUAT:'<span style="color:var(--muted);font-size:10px">None</span>')+'</td>'
-      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'<button data-slack-kind="uat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button></td>':'<td></td>')
+      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+(isVicky()?'<button data-slack-kind="uat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')+'</td>':'<td></td>')
       +(u.gap>10?'<td style="padding:6px 10px;text-align:center"><span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;border:1px solid #fecaca">🚨 UAT Date Missing</span></td>':'<td></td>')
       +'</tr>';
   }
@@ -2610,7 +2620,7 @@ function renderSatUat(){
         +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+fmtRaw(u.r['Planned Completion'])+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+fmtRaw(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
-        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'<button data-slack-kind="sat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button></td>'
+        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+(isVicky()?'<button data-slack-kind="sat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>':'';
 
@@ -2674,7 +2684,7 @@ function renderSatUat(){
           +'<td style="padding:7px 10px;text-align:center">'
           +'<a href="'+handoverUrgencyMail(ps.r)+'" target="_blank" onclick="event.stopPropagation()" '
           +'style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;text-decoration:none;background:#f97316;color:#fff;white-space:nowrap">📨 Handover Email</a>'
-          +'<button data-slack-kind="handover" data-slack-site="'+esc(ps.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>'
+          +(isVicky()?'<button data-slack-kind="handover" data-slack-site="'+esc(ps.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')
           +'</td></tr>';
       }).join('')
       +'</tbody></table></div></div>';
@@ -3722,7 +3732,7 @@ function renderProcureSection(r,idx){
   var delayMailBtn=problemItems.length
     ?('<a href="'+procureDelayMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="procure_delay" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Delay Notice ('+problemItems.length+')</a>'
       +emailLogBadge(siteName,'procure_delay')
-      +'<button data-slack-kind="procure_delay" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">📣</button>')
+      +(isVicky()?'<button data-slack-kind="procure_delay" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">📣</button>':''))
     :'';
   var statsHtml='';
   if(total){
@@ -4980,7 +4990,7 @@ function renderSnagTab(){
               '<td style="padding:7px 10px;text-align:center"><span style="font-weight:700;color:'+pc+'">'+s.pctClosed+'%</span></td>'+
               '<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+(s.avgDays!=null?s.avgDays+'d':'—')+'</td>'+
               '<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+(s.topOwner?esc(s.topOwner[0])+' ('+s.topOwner[1]+')':'—')+'</td>'+
-              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a><button data-slack-kind="snag" data-slack-site="'+esc(s.site)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'—')+'</td>'+
+              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a>'+(isVicky()?'<button data-slack-kind="snag" data-slack-site="'+esc(s.site)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':''):'—')+'</td>'+
             '</tr>';
           }).join('')+
         '</tbody>'+
@@ -5010,7 +5020,7 @@ function showSnagDetail(site){
     '<div class="reg-section-title" style="margin-bottom:0">🔧 '+esc(site)+' — Full Snag List</div>'+
     '<div style="display:flex;gap:6px;align-items:center">'+
     '<a href="'+snagVendorMailUrl(site)+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#dc2626;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Snag Notice to Vendor</a>'+
-    '<button data-slack-kind="snag" data-slack-site="'+esc(site)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:6px 10px;border-radius:6px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">📣 Slack</button>'+
+    (isVicky()?'<button data-slack-kind="snag" data-slack-site="'+esc(site)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:6px 10px;border-radius:6px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">📣 Slack</button>':'')+
     '<button class="btn btn-o" onclick="document.getElementById(\'snag-detail-panel\').style.display=\'none\'" style="font-size:11px">✕ Close</button>'+
     '</div>'+
     '</div>'+
@@ -5125,7 +5135,7 @@ function renderDelayTab(){
   wrap.innerHTML=
     '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
     '<div class="reg-section-title" style="margin-bottom:0">⏳ Delay Overview</div>'+
-    '<button class="btn btn-o btn-sm" onclick="sendToSlack(\'channel\',null,window.__slackBlockersText,this)" style="font-size:11px">🚦 Post Blockers to Slack</button>'+
+    (isVicky()?'<button class="btn btn-o btn-sm" onclick="sendToSlack(\'channel\',null,window.__slackBlockersText,this)" style="font-size:11px">🚦 Post Blockers to Slack</button>':'')+
     '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px">'+
     snagKpi(overdueSites.length,'Overdue Sites','#dc2626')+
@@ -5721,7 +5731,7 @@ function renderPendingDocsTracker(){
       +'<td style="padding:7px 10px;text-align:center">'+chip(hasProcure,'Procurement')+'</td>'
       +'<td style="padding:7px 10px;text-align:center">'
       +'<a href="'+pendingDocReminderMail(r,missing)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="'+esc(elogType)+'" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Remind</a>'
-      +'<button data-slack-kind="pending_docs" data-slack-site="'+esc(siteName)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 7px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>'
+      +(isVicky()?'<button data-slack-kind="pending_docs" data-slack-site="'+esc(siteName)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 7px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')
       +emailLogBadge(siteName,elogType)
       +'</td>'
       +'</tr>';
@@ -6620,7 +6630,7 @@ function renderTicketTab(){
   html+=dd('Site:',siteOpts,fSite,'Site');
   html+=dd('Assigned:',assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
-  html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
+  if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
 
