@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.96</title>
+<title>Cars24 Projects Tracker v4.97</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -935,6 +935,7 @@ function onSbLoginSuccess() {
           .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e2){ console.warn('loadUatExemptions failed:', e2); }); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e3){ console.warn('loadSupabaseUpdates failed:', e3); }); })
           .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){ console.warn('loadHemDelaysFromSupabase failed:', e4); }); })
+          .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); } })
           .then(function(){ buildFilters(); renderKPIs(); applyFilters(); try{var _sk='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _sv={};allData.forEach(function(r){if(r['Site Name'])_sv[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_sk,JSON.stringify(_sv));}catch(_){} });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
@@ -1509,6 +1510,13 @@ function toast(msg, type) {
   clearTimeout(t._t);
   t._t = setTimeout(() => { t.className = 'toast'; }, 2800);
 }
+
+// Every save that matters (site edits, HEM delays, UAT exemptions) must land in
+// Supabase to be visible to the rest of the team — never trust local-only state.
+// Callers append this to their success toast so a save that only landed in this
+// browser's memory/localStorage is never confused with one the team can see.
+function syncTag() { return (__sbClient && __sbUser) ? ' — synced ✓' : ' — ⚠ NOT synced, sign in to save for your team'; }
+function syncType() { return (__sbClient && __sbUser) ? 'ok' : 'err'; }
 
 function esc(s) { return (s||''). replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -2752,7 +2760,7 @@ function confirmExemption(siteName){
     ).then(function(r){if(r.error) console.warn('UAT exemption save failed:',r.error);});
   }
   document.getElementById('overlay').classList.remove('open');
-  toast('⏭ '+siteName+' exempted from UAT warnings','ok');
+  toast('⏭ '+siteName+' exempted from UAT warnings'+syncTag(),syncType());
   renderWarnings();
   var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
   if(wb&&wc){ var n=getUatWarnings().filter(function(w){ return !UAT_EXEMPTIONS[(w['Site Name']||'').trim()]; }).length; wc.textContent=n; wb.style.display=n?'':'none'; }
@@ -2767,7 +2775,7 @@ function removeUatExemption(siteName){
       .eq('site_name',siteName)
       .then(function(r){if(r.error) console.warn('UAT exemption delete failed:',r.error);});
   }
-  toast('✅ '+siteName+' restored to warning list','ok');
+  toast('✅ '+siteName+' restored to warning list'+syncTag(),syncType());
   renderWarnings();
   var wb=document.getElementById('warn-badge'); var wc=document.getElementById('warn-count');
   if(wb&&wc){ var n=getUatWarnings().filter(function(w){ return !UAT_EXEMPTIONS[(w['Site Name']||'').trim()]; }).length; wc.textContent=n; wb.style.display=n?'':'none'; }
@@ -3351,7 +3359,7 @@ function confirmDP(key, idx, dataKey) {
   if (valEl) valEl.textContent = ds;
   saveSiteFieldToSupabase(r['Site Name']||'', dataKey, oldV, ds);
   renderKPIs(); applyFilters(); buildKpiPanel();
-  toast('✓ '+key.toUpperCase().replace(/_/g,' ')+' updated', 'ok');
+  toast('✓ '+key.toUpperCase().replace(/_/g,' ')+' updated'+syncTag(), syncType());
   cancelDP(key, idx);
 }
 
@@ -3408,7 +3416,7 @@ function saveRevisedDate(idx, newDate, reason) {
   saveSiteFieldToSupabase(siteName, 'Reason for Delay', existingReason, newReason);
   saveRevisionToSupabase(siteName, oldDate, newDate, reason);
   renderKPIs(); applyFilters(); buildKpiPanel();
-  toast('✓ Revised date updated for ' + siteName, 'ok');
+  toast('✓ Revised date updated for ' + siteName + syncTag(), syncType());
 }
 
 function saveMetaOnce(f, idx, el) {
@@ -3420,7 +3428,7 @@ function saveMetaOnce(f, idx, el) {
   allData[idx][f] = v;
   saveSiteFieldToSupabase(allData[idx]['Site Name']||'', f, oldV, v);
   renderKPIs(); applyFilters();
-  toast('✓ ' + f + ' set — now locked', 'ok');
+  toast('✓ ' + f + ' set — now locked' + syncTag(), syncType());
   el.contentEditable = 'false'; el.style.background = 'transparent'; el.style.cursor = 'default';
 }
 
@@ -3451,7 +3459,7 @@ function saveSiteName(idx) {
     + '<button onclick="cancelSiteNameEdit('+idx+')" style="margin-left:3px;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:5px;padding:4px 8px;font-size:11px;cursor:pointer">✕</button>'
     + '</span>';
   renderKPIs(); applyFilters();
-  toast('✓ Site name updated', 'ok');
+  toast('✓ Site name updated' + syncTag(), syncType());
 }
 
 function buildMstatHtml(r, idx, warnHtml) {
@@ -3491,7 +3499,7 @@ function saveStatusEdit(idx) {
   const warnHtml=satD&&!uatD&&uatGap>=UAT_WARN_DAYS?'<span class="uat-warn-tag" style="margin-left:6px">🔔 '+uatGap+'d since SAT — UAT overdue</span>':'';
   document.getElementById('mstat').innerHTML = buildMstatHtml(allData[idx], idx, warnHtml);
   renderKPIs(); applyFilters();
-  toast('✓ Status updated to '+newStatus, 'ok');
+  toast('✓ Status updated to '+newStatus+syncTag(), syncType());
 }
 
 // ── Procurement Plan helpers ─────────────────────────────────────
@@ -3793,17 +3801,40 @@ async function loadHemDelaysFromSupabase(){
   });
   saveHemDelays();
 }
-async function migrateHemDelaysToSupabase(btn){
-  if(!__sbClient||!__sbUser){toast('Sign in first to migrate','err');return;}
+async function migrateHemDelaysToSupabase(btn,silent){
+  if(!__sbClient||!__sbUser){if(!silent)toast('Sign in first to migrate','err');return;}
   var sites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
-  if(!sites.length){toast('No HEM delays in localStorage to migrate','ok');return;}
+  if(!sites.length){if(!silent)toast('No HEM delays in localStorage to migrate','ok');return;}
   if(btn){btn.disabled=true;btn.textContent='Migrating…';}
   var ok=0,fail=0;
   for(var i=0;i<sites.length;i++){
     try{await saveHemDelaysToSupabase(sites[i]);ok++;}catch(e){fail++;}
   }
   if(btn){btn.disabled=false;btn.textContent='⏳ Migrate HEM Delays';}
-  toast('Migrated '+ok+' site'+(ok!==1?'s':'')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
+  if(!silent) toast('Migrated '+ok+' site'+(ok!==1?'s':'')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
+}
+
+// UAT exemptions logged before this device had a real Supabase sign-in only ever
+// lived in localStorage — push them up the moment a real session is available.
+async function migrateUatExemptionsToSupabase(btn,silent){
+  if(!__sbClient||!__sbUser){if(!silent)toast('Sign in first to migrate','err');return;}
+  var sites=Object.keys(UAT_EXEMPTIONS);
+  if(!sites.length){if(!silent)toast('No UAT exemptions in localStorage to migrate','ok');return;}
+  if(btn){btn.disabled=true;btn.textContent='Migrating…';}
+  var ok=0,fail=0;
+  for(var i=0;i<sites.length;i++){
+    var ex=UAT_EXEMPTIONS[sites[i]]||{};
+    try{
+      var r=await __sbClient.from('uat_warning_exceptions').upsert(
+        {site_name:sites[i],reason:ex.reason||'',logged_by:ex.by||'',logged_at:ex.at||''},
+        {onConflict:'site_name'}
+      );
+      if(r.error) throw r.error;
+      ok++;
+    }catch(e){fail++;}
+  }
+  if(btn){btn.disabled=false;btn.textContent='🔕 Migrate UAT Exemptions';}
+  if(!silent) toast('Migrated '+ok+' exemption'+(ok!==1?'s':'')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
 }
 function logHemDelay(siteName,days,reason,autoEntry){
   if(!HEM_DELAYS[siteName]) HEM_DELAYS[siteName]=[];
@@ -3817,6 +3848,7 @@ function deleteHemDelay(siteName,entryIdx){
   HEM_DELAYS[siteName].splice(entryIdx,1);
   saveHemDelays();
   saveHemDelaysToSupabase(siteName);
+  toast('HEM delay entry removed'+syncTag(), syncType());
 }
 function renderHemSection(r,idx){
   var siteName=(r['Site Name']||'').trim();
@@ -3945,13 +3977,13 @@ function submitHemDelay(idx,siteName){
     var autoEntry={auto:true,type:type,committedDate:committed,reason:reason,loggedOn:new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})};
     logHemDelay(siteName,0,reason,autoEntry);
     refreshHemSection(idx);
-    toast(type+' delay auto-tracking started from '+committed,'ok');
+    toast(type+' delay auto-tracking started from '+committed+syncTag(),syncType());
   } else {
     var days=dEl?parseInt(dEl.value,10):0;
     if(!days||days<1){toast('Enter a valid number of days','warn');return;}
     logHemDelay(siteName,days,reason);
     refreshHemSection(idx);
-    toast('HEM delay of '+days+' days logged','ok');
+    toast('HEM delay of '+days+' days logged'+syncTag(),syncType());
   }
 }
 
@@ -4251,7 +4283,10 @@ function saveMeta(f,idx,el){
   if(f==='Cost Center') CC_MAP[allData[idx]['Site Name']||'']=v;
   renderKPIs();applyFilters();buildKpiPanel();
   // Audit log + Supabase persist
-  if (oldV !== v) saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, v);
+  if (oldV !== v) {
+    saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, v);
+    toast('✓ '+f+' updated'+syncTag(), syncType());
+  }
 }
 function toggleU(d,idx){if(__sbRole==='viewer'){toast('Sign in to edit','err');return;}const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='none';if(e2)e2.style.display='block';}
 function cancelU(d,idx){const k=d.replace(/ /g,'_');const t=document.getElementById(`utxt-${k}-${idx}`);const e2=document.getElementById(`ued-${k}-${idx}`);if(t)t.style.display='block';if(e2)e2.style.display='none';}
@@ -4270,7 +4305,7 @@ function saveU(d,idx){
   if(t){t.textContent=v;t.style.display='block';}
   const e2=document.getElementById(`ued-${k}-${idx}`);
   if(e2) e2.style.display='none';
-  toast('Saved' + (__sbUser ? ' & tracked ✓' : ''), 'ok');
+  toast('Update saved'+syncTag(), syncType());
   applyFilters();
 }
 function addU(idx){
@@ -4283,7 +4318,7 @@ function addU(idx){
   if(sn){ HOTP_UPDATES[sn]=HOTP_UPDATES[sn]||{}; HOTP_UPDATES[sn][d]=t2; }
   // Persist to Supabase site_updates (source of truth; Cloudflare skipped)
   if (__sbUser && sn) saveUpdateToSupabase(null, sn, '['+d+'] '+t2);
-  toast('Update saved' + (__sbUser ? ' & tracked ✓' : ''), 'ok');
+  toast('Update saved'+syncTag(), syncType());
   openModal(idx);
   applyFilters();
 }
@@ -4392,6 +4427,7 @@ function handleCSV(event){
         .catch(function(e2){console.warn('loadSupabaseSiteFields failed:',e2);})
         .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e3){console.warn('loadUatExemptions failed:',e3);}); })
         .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){console.warn('loadHemDelaysFromSupabase failed:',e4);}); })
+        .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); } })
         .then(function(){buildFilters();renderKPIs();applyFilters();});
     }catch(err){console.error(err);toast('Parse error: '+err.message,'err');}
   };
@@ -5596,6 +5632,7 @@ function savePO(site, val){
   var oldVal = row ? (row['PO Number'] || '') : '';
   if (row) row['PO Number'] = val;
   saveSiteFieldToSupabase(site, 'PO Number', oldVal, val).catch(function(){});
+  toast('✓ PO Number saved'+syncTag(), syncType());
 }
 function renderTaskTab(){
   var el=document.getElementById('taskv');
@@ -7586,6 +7623,7 @@ initSupabase();
           .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e2){ console.warn('loadUatExemptions failed:', e2); }); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e3){ console.warn('loadSupabaseUpdates failed:', e3); }); })
           .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){ console.warn('loadHemDelaysFromSupabase failed:', e4); }); })
+          .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); } })
           .then(function(){
             buildFilters();
             renderKPIs();
@@ -7951,6 +7989,15 @@ function _renderAdminTabInner(el) {
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Run once to push any HEM delays saved locally in this browser to Supabase so they persist across all devices.</div>'
     + '</div>'
     + '<button onclick="migrateHemDelaysToSupabase(this)" style="padding:8px 16px;background:#d97706;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">⏳ Migrate HEM Delays</button>'
+    + '</div>'
+    + '</div>'
+    + '<div style="background:var(--white);border:1px solid #e9d5ff;border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-size:13px;font-weight:700">🔕 Migrate UAT Exemptions → Supabase</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Run once to push any UAT warning exemptions saved locally in this browser to Supabase so they persist across all devices and survive future deploys.</div>'
+    + '</div>'
+    + '<button onclick="migrateUatExemptionsToSupabase(this)" style="padding:8px 16px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">🔕 Migrate UAT Exemptions</button>'
     + '</div>'
     + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'
