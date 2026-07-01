@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.2</title>
+<title>Cars24 Projects Tracker v5.3</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1248,7 +1248,7 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
   if (sr.error) {
     console.error('saveSiteField error:', sr.error);
     toast('Save failed: ' + (sr.error.message || sr.error.code || JSON.stringify(sr.error)), 'err');
-    return;
+    return false;
   }
   console.log('saveSiteField: OK ✓');
   Promise.resolve(__sbClient.from('audit_log').insert({
@@ -1259,6 +1259,7 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) 
     changed_by:       null,
     changed_by_name:  byName
   })).catch(function(){});
+  return true;
 }
 
 // ── Photo Upload with Client-side Compression ───────────────────
@@ -8312,27 +8313,28 @@ function addCCRow() {
   document.getElementById('cc-map-body').innerHTML = buildCCMapRows();
 }
 
-function saveCCRow(site) {
+async function saveCCRow(site) {
   var inp = document.querySelector('.cc-inp[data-site="' + site + '"]');
   var code = inp ? inp.value.trim() : '';
+  var oldCode = CC_MAP[site] || '';
+  // Persist to Supabase first (site_field_overrides — same store loadSupabaseSiteFields() reads on every page load)
+  if (__sbClient) {
+    var ok = await saveSiteFieldToSupabase(site, 'Cost Center', oldCode, code);
+    if (!ok) { document.getElementById('cc-map-body').innerHTML = buildCCMapRows(); return; }
+  }
   CC_MAP[site] = code;
   _ccMapEdits[site] = code;
-  // Persist to allData
   var row = allData.find(function(r){ return (r['Site Name']||'').trim() === site; });
   if (row) row['Cost Center'] = code;
-  // Persist to Supabase
-  if (__sbClient) {
-    __sbClient.from('sites').upsert({ site_name: site, cost_center: code, updated_at: new Date().toISOString() }, { onConflict: 'site_name' });
-  }
   toast('✓ Cost center saved for ' + site, 'ok');
   document.getElementById('cc-map-body').innerHTML = buildCCMapRows();
 }
 
 async function loadCCMapInAdmin() {
   if (!__sbClient) return;
-  var r = await __sbClient.from('sites').select('site_name,cost_center').not('cost_center','is',null);
+  var r = await __sbClient.from('site_field_overrides').select('site_name,field_value').eq('field_name','Cost Center');
   if (r.data) {
-    r.data.forEach(function(s){ if(s.cost_center){ CC_MAP[s.site_name]=s.cost_center; var row=allData.find(function(d){ return d['Site Name']===s.site_name; }); if(row) row['Cost Center']=s.cost_center; } });
+    r.data.forEach(function(s){ if(s.field_value){ CC_MAP[s.site_name]=s.field_value; var row=allData.find(function(d){ return d['Site Name']===s.site_name; }); if(row) row['Cost Center']=s.field_value; } });
     var el = document.getElementById('cc-map-body'); if(el) el.innerHTML = buildCCMapRows();
   }
 }
@@ -8360,6 +8362,7 @@ async function doAddNewProject() {
   var toDate = function(v) { if(!v) return null; var d=pd(v); return d?d.toISOString().split('T')[0]:null; };
   if (__sbClient) {
     var res = await __sbClient.from('sites').upsert({ site_name:name, bu:bu, zone:zone, owner:owner, vendor:vendor, planned_completion:toDate(planned), status:status, cost_center:cc||null, serial_no:allData.length, pct_completion:0, updated_at:new Date().toISOString() }, { onConflict:'site_name' });
+    if (cc) await saveSiteFieldToSupabase(name, 'Cost Center', '', cc);
     if (res.error) { npMsg('Created locally but Supabase error: '+(res.error.message||''), false); } else { npMsg('✅ Project "'+name+'" created!', true); }
   } else { npMsg('✅ Project "'+name+'" created locally (Supabase not connected).', true); }
   buildFilters(); renderKPIs(); applyFilters();
