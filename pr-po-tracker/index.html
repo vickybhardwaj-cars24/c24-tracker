@@ -1286,7 +1286,7 @@ function InvoicingPending({ rows, fyFilter, fyOptions, onFYChange }) {
 
 // ── Dashboard ─────────────────────────────────────────────────────────────
 
-function Dashboard({ data, approvalData, onApprovalDataChange, poRequestData, onPORequestDataChange, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast }) {
+function Dashboard({ data, approvalData, onApprovalDataChange, poRequestData, onPORequestDataChange, auth, onLogin, onLogout, onUploadDone, theme, onToggleTheme, toast, lastSynced, syncing, onSync }) {
   const urlCC = useMemo(()=>new URLSearchParams(window.location.search).get('costCenter')||'', []);
   const uploadRef = useRef();
   const approvalUploadRef = useRef();
@@ -1433,6 +1433,13 @@ function Dashboard({ data, approvalData, onApprovalDataChange, poRequestData, on
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs text-gray-400 hidden sm:block">{data.length.toLocaleString()} records</span>
+          <span className="text-xs text-gray-400 hidden md:block" title={lastSynced?new Date(lastSynced).toLocaleString('en-IN'):'Never synced'}>
+            {lastSynced?`Synced ${new Date(lastSynced).toLocaleTimeString('en-IN',{hour:'numeric',minute:'2-digit'})}`:'Not synced yet'}
+          </span>
+          <button onClick={onSync} disabled={syncing} title="Fetch latest data from Cloudflare"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border border-gray-200 dark:border-gray-700 text-gray-500 hover:text-[#4736FE] hover:border-[#4736FE] disabled:opacity-50 transition-colors">
+            <Ico n="refresh" size={12} cls={syncing?'spin':''}/> {syncing?'Syncing…':'Sync'}
+          </button>
           {/* Upload CSVs */}
           <input ref={uploadRef} type="file" accept=".csv" className="hidden" onChange={handleUpload}/>
           <input ref={approvalUploadRef} type="file" accept=".csv" className="hidden" onChange={handleApprovalUpload}/>
@@ -1612,41 +1619,54 @@ function App() {
   const [approvalData, setApprovalData] = useState([]);
   const [poRequestData, setPORequestData] = useState([]);
   const [loading, setLoading]         = useState(true);
+  const [syncing, setSyncing]         = useState(false);
+  const [lastSynced, setLastSynced]   = useState(()=>{ try{const v=localStorage.getItem('c24-last-synced'); return v?+v:null;}catch{return null;} });
   const [auth, setAuth]               = useState(null);
   const [loginOpen, setLoginOpen]     = useState(false);
   const [theme, setTheme]             = useState(()=>{ try{return localStorage.getItem('c24-theme')||'light';}catch{return'light';} });
   const { toasts, add: toast }        = useToast();
 
-  // Fetch main CSV + approval CSV from Cloudflare on mount
-  useEffect(() => {
-    if (location.protocol === 'file:') { setLoading(false); return; }
-    window.C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', { cache: 'no-store' })
+  // Fetch main CSV + PO Request CSV + approval CSV from Cloudflare (on mount, and on manual sync)
+  const syncFromCloudflare = useCallback((opts={}) => {
+    const { silent } = opts;
+    if (location.protocol === 'file:') { setLoading(false); return Promise.resolve(); }
+    setSyncing(true);
+    const p1 = window.C24Uploader.fetchText(WORKER_URL + TOOL_PATH + '.csv', { cache: 'no-store' })
       .then(text => {
         const rows = parseCSVText(text);
         if (rows) setData(rows);
-        else toast('No valid data in stored CSV', 'err');
+        else if (!silent) toast('No valid data in stored CSV', 'err');
       })
-      .catch(() => {})
-      .finally(() => setLoading(false));
+      .catch(() => {});
     // Load PO Request CSV
-    window.C24Uploader.fetchText(WORKER_URL + PORQ_PATH + '.csv', { cache: 'no-store', skeleton: false })
+    const p2 = window.C24Uploader.fetchText(WORKER_URL + PORQ_PATH + '.csv', { cache: 'no-store', skeleton: false })
       .then(text => {
         const rows = parsePORequestCSV(text);
         if (rows.length) setPORequestData(rows);
       })
       .catch(() => {});
     // Load approval CSV — skeleton:false avoids conflicting with the main fetch overlay
-    window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store', skeleton: false })
+    const p3 = window.C24Uploader.fetchText(WORKER_URL + APPROVAL_PATH + '.csv', { cache: 'no-store', skeleton: false })
       .then(text => {
         const rows = parseProcessflowsCSV(text);
         if (rows.length) setApprovalData(rows);
       })
       .catch(err => {
-        if (err && err.message && !err.message.includes('404')) {
+        if (!silent && err && err.message && !err.message.includes('404')) {
           toast('Approval CSV: ' + err.message, 'warn');
         }
       });
-  }, []);
+    return Promise.all([p1, p2, p3]).finally(() => {
+      setLoading(false);
+      setSyncing(false);
+      const now = Date.now();
+      setLastSynced(now);
+      try { localStorage.setItem('c24-last-synced', String(now)); } catch {}
+      if (!silent) toast('✓ Synced from Cloudflare', 'ok');
+    });
+  }, [toast]);
+
+  useEffect(() => { syncFromCloudflare({ silent: true }); }, [syncFromCloudflare]);
 
   function toggleTheme() {
     const next = theme==='dark'?'light':'dark';
@@ -1664,7 +1684,8 @@ function App() {
       {data
         ? <Dashboard data={data} approvalData={approvalData} onApprovalDataChange={setApprovalData} poRequestData={poRequestData} onPORequestDataChange={setPORequestData}
             auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
-            onUploadDone={setData} theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
+            onUploadDone={setData} theme={theme} onToggleTheme={toggleTheme} toast={toast}
+            lastSynced={lastSynced} syncing={syncing} onSync={()=>syncFromCloudflare()}/>
         : <EmptyScreen loading={loading} auth={auth} onLogin={()=>setLoginOpen(true)} onLogout={handleLogout}
             theme={theme} onToggleTheme={toggleTheme} toast={toast}/>
       }
