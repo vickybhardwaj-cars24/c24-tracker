@@ -223,8 +223,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.0 | Version-tracking discipline restored — doc brought back in sync with shipped `<title>` version; rule 5 hardened to require version bump + this table update on every change |
 | v5.1 | Fix raw `Date.toString()` display in UAT Warning cards (Critical/High/Exempted) — SAT/Planned dates now go through `fmtRaw()` instead of the raw field value |
 | v5.2 | Fix raw `Date.toString()` display in UAT/SAT delay mail bodies — SAT/PO/Kickoff/Work Start/Planned/Revised dates in `renderWarnings()`, `markNotifiedByIdx()`, `gmailDraft()`, `vendorDelayMail()`, `satDelayMail()` and `snagVendorMailUrl()` now go through `fmtRaw()` instead of the raw field value |
+| v5.3 | Fix Cost Center admin panel not persisting for missing sites — `saveCCRow()` was writing to the `sites.cost_center` column (unawaited, no error check) which nothing else in the app reads; switched it to `saveSiteFieldToSupabase()` writing `site_field_overrides` (field_name='Cost Center'), the same table `loadSupabaseSiteFields()` reads into `CC_MAP` on every page load. `loadCCMapInAdmin()` now reads from `site_field_overrides` too, and `doAddNewProject()` also persists its Cost Center field there |
 
 ---
 
-## Current Version: v5.2
+## Current Version: v5.3
 
