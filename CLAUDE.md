@@ -37,7 +37,7 @@ index.html (single file)
 2. **Never remove c24-uploader.js** — `<script src="/shared/c24-uploader.js">`  
 3. **Never remove Worker functions** — `loadFromOrigin`, `loadSnagFromOrigin`, `handleLiveCSV`, `handleLiveSnagCSV`, `WORKER_URL`, `TOOL_PATH`  
 4. **Never embed raw CSV or Snag data** — `CSV_DATA = []` and `SNAG_DATA = {}` must stay empty  
-5. **Always increment version** — every change gets a new version number in `<title>` and filename (`v3.46`, `v3.47`...)  
+5. **Always increment version — no exceptions** — every single commit/change, however small, bumps the version number in `<title>` (`projects-tracker/index.html`) AND updates the `## Version History Summary` table \+ `## Current Version` line below in this file, in the same commit. A code change without a version bump is an incomplete change — never leave the two out of sync.  
 6. **Always syntax-check JS** with `node --check` before saving  
 7. **Never use regex with DOTALL on large JS strings** — it corrupts functions. Use positional replacement or brace-depth traversal  
 8. **Never insert functions using `c.replace()` on full HTML** — always split `html_before + js + html_after` and reassemble
@@ -219,8 +219,11 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v3.44 | UAT target \= SAT+10, thresholds \>10d/\>7d, UAT Date Missing flag |
 | v3.45 | Empty row filter fix (57 sites not 65\) |
 | v3.46 | BD Pipeline Tracker tab — temp live parsing, timeline backtrack, team triggers |
+| v3.47–v4.98 | *(bridging range — versions shipped without this log being updated; see `git log --oneline` for the full commit-by-commit detail)* Major themes: full Supabase migration for persistence (site fields, revision history, procurement, HEM delays), PWA/service worker + offline shell, HEM Delay Tracker sub-tab, procurement delay mailer, toolbar filters rebuilt as pill-style multi-checkbox dropdowns, Tasks tab rewrites (latest-date/PM-grouped logic iterated many times), inline modal editing (status, revised date, owner, vendor rating) with role-based permissions, photo upload/compression + delete, Drive editor, Priority sites, Milestone Proximity Alerts, WoW progress |
+| v5.0 | Version-tracking discipline restored — doc brought back in sync with shipped `<title>` version; rule 5 hardened to require version bump + this table update on every change |
+| v5.1 | Fix raw `Date.toString()` display in UAT Warning cards (Critical/High/Exempted) — SAT/Planned dates now go through `fmtRaw()` instead of the raw field value |
 
 ---
 
-## Current Version: v3.46
+## Current Version: v5.1
 
