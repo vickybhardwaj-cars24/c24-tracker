@@ -7,4 +7,4 @@ binding = "BUCKET"
 bucket_name = "c24-data"
 
 [triggers]
-crons = ["0 9 */3 * *"]
+crons = ["0 9 */3 * *", "30 3 * * *"]

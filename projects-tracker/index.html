@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.6</title>
+<title>Cars24 Projects Tracker v5.7</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -701,9 +701,10 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 
 <div id="taskv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="pmsv" style="padding:16px 20px;overflow-y:auto;flex:1">
-  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div style="font-size:14px;font-weight:700">👤 PM Scorecard</div>
     <div style="font-size:11px;color:var(--muted)">Click a row to filter table by PM</div>
+    <button class="btn btn-o btn-sm" onclick="sendPmDigestsToSlack(this)" style="font-size:11px">📣 Send PM Updates to Slack</button>
   </div>
   <table class="pm-tbl"><thead><tr>
     <th>PM</th><th>Sites</th><th>WIP</th><th>SAT</th><th>UAT</th><th>Overdue</th><th>Stale</th><th>Avg%</th><th>📈 WoW Δ</th><th>Blkrs</th><th>⏱ OTD</th><th>🔒 UAT%</th><th>🔧 Snag</th><th>Health</th>
@@ -976,6 +977,97 @@ function workerFetchText(url, opts) {
       if (!r.ok) throw new Error('HTTP ' + r.status);
       return r.text();
     });
+}
+
+// Reconstructed from the removed SLACK_HANDLES map — maps a PM's first name
+// (the 'Owner' field) to their @cars24.com email so DMs can be resolved via
+// Slack's users.lookupByEmail. Kept in sync manually with the identical map
+// in worker.js; the two runtimes don't share a module.
+const PM_EMAIL_MAP = {
+  'Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.fasih.akhtar@cars24.com','Arun':'arun.varghese@cars24.com',
+  'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharrma@cars24.com','Gaurav':'gaurav.pandey@cars24.com',
+  'Harshit':'harshit.pandey@cars24.com','Indranil':'indranil.roy.chowdhury@cars24.com','Kamal':'kamal.saini@cars24.com',
+  'Karan':'karan.dhar.singh.bharti@cars24.com','Nitesh':'nitesh.kumar@cars24.com','Pallavi':'pallavi.priya@cars24.com',
+  'Pradeep':'pradeep.yadav@cars24.com','Rahul':'rahul.panwar@cars24.com','Rajat':'rajat.sharma@cars24.com',
+  'Raman':'raman.kumar@cars24.com','Riya':'riya.kumari@cars24.com','Sachin':'sachin.lohchab@cars24.com',
+  'Saurabh':'saurabh.girdhar@cars24.com','Shivam':'shivam.shukla@cars24.com','Shubhita':'shubhita.jain@cars24.com',
+  'Sumit':'sumit.kumar@cars24.com','Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com',
+  'Vicky':'vicky.bhardwaj@cars24.com','Vinod':'vinod.yadav@cars24.com',
+};
+
+// Posts a message via the Worker's Slack relay (the bot token itself never
+// reaches the browser). mode='dm' resolves `email` to a Slack user via
+// users.lookupByEmail server-side; mode='channel' posts to SLACK_CHANNEL_ID.
+function sendToSlack(mode, email, text, btn) {
+  var ah = workerAuthHeader();
+  if (!ah) { toast('Sign in first to send Slack messages', 'err'); return; }
+  var origLabel = btn ? btn.textContent : '';
+  if (btn) { btn.disabled = true; btn.textContent = '⟳'; }
+  fetch(WORKER_URL + 'slack/send', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': ah },
+    body: JSON.stringify({ mode: mode, email: email || undefined, text: text })
+  })
+  .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
+  .then(function(res) {
+    if (!res.ok || !res.j.success) { toast('Slack send failed: ' + (res.j.error || 'unknown error'), 'err'); return; }
+    toast(res.j.fellBackToChannel ? '📣 Sent to channel (no Slack account for that email)' : '📣 Sent to Slack', 'ok');
+  })
+  .catch(function(e) { toast('Slack send network error: ' + e.message, 'err'); })
+  .then(function() { if (btn) { btn.disabled = false; btn.textContent = origLabel; } });
+}
+
+// PM Scorecard "📣 Send PM Updates to Slack" button — DMs each PM their own
+// site-update digest and posts a combined roll-up to the team channel.
+function sendPmDigestsToSlack(btn){
+  var byPM={};
+  allData.forEach(function(r){
+    var site=(r['Site Name']||'').trim(); if(!site) return;
+    var owner=(r['Owner']||'').trim(); if(!owner) return;
+    (byPM[owner]=byPM[owner]||[]).push(r);
+  });
+  var owners=Object.keys(byPM);
+  if(!owners.length){ toast('No site data loaded','err'); return; }
+  var today=new Date();
+  var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+  var summaryLines=['*📋 PM Daily Digest — '+ds+'*',''];
+  var origLabel=btn?btn.textContent:''; if(btn){btn.disabled=true;btn.textContent='⟳ Sending…';}
+  var sends=[];
+  owners.forEach(function(owner){
+    var sites=byPM[owner];
+    var lines=['*Your Site Updates — '+ds+'*',''];
+    sites.forEach(function(r){
+      var stale=getStaleDays(r);
+      lines.push('*'+r['Site Name']+'* ('+(r['Status']||'')+((r['Percentage Completion']||'')?(' · '+r['Percentage Completion']):'')+')'+(stale>=5?' ⏸ '+stale+'d stale':''));
+    });
+    summaryLines.push('*'+owner+'* — '+sites.length+' site'+(sites.length>1?'s':''));
+    var first=owner.split(' ')[0];
+    var email=PM_EMAIL_MAP[first];
+    if(email){
+      sends.push(new Promise(function(resolve){
+        sendToSlack('dm', email, lines.join('\n'), null);
+        resolve();
+      }));
+    }
+  });
+  Promise.all(sends).then(function(){
+    sendToSlack('channel', null, summaryLines.join('\n'), null);
+    toast('📣 Sent digests to '+sends.length+' PM'+(sends.length!==1?'s':'')+' + channel summary', 'ok');
+  }).then(function(){ if(btn){btn.disabled=false;btn.textContent=origLabel;} });
+}
+
+// Tickets tab "📣 Slack" button — posts an open-ticket summary to the channel.
+function sendTicketSummaryToSlack(btn){
+  if(!TICKET_DATA.length){ toast('No ticket data loaded','err'); return; }
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return row[names[i]]||'';}return '';}
+  var total=TICKET_DATA.length;
+  var urgent=TICKET_DATA.filter(function(r){return col(r,['Priority']).toLowerCase()==='urgent';}).length;
+  var over30=TICKET_DATA.filter(function(r){return parseInt(col(r,['TAT','Open Since Days','Open Since'])||0)>30;}).length;
+  var unassigned=TICKET_DATA.filter(function(r){var a=col(r,['Assigned To']);return !a||a.toLowerCase()==='unassigned';}).length;
+  var today=new Date();
+  var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+  var text='*🎫 Ticket Summary — '+ds+'*\n\n📊 *'+total+' open* · 🚨 '+urgent+' urgent · ⏰ '+over30+' over 30d · ❓ '+unassigned+' unassigned';
+  sendToSlack('channel', null, text, btn);
 }
 
 function applyRoleBasedView() {
@@ -2395,7 +2487,7 @@ function renderSatUat(){
       +'<td style="padding:6px 10px;text-align:center">'+fmtRaw(u.r['SAT Date']||'')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600;color:#7c3aed">'+(revUAT!='--'?revUAT:'<span style="color:var(--muted);font-size:10px">None</span>')+'</td>'
-      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'</td>':'<td></td>')
+      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+'<button data-slack-kind="uat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button></td>':'<td></td>')
       +(u.gap>10?'<td style="padding:6px 10px;text-align:center"><span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;border:1px solid #fecaca">🚨 UAT Date Missing</span></td>':'<td></td>')
       +'</tr>';
   }
@@ -2518,7 +2610,7 @@ function renderSatUat(){
         +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+fmtRaw(u.r['Planned Completion'])+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+fmtRaw(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
-        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+'<button data-slack-kind="sat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button></td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>':'';
 
@@ -2582,6 +2674,7 @@ function renderSatUat(){
           +'<td style="padding:7px 10px;text-align:center">'
           +'<a href="'+handoverUrgencyMail(ps.r)+'" target="_blank" onclick="event.stopPropagation()" '
           +'style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;text-decoration:none;background:#f97316;color:#fff;white-space:nowrap">📨 Handover Email</a>'
+          +'<button data-slack-kind="handover" data-slack-site="'+esc(ps.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>'
           +'</td></tr>';
       }).join('')
       +'</tbody></table></div></div>';
@@ -3628,7 +3721,8 @@ function renderProcureSection(r,idx){
     +'<input type="file" id="'+uploadId+'" accept=".csv" style="display:none" onchange="handleProcureUpload(event,\''+siteNameEsc+'\','+idx+')">';
   var delayMailBtn=problemItems.length
     ?('<a href="'+procureDelayMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="procure_delay" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Delay Notice ('+problemItems.length+')</a>'
-      +emailLogBadge(siteName,'procure_delay'))
+      +emailLogBadge(siteName,'procure_delay')
+      +'<button data-slack-kind="procure_delay" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">📣</button>')
     :'';
   var statsHtml='';
   if(total){
@@ -4886,7 +4980,7 @@ function renderSnagTab(){
               '<td style="padding:7px 10px;text-align:center"><span style="font-weight:700;color:'+pc+'">'+s.pctClosed+'%</span></td>'+
               '<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+(s.avgDays!=null?s.avgDays+'d':'—')+'</td>'+
               '<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+(s.topOwner?esc(s.topOwner[0])+' ('+s.topOwner[1]+')':'—')+'</td>'+
-              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a>':'—')+'</td>'+
+              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a><button data-slack-kind="snag" data-slack-site="'+esc(s.site)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'—')+'</td>'+
             '</tr>';
           }).join('')+
         '</tbody>'+
@@ -4916,6 +5010,7 @@ function showSnagDetail(site){
     '<div class="reg-section-title" style="margin-bottom:0">🔧 '+esc(site)+' — Full Snag List</div>'+
     '<div style="display:flex;gap:6px;align-items:center">'+
     '<a href="'+snagVendorMailUrl(site)+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#dc2626;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Snag Notice to Vendor</a>'+
+    '<button data-slack-kind="snag" data-slack-site="'+esc(site)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:6px 10px;border-radius:6px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">📣 Slack</button>'+
     '<button class="btn btn-o" onclick="document.getElementById(\'snag-detail-panel\').style.display=\'none\'" style="font-size:11px">✕ Close</button>'+
     '</div>'+
     '</div>'+
@@ -4979,6 +5074,20 @@ function renderDelayTab(){
     return {key:cat.key,prefixes:cat.prefixes,color:cat.color,bg:cat.bg,icon:cat.icon,sites:blocked};
   });
 
+  // Stashed for the "Post Blockers to Slack" button below — read at click
+  // time via window.__slackBlockersText rather than embedded in HTML.
+  (function(){
+    var ds=(new Date()).getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(new Date()).getMonth()];
+    var lines=['*🚦 Cross-Functional Blockers — '+ds+'*',''];
+    catData.forEach(function(cat){
+      if(!cat.sites.length) return;
+      lines.push(cat.icon+' *'+cat.key+'* — '+cat.sites.length+' site'+(cat.sites.length>1?'s':''));
+      cat.sites.forEach(function(r){ lines.push('  • '+(r['Site Name']||'')); });
+    });
+    if(lines.length<=2) lines.push('✅ No active cross-functional blockers today.');
+    window.__slackBlockersText=lines.join('\n');
+  })();
+
   var ZONES=['North','South','East','West'];
   var zClr={North:'#2563eb',South:'#16a34a',East:'#d97706',West:'#7c3aed'};
   var zoneDelay=ZONES.map(function(z){
@@ -5014,7 +5123,10 @@ function renderDelayTab(){
   wrap.style.cssText='padding:16px 20px';
 
   wrap.innerHTML=
-    '<div class="reg-section-title">⏳ Delay Overview</div>'+
+    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'+
+    '<div class="reg-section-title" style="margin-bottom:0">⏳ Delay Overview</div>'+
+    '<button class="btn btn-o btn-sm" onclick="sendToSlack(\'channel\',null,window.__slackBlockersText,this)" style="font-size:11px">🚦 Post Blockers to Slack</button>'+
+    '</div>'+
     '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:20px">'+
     snagKpi(overdueSites.length,'Overdue Sites','#dc2626')+
     snagKpi(catData.reduce(function(a,c){return a+c.sites.length;},0),'Dependency Blocked','#d97706')+
@@ -5609,6 +5721,7 @@ function renderPendingDocsTracker(){
       +'<td style="padding:7px 10px;text-align:center">'+chip(hasProcure,'Procurement')+'</td>'
       +'<td style="padding:7px 10px;text-align:center">'
       +'<a href="'+pendingDocReminderMail(r,missing)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="'+esc(elogType)+'" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Remind</a>'
+      +'<button data-slack-kind="pending_docs" data-slack-site="'+esc(siteName)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 7px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>'
       +emailLogBadge(siteName,elogType)
       +'</td>'
       +'</tr>';
@@ -6507,6 +6620,7 @@ function renderTicketTab(){
   html+=dd('Site:',siteOpts,fSite,'Site');
   html+=dd('Assigned:',assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
+  html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
 
@@ -6825,6 +6939,65 @@ async function submitMaterial(idx) {
   toast('✓ Material logged for approval', 'ok');
   document.getElementById('add-mat-form-'+idx).style.display = 'none';
   renderMaterialApprovals(idx);
+}
+
+// ═══ SLACK DELAY-ALERT TEXT BUILDER ══════════════════════════════
+// Recomputes a short Slack-friendly message purely from siteName + global
+// state (allData/PROCURE_DATA/SCHED_DATA/LL_SCOPE_DATA/SNAG_DATA) so the
+// button markup only ever needs to carry a site name + kind — no freeform
+// text embedded in HTML attributes to escape.
+function buildSlackDelayText(kind, siteName){
+  var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; }) || {};
+  var owner = r['Owner'] || 'PM';
+  if (kind === 'uat_delay') {
+    var satD = pd(r['SAT Date']);
+    var uatTgt = satD ? new Date(satD.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
+    var now = new Date(); now.setHours(0,0,0,0);
+    var od = satD ? Math.round((now-new Date(satD.getTime()+15*86400000))/86400000) : 0;
+    return '⚠️ *UAT Delay* — *'+siteName+'* is '+od+'d overdue on UAT (target '+uatTgt+'). Owner: '+owner;
+  }
+  if (kind === 'sat_delay') {
+    var planD = r['Planned Completion']?fmtRaw(r['Planned Completion']):'--';
+    var revD = r['Revised Completion']?fmtRaw(r['Revised Completion']):'--';
+    var finalDate = revD!=='--'?revD:planD;
+    return '⚠️ *SAT Delay* — *'+siteName+'* final SAT date: '+finalDate+'. Owner: '+owner;
+  }
+  if (kind === 'handover') {
+    var satDone = !!(r['SAT Date']||'').trim();
+    var cd = committedDate(r);
+    var cdStr = cd?cd.toLocaleDateString('en-IN',{day:'numeric',month:'short'}):'TBD';
+    var uatD = pd(r['SAT Date']);
+    var uatTarget = uatD ? new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'TBD';
+    var deadline = satDone ? uatTarget : cdStr;
+    return '🔴 *Handover Urgency* — *'+siteName+'* '+(satDone?'UAT':'SAT')+' deadline: '+deadline+'. Owner: '+owner;
+  }
+  if (kind === 'procure_delay') {
+    var items = PROCURE_DATA[siteName]||[];
+    var today = new Date(); today.setHours(0,0,0,0);
+    var problemItems = items.filter(function(it){
+      if(it.delivered) return false;
+      if(it.partiallyDelivered) return true;
+      if(it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) return true;}
+      return false;
+    });
+    return '📦 *Procurement Delay* — *'+siteName+'* has '+problemItems.length+' delayed item'+(problemItems.length!==1?'s':'')+'. Owner: '+owner;
+  }
+  if (kind === 'pending_docs') {
+    var missing=[];
+    if(!(SCHED_DATA[siteName]&&SCHED_DATA[siteName].length)) missing.push('Schedule');
+    if(!(LL_SCOPE_DATA[siteName]&&LL_SCOPE_DATA[siteName].length)) missing.push('LL Scope');
+    if(!(PROCURE_DATA[siteName]&&PROCURE_DATA[siteName].length)) missing.push('Procurement Plan');
+    return '📋 *Pending Docs* — *'+siteName+'* needs: '+(missing.join(', ')||'—')+'. Owner: '+owner;
+  }
+  if (kind === 'snag') {
+    var rows = SNAG_DATA[siteName]||[];
+    var open = rows.filter(function(rr){
+      var s=(rr.status||'').toLowerCase();
+      return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';
+    });
+    return '🔧 *Snag Closure* — *'+siteName+'* has '+open.length+' open snag'+(open.length!==1?'s':'')+' pending before UAT. Owner: '+owner;
+  }
+  return siteName;
 }
 
 // ═══ VENDOR DELAY MAIL ═══════════════════════════════════════════
@@ -8667,6 +8840,23 @@ window.addEventListener('load', function() { if (!__sbClient) initSupabase(); })
   var el = document.getElementById('app-ver');
   if (el) el.textContent = m ? 'v' + m[1] : '';
 })();
+
+// Delegated click handler for every "📣 Slack" button (renderSatUat,
+// renderProcureSection, renderSnagTab, renderPendingDocsTracker, etc.) — a
+// single binding here covers buttons rendered anywhere (modals, tabs, detail
+// panels) without needing a re-bind call after each individual render.
+document.addEventListener('click', function(e){
+  var btn = e.target.closest && e.target.closest('button[data-slack-kind]');
+  if (!btn) return;
+  e.stopPropagation();
+  var kind = btn.dataset.slackKind;
+  var siteName = btn.dataset.slackSite;
+  var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; });
+  var owner = r ? (r['Owner']||'').trim().split(' ')[0] : '';
+  var email = PM_EMAIL_MAP[owner];
+  var text = buildSlackDelayText(kind, siteName);
+  sendToSlack(email ? 'dm' : 'channel', email, text, btn);
+});
 
 // ── PWA service worker registration ──────────────────────────────
 if ('serviceWorker' in navigator) {

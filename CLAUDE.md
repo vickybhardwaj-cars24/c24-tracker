@@ -143,6 +143,18 @@ All Gmail drafts:
 
 ---
 
+## Slack Integration
+
+Real Slack posting (not the deleted copy-paste "Slack" tab from v5.6) — the bot token never touches the browser. All sends go through the Worker.
+
+- **Frontend → Worker:** `sendToSlack(mode, email, text, btn)` in `index.html` POSTs to `WORKER_URL + 'slack/send'` with the same auth header used for uploads. `mode:'channel'` posts to `SLACK_CHANNEL_ID`; `mode:'dm'` resolves `email` via Slack's `users.lookupByEmail` server-side.
+- **Worker → Slack:** `POST /slack/send` in `worker.js`, gated by `checkAnyAuth`. Required env (Cloudflare dashboard → Worker → Settings → Variables and Secrets, never in `wrangler.toml`): `SLACK_BOT_TOKEN` (xoxb-…, needs Bot Token Scopes `chat:write`, `users:read`, `users:read.email`), `SLACK_CHANNEL_ID`, `SLACK_AUTOMATION_ENABLED` (set to `1` to arm the daily cron).
+- **`PM_EMAIL_MAP`** — a 26-name map from PM first name (the `Owner` field) to `@cars24.com` email, used to resolve DMs. Exists **twice**, once in `index.html` (manual buttons) and once in `worker.js` (automatic cron) — the two runtimes share no module, so edits to this map must be applied in both files.
+- **Manual buttons** (`data-slack-kind` + `data-slack-site` attributes, one delegated `click` listener bound once near the end of `index.html`, no per-render rebind needed): next to every existing Gmail-draft button (`vendorDelayMail`, `satDelayMail`, `handoverUrgencyMail`, `procureDelayMail`, `snagVendorMailUrl` ×2, `pendingDocReminderMail`) via `buildSlackDelayText(kind, siteName)`; plus standalone buttons for cross-functional blockers (Insights → Delay Analysis), PM digests (`sendPmDigestsToSlack()` in PM Scorecard), and ticket summary (`sendTicketSummaryToSlack()` in Tickets tab).
+- **Automatic cron** — `worker.js`'s `scheduled()` handler, second cron entry in `wrangler.toml` (`30 3 * * *` = 09:00 IST), reads `projects-tracker.csv`/`tickets.csv` directly from R2 (gunzipped via `DecompressionStream('gzip')`) and posts the same 4 categories. No-ops unless `SLACK_AUTOMATION_ENABLED=1`. Uses a small ported subset of business logic (`pdW`, `parseCSVRows`, `extractBlockersW`, `getStaleDaysW`, `committedDateW`, thresholds) — **keep these in sync with the real implementations in `index.html` and with the "Business Logic — Critical" section above**; this is the one place logic is intentionally duplicated in this codebase.
+
+---
+
 ## Known Pending Bugs (as of v3.46)
 
 | \# | Area | Issue |
@@ -218,8 +230,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.4 | Fix UAT Warning count/list mismatch — `getUatWarnings()` flags sites at `gap>=15` days since SAT (matching `UAT_WARN_DAYS`), but `renderWarnings()`'s `high` bucket only matched `gap>15`, so a site at exactly 15 days was counted in the header badge/active total but never rendered in the Critical or High section. `high` bucket now uses `gap>=15&&gap<=30` to match the inclusion threshold |
 | v5.5 | Fix wrong tab highlighted when jumping to UAT Warnings — the `warn-badge` (header) and `__warn__` KPI tile both used stale `querySelectorAll('.vtab')`/`.inv-tab` indices (3/4 and 3) computed without accounting for the first button in each row carrying an extra `active` class (`class="vtab active"` / `class="inv-tab active"`), which shifted every subsequent index. Corrected to `.vtab[2]` (Insights) and `.inv-tab[6]` (UAT Warnings) — the Insights sub-tab bar reads `ov,kpis,vr,reg,snag,delay,warn,hem`, and `.inv-tab[3]` was landing on `reg` (Regional), matching the reported "highlights Regional" bug |
 | v5.6 | Removed Slack option entirely — `renderSlackTab()` and its Cross-Functional/PM Update/Tickets sub-tabs, the `slackv` vtab button/div, `SLACK_HANDLES`/`slackHandle()`, `copyTasksForSlack()` (Tasks tab), `generateTicketSlack()`/`buildTicketSlackLines()` (Tickets tab), `copyToClipboard()`, and the `#slack-modal` markup/CSS all removed |
+| v5.7 | Real Slack API integration (replacing the copy-paste feature removed in v5.6) — new Worker `POST /slack/send` relay (`slackApi`/`resolveSlackUserId`/`postSlackMessage` in `worker.js`, bot token never reaches the browser) plus `sendToSlack()` in `index.html`; manual "📣" buttons next to every delay-mailer button, PM Scorecard, Tickets tab, and Insights → Delay Analysis; automatic daily digest via a second Worker cron (`30 3 * * *`, gated on `SLACK_AUTOMATION_ENABLED`) that reads `projects-tracker.csv`/`tickets.csv` straight from R2. See "Slack Integration" section above |
 
 ---
 
-## Current Version: v5.6
+## Current Version: v5.7
 
