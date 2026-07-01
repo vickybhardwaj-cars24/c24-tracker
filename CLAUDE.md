@@ -225,8 +225,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.2 | Fix raw `Date.toString()` display in UAT/SAT delay mail bodies — SAT/PO/Kickoff/Work Start/Planned/Revised dates in `renderWarnings()`, `markNotifiedByIdx()`, `gmailDraft()`, `vendorDelayMail()`, `satDelayMail()` and `snagVendorMailUrl()` now go through `fmtRaw()` instead of the raw field value |
 | v5.3 | Fix Cost Center admin panel not persisting for missing sites — `saveCCRow()` was writing to the `sites.cost_center` column (unawaited, no error check) which nothing else in the app reads; switched it to `saveSiteFieldToSupabase()` writing `site_field_overrides` (field_name='Cost Center'), the same table `loadSupabaseSiteFields()` reads into `CC_MAP` on every page load. `loadCCMapInAdmin()` now reads from `site_field_overrides` too, and `doAddNewProject()` also persists its Cost Center field there |
 | v5.4 | Fix UAT Warning count/list mismatch — `getUatWarnings()` flags sites at `gap>=15` days since SAT (matching `UAT_WARN_DAYS`), but `renderWarnings()`'s `high` bucket only matched `gap>15`, so a site at exactly 15 days was counted in the header badge/active total but never rendered in the Critical or High section. `high` bucket now uses `gap>=15&&gap<=30` to match the inclusion threshold |
+| v5.5 | Fix wrong tab highlighted when jumping to UAT Warnings — the `warn-badge` (header) and `__warn__` KPI tile both used stale `querySelectorAll('.vtab')`/`.inv-tab` indices (3/4 and 3) computed without accounting for the first button in each row carrying an extra `active` class (`class="vtab active"` / `class="inv-tab active"`), which shifted every subsequent index. Corrected to `.vtab[2]` (Insights) and `.inv-tab[6]` (UAT Warnings) — the Insights sub-tab bar reads `ov,kpis,vr,reg,snag,delay,warn,hem`, and `.inv-tab[3]` was landing on `reg` (Regional), matching the reported "highlights Regional" bug |
 
 ---
 
-## Current Version: v5.4
+## Current Version: v5.5
 
