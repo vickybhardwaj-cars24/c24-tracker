@@ -222,8 +222,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v3.47–v4.98 | *(bridging range — versions shipped without this log being updated; see `git log --oneline` for the full commit-by-commit detail)* Major themes: full Supabase migration for persistence (site fields, revision history, procurement, HEM delays), PWA/service worker + offline shell, HEM Delay Tracker sub-tab, procurement delay mailer, toolbar filters rebuilt as pill-style multi-checkbox dropdowns, Tasks tab rewrites (latest-date/PM-grouped logic iterated many times), inline modal editing (status, revised date, owner, vendor rating) with role-based permissions, photo upload/compression + delete, Drive editor, Priority sites, Milestone Proximity Alerts, WoW progress |
 | v5.0 | Version-tracking discipline restored — doc brought back in sync with shipped `<title>` version; rule 5 hardened to require version bump + this table update on every change |
 | v5.1 | Fix raw `Date.toString()` display in UAT Warning cards (Critical/High/Exempted) — SAT/Planned dates now go through `fmtRaw()` instead of the raw field value |
+| v5.2 | Fix raw `Date.toString()` display in UAT/SAT delay mail bodies — SAT/PO/Kickoff/Work Start/Planned/Revised dates in `renderWarnings()`, `markNotifiedByIdx()`, `gmailDraft()`, `vendorDelayMail()`, `satDelayMail()` and `snagVendorMailUrl()` now go through `fmtRaw()` instead of the raw field value |
 
 ---
 
-## Current Version: v5.1
+## Current Version: v5.2
 
