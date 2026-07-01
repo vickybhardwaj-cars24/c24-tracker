@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v4.97</title>
+<title>Cars24 Projects Tracker v4.98</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -935,7 +935,7 @@ function onSbLoginSuccess() {
           .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e2){ console.warn('loadUatExemptions failed:', e2); }); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e3){ console.warn('loadSupabaseUpdates failed:', e3); }); })
           .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){ console.warn('loadHemDelaysFromSupabase failed:', e4); }); })
-          .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); } })
+          .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); migrateEmailLogToSupabase(null,true); } })
           .then(function(){ buildFilters(); renderKPIs(); applyFilters(); try{var _sk='c24_pct_snap_'+new Date().toISOString().slice(0,10);var _sv={};allData.forEach(function(r){if(r['Site Name'])_sv[r['Site Name']]=parseInt((r['Percentage Completion']||'0').replace('%',''))||0;});localStorage.setItem(_sk,JSON.stringify(_sv));}catch(_){} });
       } else {
         toast('Worker returned empty data — upload CSV first', 'err');
@@ -4427,7 +4427,7 @@ function handleCSV(event){
         .catch(function(e2){console.warn('loadSupabaseSiteFields failed:',e2);})
         .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e3){console.warn('loadUatExemptions failed:',e3);}); })
         .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){console.warn('loadHemDelaysFromSupabase failed:',e4);}); })
-        .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); } })
+        .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); migrateEmailLogToSupabase(null,true); } })
         .then(function(){buildFilters();renderKPIs();applyFilters();});
     }catch(err){console.error(err);toast('Parse error: '+err.message,'err');}
   };
@@ -7504,7 +7504,69 @@ function loadEmailLog(){
       _emailLogMappingsCache = (data && typeof data === 'object' && !Array.isArray(data)) ? data : {};
       EMAIL_LOG = _emailLogMappingsCache[EMAIL_LOG_KEY] || {};
     })
-    .catch(function(e){ console.warn('loadEmailLog failed:', e); EMAIL_LOG = {}; });
+    .catch(function(e){ console.warn('loadEmailLog failed:', e); EMAIL_LOG = {}; })
+    .then(function(){ return loadEmailLogFromSupabase().catch(function(e2){ console.warn('loadEmailLogFromSupabase failed:', e2); }); });
+}
+
+// The R2 blob above is a whole-object read-modify-write: two people marking
+// different sites' emails as sent around the same time silently clobber each
+// other's entries, because each browser only holds its own in-memory copy of
+// the entire object. email_log in Supabase is one row per (site_name,
+// email_type), upserted, so concurrent writes from different people never
+// collide. Rows here overlay/replace whatever the R2 blob had for that key.
+async function loadEmailLogFromSupabase(){
+  if (!__sbClient) return;
+  var r;
+  try { r = await __sbClient.from('email_log').select('site_name,email_type,sent_at,sent_count,last_sent_date,subject'); }
+  catch(e) { return; }
+  if (!r || r.error || !r.data) return;
+  r.data.forEach(function(row){
+    var sn = (row.site_name||'').trim(); if (!sn) return;
+    EMAIL_LOG[sn] = EMAIL_LOG[sn] || {};
+    EMAIL_LOG[sn][row.email_type] = {
+      sentAt: row.sent_at,
+      count: row.sent_count || 1,
+      lastSentDate: row.last_sent_date || '',
+      subject: row.subject || ''
+    };
+  });
+}
+
+async function saveEmailLogToSupabase(siteName, emailType, sentAtIso, count, lastSentDate, subject){
+  if (!__sbClient || !__sbUser) return;
+  var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
+  try {
+    await __sbClient.from('email_log').upsert(
+      { site_name: siteName, email_type: emailType, sent_at: sentAtIso, sent_count: count, last_sent_date: lastSentDate, subject: subject||'', sent_by: byName },
+      { onConflict: 'site_name,email_type' }
+    );
+  } catch(e) { console.warn('saveEmailLogToSupabase failed:', e); }
+}
+
+// Push any email-sent entries that only ever made it into the R2 blob (e.g.
+// logged before this device had a real Supabase sign-in) up as proper rows.
+async function migrateEmailLogToSupabase(btn,silent){
+  if(!__sbClient||!__sbUser){if(!silent)toast('Sign in first to migrate','err');return;}
+  var byName=(__sbProfile&&__sbProfile.full_name)||__sbUser.email;
+  var rows=[];
+  Object.keys(EMAIL_LOG).forEach(function(sn){
+    Object.keys(EMAIL_LOG[sn]).forEach(function(t){
+      var e=EMAIL_LOG[sn][t];
+      rows.push({site_name:sn, email_type:t, sent_at:e.sentAt||new Date().toISOString(), sent_count:e.count||1, last_sent_date:e.lastSentDate||'', subject:e.subject||'', sent_by:byName});
+    });
+  });
+  if(!rows.length){if(!silent)toast('No email log entries to migrate','ok');return;}
+  if(btn){btn.disabled=true;btn.textContent='Migrating…';}
+  var ok=0,fail=0;
+  for(var i=0;i<rows.length;i++){
+    try{
+      var r=await __sbClient.from('email_log').upsert(rows[i],{onConflict:'site_name,email_type'});
+      if(r.error) throw r.error;
+      ok++;
+    }catch(e){fail++;}
+  }
+  if(btn){btn.disabled=false;btn.textContent='📧 Migrate Email Log';}
+  if(!silent) toast('Migrated '+ok+' entr'+(ok!==1?'ies':'y')+' to Supabase'+(fail?' ('+fail+' failed)':''),'ok');
 }
 
 function saveEmailLog(){
@@ -7527,17 +7589,18 @@ function saveEmailLog(){
 function markEmailSent(siteName, emailType, subject){
   var entry = EMAIL_LOG[siteName] || {};
   var prev = entry[emailType] || {};
-  entry[emailType] = {
-    sentAt: new Date().toISOString(),
-    count: (prev.count || 0) + 1,
-    lastSentDate: new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'}),
-    subject: subject || prev.subject || ''
-  };
+  var sentAtIso = new Date().toISOString();
+  var count = (prev.count || 0) + 1;
+  var lastSentDate = new Date().toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
+  var subj = subject || prev.subject || '';
+  entry[emailType] = { sentAt: sentAtIso, count: count, lastSentDate: lastSentDate, subject: subj };
   EMAIL_LOG[siteName] = entry;
-  saveEmailLog();
+  saveEmailLog(); // R2 mirror, kept for continuity — Supabase below is the race-free source of truth
+  saveEmailLogToSupabase(siteName, emailType, sentAtIso, count, lastSentDate, subj);
   // Re-render whichever tab is active
   var suv = document.getElementById('suv');
   if (suv && suv.classList.contains('show')) renderSatUat();
+  toast('📧 Email logged'+syncTag(), syncType());
 }
 
 // Attach tracking to all email links after render — no URL embedded in onclick
@@ -7567,6 +7630,10 @@ function clearEmailLog(btn, siteName, emailType){
       if (!Object.keys(EMAIL_LOG[siteName]).length) delete EMAIL_LOG[siteName];
     }
     saveEmailLog();
+    if (__sbClient && __sbUser) {
+      __sbClient.from('email_log').delete().eq('site_name', siteName).eq('email_type', emailType)
+        .then(function(r){ if (r.error) console.warn('email_log delete failed:', r.error); });
+    }
     // Walk up to find the badge span and remove it
     var el = btn;
     while (el && el.tagName !== 'SPAN') el = el.parentElement;
@@ -7623,7 +7690,7 @@ initSupabase();
           .then(function(){ return loadUatExemptionsFromSupabase().catch(function(e2){ console.warn('loadUatExemptions failed:', e2); }); })
           .then(function(){ return loadSupabaseUpdates().catch(function(e3){ console.warn('loadSupabaseUpdates failed:', e3); }); })
           .then(function(){ return loadHemDelaysFromSupabase().catch(function(e4){ console.warn('loadHemDelaysFromSupabase failed:', e4); }); })
-          .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); } })
+          .then(function(){ if(__sbClient&&__sbUser){ migrateHemDelaysToSupabase(null,true); migrateUatExemptionsToSupabase(null,true); migrateEmailLogToSupabase(null,true); } })
           .then(function(){
             buildFilters();
             renderKPIs();
@@ -7998,6 +8065,15 @@ function _renderAdminTabInner(el) {
     + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Run once to push any UAT warning exemptions saved locally in this browser to Supabase so they persist across all devices and survive future deploys.</div>'
     + '</div>'
     + '<button onclick="migrateUatExemptionsToSupabase(this)" style="padding:8px 16px;background:#7c3aed;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">🔕 Migrate UAT Exemptions</button>'
+    + '</div>'
+    + '</div>'
+    + '<div style="background:var(--white);border:1px solid #bae6fd;border-radius:10px;padding:16px;margin-bottom:16px">'
+    + '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px">'
+    + '<div>'
+    + '<div style="font-size:13px;font-weight:700">📧 Migrate Email Log → Supabase</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px">Pushes "Sent" badges from this device\'s local copy into Supabase as individual rows, so concurrent logging from different PMs never overwrites each other.</div>'
+    + '</div>'
+    + '<button onclick="migrateEmailLogToSupabase(this)" style="padding:8px 16px;background:#0369a1;color:#fff;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap;font-family:Inter,sans-serif">📧 Migrate Email Log</button>'
     + '</div>'
     + '</div>'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">'

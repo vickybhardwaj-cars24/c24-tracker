@@ -62,6 +62,23 @@ Exemptions** for any device that hasn't logged in in a while.
 
 ---
 
+## Step 1c — Run Migration v10 (2 min) — REQUIRED for email-sent tracking to be shared
+
+1. Go to https://supabase.com → your project (`fnvylizldarvqejsfkbn`) → **SQL Editor** → **New Query**
+2. Open `supabase-migration-v10.sql` from this repo and paste the entire contents
+3. Click **Run**
+
+**What this fixes:** the "📧 Sent ✓" badges on SAT/UAT communication cards,
+HEM + Design emails, vendor delay notices, and procurement reminders were
+stored as a single whole-file blob in Cloudflare R2 — every save overwrote
+the entire file, so two people logging different sites' emails around the
+same time could silently erase each other's entries. This migration adds a
+proper `email_log` table (one row per site + email type) so concurrent
+logging never collides. Admin → **Migrate Email Log** pushes any history
+still only sitting in the old R2 blob into the new table.
+
+---
+
 ## Step 2 — Disable Email Confirmation (1 min)
 
 1. Supabase → **Authentication** → **Providers** → **Email**
