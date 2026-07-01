@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.3</title>
+<title>Cars24 Projects Tracker v5.4</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2665,7 +2665,7 @@ function renderWarnings(container){
   const activeWarns=warns.filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]);
   const exemptedWarns=warns.filter(w=>UAT_EXEMPTIONS[(w['Site Name']||'').trim()]);
   const critical=activeWarns.filter(w=>w._gap>30);
-  const high=activeWarns.filter(w=>w._gap>15&&w._gap<=30);
+  const high=activeWarns.filter(w=>w._gap>=15&&w._gap<=30);
   function wCard(r){
     const idx=allData.findIndex(x=>x['Site Name']===r['Site Name']);
     const isCrit=r._gap>30;
