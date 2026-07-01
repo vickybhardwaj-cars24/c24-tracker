@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.5</title>
+<title>Cars24 Projects Tracker v5.6</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -128,7 +128,7 @@ td{padding:7px 12px;vertical-align:middle}
 .r3{background:#fef9c3;color:#ca8a04}.r4{background:#dcfce7;color:#16a34a}
 .r5{background:#f0fdf4;color:#15803d}.r0{background:var(--surface);color:var(--muted)}
 #sv{display:none;padding:14px 20px}#sv.show{display:block}
-#suv,#taskv,#pmsv,#tickv,#slackv,#attv,#adminv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#slackv.show,#attv.show,#adminv.show{display:block}
+#suv,#taskv,#pmsv,#tickv,#attv,#adminv{display:none;padding:14px 20px}#suv.show,#taskv.show,#pmsv.show,#tickv.show,#attv.show,#adminv.show{display:block}
 #calv{display:none;padding:14px 20px}#calv.show{display:block}
 #inv{display:none}#inv.show{display:block}
 #warnv{display:none;padding:14px 20px}#warnv.show{display:block}
@@ -323,7 +323,7 @@ td{padding:7px 12px;vertical-align:middle}
   .warn-card-top{flex-direction:column;gap:6px}
   .warn-days{font-size:18px}
   .warn-meta{gap:8px}
-  #suv,#taskv,#pmsv,#tickv,#slackv,#attv{padding:10px 12px}
+  #suv,#taskv,#pmsv,#tickv,#attv{padding:10px 12px}
   #taskv{overflow-y:visible;flex:none}
   .mbody{padding:12px 14px}
   .date-badge,.warn-badge{font-size:11px;padding:4px 8px}
@@ -478,10 +478,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 .pm-tbl th{padding:7px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;color:var(--muted);border-bottom:2px solid var(--border);white-space:nowrap}
 .drive-btn{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:5px;font-size:11px;font-weight:500;background:#e8f0fe;color:#1a73e8;border:1px solid #c5d8fd;text-decoration:none;white-space:nowrap}
 .drive-btn:hover{background:#d2e3fc}
-#slack-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;align-items:center;justify-content:center}
-.slack-box{background:#fff;border-radius:12px;padding:20px;width:620px;max-width:95vw;max-height:85vh;display:flex;flex-direction:column;gap:12px;box-shadow:0 20px 40px rgba(0,0,0,.2)}
-.slack-box h3{font-size:14px;font-weight:700;margin:0}
-#slack-preview{flex:1;overflow-y:auto;font-family:monospace;font-size:11px;background:#1e1e2e;color:#cdd6f4;padding:12px;border-radius:8px;white-space:pre-wrap;min-height:200px;max-height:50vh}
 </style>
 <script src="/shared/c24-uploader.js"></script>
 </head>
@@ -670,7 +666,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" onclick="setView('inv',this)">Insights</button>
     <button class="vtab" onclick="setView('taskv',this)">📋 Tasks</button>
     <button class="vtab" onclick="setView('pmsv',this)">👤 PM Scorecard</button>
-    <button class="vtab" onclick="setView('slackv',this)">📣 Slack</button>
     <button class="vtab" onclick="setView('tickv',this)">🎫 Tickets</button>
     <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
     <button class="vtab" id="tab-adminv" data-admin-only="true" onclick="setView('adminv',this)">⚙ Admin</button>
@@ -717,7 +712,6 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
 <div id="tickv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="attv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 <div id="adminv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
-<div id="slackv" style="padding:16px 20px;overflow-y:auto;flex:1"></div>
 </div>
 
 <div class="overlay" id="overlay" onclick="onOvClick(event)">
@@ -1915,12 +1909,11 @@ function setView(v,btn){
   if(v==='inv') setTimeout(function(){renderInsights();},0);
   if(v==='pmsv') renderPMScorecard();
   if(v==='tickv') renderTicketTab();
-  if(v==='slackv') renderSlackTab();
 
   if(v==='attv') renderAttendanceTab();
   if(v==='adminv') renderAdminTab();
   if(v==='suv') setTimeout(function(){renderSatUat();},0);
-  ['tv','suv','inv','taskv','pmsv','tickv','slackv','attv','adminv'].forEach(id=>{
+  ['tv','suv','inv','taskv','pmsv','tickv','attv','adminv'].forEach(id=>{
     const el=document.getElementById(id);
     if(!el) return;
     if(id==='tv'){el.classList.toggle('hide',v!=='tv');}
@@ -4422,7 +4415,6 @@ function handleCSV(event){
       allData=parsed.filter(function(r){return (r['Site Name']||'').trim();});filteredData=[...allData];
       applyHOTPUpdates();
       stampCSV('hotp');
-      var sv=document.getElementById('slackv');if(sv&&sv.style.display!=='none') renderSlackTab();
       toast('✓ Loaded '+allData.length+' sites','ok');
       loadSupabaseSiteFields()
         .catch(function(e2){console.warn('loadSupabaseSiteFields failed:',e2);})
@@ -5682,7 +5674,6 @@ function renderTaskTab(){
   var html='<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'
     +'<div style="font-size:14px;font-weight:700">📋 Action Items'
     +'<span style="font-size:11px;font-weight:400;color:var(--muted)"> — '+esc(dateRange)+' · '+totalSites+' sites</span></div>'
-    +'<button class="btn btn-o btn-sm" onclick="copyTasksForSlack()" style="font-size:11px">📣 Copy for Slack</button>'
     +'</div>';
   pmOrder.forEach(function(owner){
     var sites=byPM[owner];
@@ -5705,42 +5696,6 @@ function renderTaskTab(){
   });
   el.innerHTML=html;
 }
-function copyTasksForSlack(){
-  var orderedCols=DATE_COLS.slice().sort(function(a,b){
-    var da=pd(a),db=pd(b);
-    if(!da&&!db) return 0; if(!da) return 1; if(!db) return -1;
-    return db-da;
-  });
-  var byPM={};
-  allData.forEach(function(r){
-    if(!r['Site Name']) return;
-    var owner=(r['Owner']||'').trim(); if(!owner) return;
-    var siteItems=[];
-    for(var ci=0;ci<orderedCols.length;ci++){
-      var upd=(r[orderedCols[ci]]||'').trim(); if(!upd) continue;
-      var m=upd.match(/task\s*:\s*([\s\S]*)/i);
-      if(m&&m[1].trim()){
-        var items=m[1].trim().split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean);
-        if(items.length){siteItems=items;break;}
-      }
-    }
-    if(!siteItems.length) return;
-    if(!byPM[owner]) byPM[owner]=[];
-    byPM[owner].push({site:r['Site Name'],items:siteItems});
-  });
-  var lines=['*CARS24 Action Items*',''];
-  Object.keys(byPM).sort().forEach(function(owner){
-    lines.push(slackHandle(owner)+' -- Action Items');
-    byPM[owner].forEach(function(entry){
-      lines.push('  *'+entry.site+'*');
-      entry.items.forEach(function(item){lines.push('    - '+item);});
-    });
-    lines.push('');
-  });
-  lines.push('_Paste into Claude for analysis_');
-  navigator.clipboard.writeText(lines.join('\n')).then(function(){toast('Copied','ok');});
-}
-
 // ═══════════════════════════════════════════════════════════════
 // LIVE GOOGLE SHEETS SYNC
 // ═══════════════════════════════════════════════════════════════
@@ -6340,7 +6295,6 @@ function handleTicketUpload(event){
       toast('✓ Tickets loaded: '+rows.length+' rows','ok');
       if(lbl) lbl.textContent='🎫 Tickets ('+rows.length+')';
       stampCSV('tickets');
-      var sv=document.getElementById('slackv');if(sv&&sv.style.display!=='none') renderSlackTab();
       // Auto-switch to tickets tab
       setView('tickv',document.querySelector('[onclick*="tickv"]'));
     }catch(err){
@@ -6553,7 +6507,6 @@ function renderTicketTab(){
   html+=dd('Site:',siteOpts,fSite,'Site');
   html+=dd('Assigned:',assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
-  html+='<button class="btn btn-o btn-sm" onclick="generateTicketSlack()" style="font-size:11px">📣 Slack</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
 
@@ -6672,68 +6625,6 @@ function showTicketDetail(id){
     +'<span style="font-size:11px;color:var(--muted)">Ticket <span style="color:#003660;font-weight:700">#'+id+'</span> · Direct link</span>'
     +'</div>';
   document.getElementById('mbody').innerHTML=html+pfBtn;
-}
-
-function buildTicketSlackLines(){
-  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return row[names[i]]||'';}return '';}
-  var today=new Date();
-  var dateStr=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var lines=['*🎫 Project Open Tickets Summary — '+dateStr+'*',''];
-  var bySite={};
-  TICKET_DATA.forEach(function(r){
-    var store=col(r,['Store','store']);
-    var site=tickSiteName(store)||'Unknown';
-    if(!bySite[site]) bySite[site]=[];
-    bySite[site].push(r);
-  });
-  var total=TICKET_DATA.length;
-  var urgent=TICKET_DATA.filter(function(r){return col(r,['Priority']).toLowerCase()==='urgent';}).length;
-  var over30=TICKET_DATA.filter(function(r){return parseInt(col(r,['TAT','Open Since Days','Open Since'])||0)>30;}).length;
-  var unassigned=TICKET_DATA.filter(function(r){var a=col(r,['Assigned To']);return !a||a.toLowerCase()==='unassigned';}).length;
-  lines.push('📊 *'+total+' open* · 🚨 '+urgent+' urgent · ⏰ '+over30+' over 30d · ❓ '+unassigned+' unassigned','');
-  Object.keys(bySite).sort().forEach(function(site){
-    var tickets=bySite[site];
-    lines.push('*📍 '+site+'* ('+tickets.length+' tickets)');
-    tickets.slice(0,5).forEach(function(r){
-      var pri=col(r,['Priority']);
-      var tat=col(r,['TAT','Open Since Days','Open Since']);
-      var assign=col(r,['Assigned To'])||'Unassigned';
-      var title=col(r,['Title'])||'';
-      var emoji=pri.toLowerCase()==='urgent'?'🔴':pri.toLowerCase()==='high'?'🟠':'🟡';
-      lines.push('  '+emoji+' #'+col(r,['ID'])+' — '+title.substring(0,60)+(title.length>60?'...':''));
-      lines.push('      Assigned: '+assign+' · TAT: '+tat+'d');
-    });
-    if(tickets.length>5) lines.push('  _...and '+(tickets.length-5)+' more_');
-    lines.push('');
-  });
-  lines.push('_Full details: CARS24 Projects Tracker_');
-  return lines.join('\n');
-}
-
-function generateTicketSlack(){
-  if(!TICKET_DATA.length){toast('No ticket data loaded','err');return;}
-  document.getElementById('slack-preview').textContent=buildTicketSlackLines();
-  document.getElementById('slack-modal').style.display='flex';
-}
-
-// ═══ SLACK HANDLES ═══════════════════════════════════════════════
-const SLACK_HANDLES={'Ajeet':'@ajeet.sharma','Akhtar':'@md.fasih.akhtar','Arun':'@arun.varghese',
-  'Chetan':'@chetan.jaskalyan','Danish':'@danish.sharrma','Gaurav':'@gaurav.pandey',
-  'Harshit':'@harshit.pandey','Indranil':'@indranil.roy.chowdhury','Kamal':'@kamal.saini',
-  'Karan':'@karan.dhar.singh.bharti','Nitesh':'@nitesh.kumar','Pallavi':'@pallavi.priya',
-  'Pradeep':'@pradeep.yadav','Rahul':'@rahul.panwar','Rajat':'@rajat.sharma',
-  'Raman':'@raman.kumar','Riya':'@riya.kumari','Sachin':'@sachin.lohchab',
-  'Saurabh':'@saurabh.girdhar','Shivam':'@shivam.shukla','Shubhita':'@shubhita.jain',
-  'Sumit':'@sumit.kumar','Swatesh':'@swatesh.kumar','Tanuj':'@tanuj.singh',
-  'Vicky':'@vicky.bhardwaj','Vinod':'@vinod.yadav'};
-function slackHandle(name){
-  if(!name) return '';
-  var first=(name+'').trim().split(' ')[0];
-  return SLACK_HANDLES[first]||('@'+first.toLowerCase());
-}
-function copyToClipboard(elId){
-  var el=document.getElementById(elId); if(!el) return;
-  navigator.clipboard.writeText(el.textContent).then(function(){toast('Copied for Slack','ok');});
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -6986,114 +6877,6 @@ function snagVendorMailUrl(site){
     +'This is a system-generated notice. For queries, contact '+owner+', CARS24 Projects.\n\n'
     +'Regards,\n'+owner+'\nCARS24 Projects Team\nDate: '+today;
   return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc=vicky.bhardwaj%40cars24.com%2Crajat.sharma3%40cars24.com&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
-}
-
-// ═══ SLACK TAB ═══════════════════════════════════════════════════
-function renderSlackTab(subTab){
-  subTab=subTab||'crossfunc';
-  var el=document.getElementById('slackv'); if(!el) return;
-  var today=new Date();
-  var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var nav='<div style="display:flex;gap:0;margin-bottom:16px;border-bottom:2px solid var(--border)">'
-    +'<button onclick="renderSlackTab(\'crossfunc\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='crossfunc'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Cross-Functional</button>'
-    +'<button onclick="renderSlackTab(\'pmupdate\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='pmupdate'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">PM Update</button>'
-    +'<button onclick="renderSlackTab(\'tickets\')" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(subTab==='tickets'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">🎫 Tickets</button>'
-    +'</div>';
-  if(subTab==='crossfunc'){
-    var bt={'IT':[],'Design':[],'Commercial':[],'HEM':[],'BD':[],'Other':[]};
-    var be={'IT':'💻','Design':'🎨','Commercial':'💰','HEM':'🔍','BD':'📊','Other':'📌'};
-    function tagToKey(tag){
-      var t=tag.toUpperCase();
-      return t.includes('IT')?'IT':t.includes('DESIGN')?'Design':t.includes('HEM')?'HEM':t.includes('BD')?'BD':t.includes('COMM')?'Commercial':'Other';
-    }
-    allData.forEach(function(r){
-      var st=(r['Status']||'').toLowerCase();
-      if(st.includes('uat done')||st.includes('completed')||!r['Site Name']) return;
-      var bl=extractBlockers(getTodayUpdate(r)||getLatestUpdate(r));
-      var rfd=(r['Reason for Delay']||'').trim();
-      if((!bl||!bl.length)&&!rfd) return;
-      var site=r['Site Name'];
-      var handle=slackHandle(r['Owner']||'');
-      var pct=(r['Percentage Completion']||'').replace('%','').trim();
-      var statusLabel=(r['Status']||'').toUpperCase();
-      // Add to every relevant team bucket (not just first blocker)
-      var addedKeys=new Set();
-      if(bl&&bl.length){
-        bl.forEach(function(b){
-          var key=tagToKey(b.tag||'Other');
-          if(!addedKeys.has(key)){
-            addedKeys.add(key);
-            var gfcDays=(key==='Design')?getDepStaleDays(r,'gfc'):0;
-            bt[key].push({site:site,handle:handle,pct:pct,status:statusLabel,note:(b.text||rfd||'').substring(0,100),gfcDays:gfcDays});
-          }
-        });
-      } else if(rfd){
-        var key='Other';
-        bt[key].push({site:site,handle:handle,pct:pct,status:statusLabel,note:rfd.substring(0,100),gfcDays:0});
-      }
-    });
-    var lines=['*🚦 Cross-Functional Blockers & Dependencies — '+ds+'*','','_Sites blocked pending action from other teams. Please update or tag relevant member._',''];
-    var any=false;
-    ['IT','Design','Commercial','HEM','BD','Other'].forEach(function(t){
-      if(!bt[t].length) return; any=true;
-      lines.push(be[t]+' *'+t+' Team Action Required* — '+bt[t].length+' site'+(bt[t].length>1?'s':''));
-      bt[t].forEach(function(x){
-        var meta=(x.status?x.status:'')+(x.pct?' · '+x.pct+'%':'');
-        lines.push('  • *'+x.site+'* '+x.handle+(meta?' ['+meta+']':''));
-        if(x.note) lines.push('    ↳ '+x.note);
-        // GFC staleness: if Design blocker and note mentions GFC, show days unchanged
-        if(t==='Design'&&x.gfcDays>0) lines.push('    ⏳ GFC pending — same update for *'+x.gfcDays+' day'+(x.gfcDays>1?'s':'')+' in a row*');
-      });
-      lines.push('');
-    });
-    if(!any) lines.push('✅ No active cross-functional blockers today.');
-    lines.push('_Please reply with status or tag the PM directly._');
-    el.innerHTML=nav+'<div style="display:flex;justify-content:flex-end;margin-bottom:8px">'
-      +'<button class="btn btn-p btn-sm" onclick="copyToClipboard(\'cf-prev\')">Copy for Slack</button></div>'
-      +'<pre id="cf-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(lines.join('\n'))+'</pre>';
-    return;
-  }
-  if(subTab==='tickets'){
-    var tsAge='';
-    if(window.__ticketsLoadedAt){var ageMins=Math.round((Date.now()-window.__ticketsLoadedAt)/60000);tsAge=ageMins<=1?'just now':ageMins+'m ago';}
-    var tickLines=TICKET_DATA.length?buildTicketSlackLines():'No ticket data loaded — click Refresh to fetch live.';
-    el.innerHTML=nav
-      +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">'
-      +'<button class="btn btn-o btn-sm" onclick="(function(){var b=event.target;b.textContent=\'⟳ Refreshing…\';b.disabled=true;var url=pfTicketsUrl();pfFetch(url).then(function(t){var rows=parsePFPayload(t);TICKET_DATA=rows;window.__ticketsLoadedAt=Date.now();renderSlackTab(\'tickets\');toast(\'✓ \'+rows.length+\' tickets loaded\',\'ok\');}).catch(function(e){toast(\'Refresh failed: \'+(e.message||e),\'err\');b.textContent=\'🔄 Refresh\';b.disabled=false;});})()" style="white-space:nowrap">🔄 Refresh Tickets</button>'
-      +(tsAge?'<span style="font-size:11px;color:var(--muted)">Last updated: '+tsAge+'</span>':'<span style="font-size:11px;color:var(--muted)">Showing cached data</span>')
-      +(TICKET_DATA.length?'<button class="btn btn-p btn-sm" onclick="copyToClipboard(\'tick-prev\')" style="margin-left:auto">Copy for Slack</button>':'')
-      +'</div>'
-      +'<pre id="tick-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(tickLines)+'</pre>';
-    return;
-  }
-  var owners=[];
-  allData.forEach(function(r){var o=(r['Owner']||'').trim();if(o&&!owners.includes(o))owners.push(o);});
-  owners.sort();
-  var selPM=el._selPM||'';
-  var pmSel='<div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<span style="font-size:12px;font-weight:600">Select PM:</span>'
-    +'<select style="font-size:12px;padding:4px 8px;border-radius:6px;border:1px solid var(--border)" onchange="(function(v){document.getElementById(\'slackv\')._selPM=v;renderSlackTab(\'pmupdate\');})(this.value)">'
-    +'<option value="">-- Choose PM --</option>'
-    +owners.map(function(o){return '<option value="'+esc(o)+'"'+(o===selPM?' selected':'')+'>'+esc(o)+'</option>';}).join('')+'</select>'
-    +(selPM?'<button class="btn btn-p btn-sm" onclick="copyToClipboard(\'pm-prev\')">Copy for Slack</button>':'')+'</div>';
-  if(!selPM){el.innerHTML=nav+pmSel;return;}
-  var pmSites=allData.filter(function(r){return (r['Owner']||'').trim()===selPM;});
-  var lns=[slackHandle(selPM)+' -- Site Updates ('+ds+')',''];
-  pmSites.forEach(function(r){
-    if(!r['Site Name']) return;
-    var txt='';
-    for(var i=DATE_COLS.length-1;i>=0;i--){var v=(r[DATE_COLS[i]]||'').trim();if(v&&v!=='\u200b'){txt=v.split('\n')[0].substring(0,100);break;}}
-    lns.push('*'+r['Site Name']+'* ('+(r['Status']||'')+((r['Percentage Completion']||'')?(' · '+r['Percentage Completion']):'')+')'+(getStaleDays(r)>=5?' [stale]':''));
-    if(txt) lns.push('  > '+txt);
-    for(var j=DATE_COLS.length-1;j>=0;j--){
-      var u2=(r[DATE_COLS[j]]||'').trim(); if(!u2) continue;
-      var m=u2.match(/task\s*:\s*([\s\S]*)/i);
-      if(m&&m[1]){m[1].split('\n').map(function(l){return l.replace(/^\d+\.\s*/,'').trim();}).filter(Boolean).forEach(function(item){lns.push('  Action: '+item);});break;}
-    }
-    lns.push('');
-  });
-  lns.push('Reply: Done / In Progress / Blocked');
-  el.innerHTML=nav+pmSel+'<pre id="pm-prev" style="background:#1e1e2e;color:#cdd6f4;padding:14px;border-radius:10px;font-size:11px;white-space:pre-wrap;font-family:monospace;line-height:1.6">'+esc(lns.join('\n'))+'</pre>';
 }
 
 function satDelayMail(r){
@@ -8898,7 +8681,6 @@ if ('serviceWorker' in navigator) {
   });
 }
 </script>
-<div id="slack-modal" onclick="if(event.target===this)this.style.display='none'"><div class="slack-box"><h3>📋 Slack Preview</h3><pre id="slack-preview"></pre><div style="display:flex;gap:8px;justify-content:flex-end"><button class="btn btn-p btn-sm" onclick="copySlack()">📋 Copy</button><button class="btn btn-o btn-sm" onclick="document.getElementById('slack-modal').style.display='none'">Close</button></div></div></div>
 
 <nav id="bnav" aria-label="Main navigation">
   <button class="bnav-active" onclick="bnavGo('tv',this)"><span class="bni">📊</span><span>Table</span></button>

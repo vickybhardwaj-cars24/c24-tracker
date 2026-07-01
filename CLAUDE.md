@@ -19,12 +19,11 @@ index.html (single file)
 ├── <script src="/shared/c24-uploader.js">   ← Cloudflare Worker auth helper — NEVER REMOVE
 ├── <style>                                   ← All CSS inline
 └── <script>                                  ← All JS inline
-    ├── Constants (CSV_DATA=[], SNAG_DATA={}, TICKET_DATA=[], DRIVE_MAP, SLACK_HANDLES)
+    ├── Constants (CSV_DATA=[], SNAG_DATA={}, TICKET_DATA=[], DRIVE_MAP)
     ├── Global helpers (pd, esc, toast, parseCSV, extractBlockers, getStaleDays...)
     ├── SAT/UAT helpers (getRevHistory, fmtRevHistory, committedDate, gmailDraft...)
     ├── Vendor mail (vendorDelayMail, satDelayMail, bdTeamMail)
     ├── Feature modules (renderTable, renderSatUat, renderSnagTab, renderBDTab...)
-    ├── Slack module (renderSlackTab, generateBDSlack, copyTasksForSlack...)
     ├── Ticket module (renderTicketTab, handleTicketUpload, parseTicketCSV...)
     └── (function init(){...})();              ← IIFE — always last
 ```
@@ -53,11 +52,10 @@ index.html (single file)
 | Insights | `inv` | `renderInsights()` |
 | Tasks | `taskv` | `renderTaskTab()` |
 | PM Scorecard | `pmsv` | `renderPMScorecard()` |
-| Slack | `slackv` | `renderSlackTab()` |
 | Tickets | `tickv` | `renderTicketTab()` |
 | BD | `bdv` | `renderBDTab()` |
 
-All non-`tv` divs are hidden by CSS: `#suv,#taskv,#pmsv,#tickv,#slackv,#bdv{display:none}` Shown via `.show` class: `#suv.show,#taskv.show,...{display:block}` `setView(v, btn)` handles all tab switching — always update it when adding new tabs.
+All non-`tv` divs are hidden by CSS: `#suv,#taskv,#pmsv,#tickv,#bdv{display:none}` Shown via `.show` class: `#suv.show,#taskv.show,...{display:block}` `setView(v, btn)` handles all tab switching — always update it when adding new tabs.
 
 ---
 
@@ -117,12 +115,6 @@ Status values excluded from open count: `closed`, `na`, `n/a`, `not applicable`
 
 ---
 
-## Slack Handles Map
-
-All 26 PM handles are hardcoded in `SLACK_HANDLES` constant. Key mappings: `Akhtar → @md.fasih.akhtar`, `Kamal → @kamal.saini`, `Karan → @karan.dhar.singh.bharti`
-
----
-
 ## Email / Mailer Rules
 
 All Gmail drafts:
@@ -160,7 +152,6 @@ All Gmail drafts:
 | 25 | Tickets Tab | Add embed link to Tickets Google Sheet |
 | 26 | Table | Empty sites still loading despite Site Name filter fix |
 | 27 | UAT Warnings | Replace Mark Warning button with Gmail draft to PM |
-| 28 | Slack Cross-Functional | Fix blocker type grouping \+ Slack format |
 | 29 | SAT Delay Section | Show both initial planned date AND revised date |
 | 30 | Tickets | Mark as Closed per ticket (session only \+ Show Closed toggle) |
 | 31 | SAT Delay | Threshold `>7d` → `>=7d` |
@@ -226,8 +217,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.3 | Fix Cost Center admin panel not persisting for missing sites — `saveCCRow()` was writing to the `sites.cost_center` column (unawaited, no error check) which nothing else in the app reads; switched it to `saveSiteFieldToSupabase()` writing `site_field_overrides` (field_name='Cost Center'), the same table `loadSupabaseSiteFields()` reads into `CC_MAP` on every page load. `loadCCMapInAdmin()` now reads from `site_field_overrides` too, and `doAddNewProject()` also persists its Cost Center field there |
 | v5.4 | Fix UAT Warning count/list mismatch — `getUatWarnings()` flags sites at `gap>=15` days since SAT (matching `UAT_WARN_DAYS`), but `renderWarnings()`'s `high` bucket only matched `gap>15`, so a site at exactly 15 days was counted in the header badge/active total but never rendered in the Critical or High section. `high` bucket now uses `gap>=15&&gap<=30` to match the inclusion threshold |
 | v5.5 | Fix wrong tab highlighted when jumping to UAT Warnings — the `warn-badge` (header) and `__warn__` KPI tile both used stale `querySelectorAll('.vtab')`/`.inv-tab` indices (3/4 and 3) computed without accounting for the first button in each row carrying an extra `active` class (`class="vtab active"` / `class="inv-tab active"`), which shifted every subsequent index. Corrected to `.vtab[2]` (Insights) and `.inv-tab[6]` (UAT Warnings) — the Insights sub-tab bar reads `ov,kpis,vr,reg,snag,delay,warn,hem`, and `.inv-tab[3]` was landing on `reg` (Regional), matching the reported "highlights Regional" bug |
+| v5.6 | Removed Slack option entirely — `renderSlackTab()` and its Cross-Functional/PM Update/Tickets sub-tabs, the `slackv` vtab button/div, `SLACK_HANDLES`/`slackHandle()`, `copyTasksForSlack()` (Tasks tab), `generateTicketSlack()`/`buildTicketSlackLines()` (Tickets tab), `copyToClipboard()`, and the `#slack-modal` markup/CSS all removed |
 
 ---
 
-## Current Version: v5.5
+## Current Version: v5.6
 
