@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.1</title>
+<title>Cars24 Projects Tracker v5.2</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2156,7 +2156,7 @@ function gmailDraft(r, type){
         +revLine
         +'\nRequest HEM team to schedule the physical inspection and Design team to confirm execution is as per approved GFC drawings.\n\nPlease confirm your availability at the earliest so the SAT can be completed on the committed date.\n\nRegards,\n'+owner+'\nCARS24 Projects Team';
     } else {
-      const satDateStr=r['SAT Date']||'—';
+      const satDateStr=fmtRaw(r['SAT Date']);
       const uatTarget=pd(r['SAT Date']);
       const uatTargetStr=uatTarget
         ? new Date(uatTarget.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'})
@@ -2672,7 +2672,7 @@ function renderWarnings(container){
     const exemptInfo=isExempt?UAT_EXEMPTIONS[(r['Site Name']||'').trim()]:null;
     const upd=getLatestUpdate(r).substring(0,200);
     const lastCol=getLatestUpdateDate(r)||'—';
-    const satD=r['SAT Date']||'—';
+    const satD=fmtRaw(r['SAT Date']);
     const gap=r._gap||'';
     const owner=r.Owner||'PM';
     const site=r['Site Name']||'Site';
@@ -2786,7 +2786,7 @@ function markNotifiedByIdx(btn) {
   const r=allData[idx];
   if(!r) return;
   // Build warning email
-  const satD=r['SAT Date']||'—';
+  const satD=fmtRaw(r['SAT Date']);
   const gap=r._gap||'';
   const owner=r.Owner||'PM';
   const site=r['Site Name']||'Site';
@@ -6938,8 +6938,8 @@ async function submitMaterial(idx) {
 // ═══ VENDOR DELAY MAIL ═══════════════════════════════════════════
 function vendorDelayMail(r){
   var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
-  var poD=r['PO Date']||'--',ksD=r['Kickoff Date']||'--',wsD=r['Work Start Date']||'--';
-  var satD2=pd(r['SAT Date']),satStr=r['SAT Date']||'--';
+  var poD=r['PO Date']?fmtRaw(r['PO Date']):'--',ksD=r['Kickoff Date']?fmtRaw(r['Kickoff Date']):'--',wsD=r['Work Start Date']?fmtRaw(r['Work Start Date']):'--';
+  var satD2=pd(r['SAT Date']),satStr=r['SAT Date']?fmtRaw(r['SAT Date']):'--';
   var uatTgt=satD2?new Date(satD2.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'--';
   var now=new Date(); now.setHours(0,0,0,0);
   var od=satD2?Math.round((now-new Date(satD2.getTime()+15*86400000))/86400000):0;
@@ -6961,7 +6961,7 @@ function snagVendorMailUrl(site){
   var pr=allData.find(function(r){return (r['Site Name']||'').trim()===site.trim();})||{};
   var owner=pr['Owner']||'PM';
   var vendor=pr['Vendor']||'Vendor';
-  var satDate=pr['SAT Date']||'—';
+  var satDate=fmtRaw(pr['SAT Date']);
   var uatD=pd(pr['SAT Date']);
   var uatTgt=uatD?new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
   var today=new Date().toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'});
@@ -7097,9 +7097,9 @@ function renderSlackTab(subTab){
 
 function satDelayMail(r){
   var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
-  var poD=r['PO Date']||'--',ksD=r['Kickoff Date']||'--',wsD=r['Work Start Date']||'--';
-  var planD=r['Planned Completion']||'--';
-  var revD=r['Revised Completion']||'--';
+  var poD=r['PO Date']?fmtRaw(r['PO Date']):'--',ksD=r['Kickoff Date']?fmtRaw(r['Kickoff Date']):'--',wsD=r['Work Start Date']?fmtRaw(r['Work Start Date']):'--';
+  var planD=r['Planned Completion']?fmtRaw(r['Planned Completion']):'--';
+  var revD=r['Revised Completion']?fmtRaw(r['Revised Completion']):'--';
   var finalDate=revD!=='--'?revD:planD;
   var revHist=fmtRevHistory(r);
   var revLine=revHist?'\nRevision History:\n'+revHist+'\n':'';
