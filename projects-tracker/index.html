@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.31</title>
+<title>Cars24 Projects Tracker v5.32</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1989,7 +1989,10 @@ function toast(msg, type) {
 function syncTag() { return (__sbClient && __sbUser) ? ' — synced ✓' : ' — ⚠ NOT synced, sign in to save for your team'; }
 function syncType() { return (__sbClient && __sbUser) ? 'ok' : 'err'; }
 
-function esc(s) { return (s||''). replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return (s||''). replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// For raw values spliced into a single-quoted JS arg inside a double-quoted onclick/onchange="..." attribute —
+// escapes backslash+quote for the JS-string layer first, then HTML-escapes for the attribute layer.
+function escJsAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function sCls(s) {
   if (!s) return 'b-other';
@@ -2190,7 +2193,7 @@ function buildChkBox(boxId,values,lbl,btn,clr){
     +values.map(s=>{
       const sid=boxId+'_'+s.replace(/[^a-zA-Z0-9]/g,'_');
       const chk=prev.length===0||prev.includes(s)?'checked':'';
-      return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+s+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+s+'</span></label>';
+      return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+esc(s)+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+esc(s)+'</span></label>';
     }).join('');
   updateChkLbl(boxId,lbl,btn,clr);
 }
@@ -3349,15 +3352,15 @@ function renderInsights(){
   const maxS=Math.max(...Object.values(sMap),1);
   const maxO=Math.max(...Object.values(oMap),1);
   const maxV=Math.max(...Object.values(vMap),1);
-  const sRows=Object.entries(sMap).sort((a,b)=>b[1]-a[1]).map(([s,n])=>`<div class="br" onclick="clickInsight('status','${s.replace(/'/g,"\'")}')"><div class="bl">${esc(s)}</div><div class="bt"><div class="bf" style="width:${(n/maxS*100).toFixed(0)}%;background:${sClr(s)}"></div></div><div class="bn">${n}</div></div>`).join('');
-  const oRows=Object.entries(oMap).sort((a,b)=>b[1]-a[1]).map(([o,n])=>`<div class="br" onclick="clickInsight('owner','${o.replace(/'/g,"\'")}')" ><div class="bl">${esc(o)}</div><div class="bt"><div class="bf" style="width:${(n/maxO*100).toFixed(0)}%;background:#2563eb"></div></div><div class="bn">${n}</div></div>`).join('');
-  const vRows=Object.entries(vMap).sort((a,b)=>b[1]-a[1]).map(([v,n])=>`<div class="br" onclick="clickInsight('vendor','${v.replace(/'/g,"\'")}')" ><div class="bl">${esc(v)}</div><div class="bt"><div class="bf" style="width:${(n/maxV*100).toFixed(0)}%;background:#16a34a"></div></div><div class="bn">${n}</div></div>`).join('');
+  const sRows=Object.entries(sMap).sort((a,b)=>b[1]-a[1]).map(([s,n])=>`<div class="br" onclick="clickInsight('status','${escJsAttr(s)}')"><div class="bl">${esc(s)}</div><div class="bt"><div class="bf" style="width:${(n/maxS*100).toFixed(0)}%;background:${sClr(s)}"></div></div><div class="bn">${n}</div></div>`).join('');
+  const oRows=Object.entries(oMap).sort((a,b)=>b[1]-a[1]).map(([o,n])=>`<div class="br" onclick="clickInsight('owner','${escJsAttr(o)}')" ><div class="bl">${esc(o)}</div><div class="bt"><div class="bf" style="width:${(n/maxO*100).toFixed(0)}%;background:#2563eb"></div></div><div class="bn">${n}</div></div>`).join('');
+  const vRows=Object.entries(vMap).sort((a,b)=>b[1]-a[1]).map(([v,n])=>`<div class="br" onclick="clickInsight('vendor','${escJsAttr(v)}')" ><div class="bl">${esc(v)}</div><div class="bt"><div class="bf" style="width:${(n/maxV*100).toFixed(0)}%;background:#16a34a"></div></div><div class="bn">${n}</div></div>`).join('');
   const alerts=allData.filter(r=>{const u=getTodayUpdate(r).toLowerCase();return r.Status?.toLowerCase().includes('hold')||u.includes('not responding')||u.includes('pending');}).slice(0,7);
   const c=fn=>allData.filter(fn).length;
   const vrMap={};
   allData.forEach(r=>{if(r.Vendor&&r['Vendor Rating']){const n=parseInt(r['Vendor Rating']);if(n>=1&&n<=5){if(!vrMap[r.Vendor])vrMap[r.Vendor]={sum:0,cnt:0};vrMap[r.Vendor].sum+=n;vrMap[r.Vendor].cnt++;}}});
   const vrData=Object.entries(vrMap).map(([v,d])=>({v,avg:d.sum/d.cnt,cnt:d.cnt})).sort((a,b)=>b.avg-a.avg);
-  const vrHtml=vrData.length?vrData.map(({v,avg,cnt})=>{const n2=Math.round(avg);return`<div class="br" onclick="clickInsight('vendor','${v.replace(/'/g,"\'")}')" ><div class="bl">${esc(v)}</div><div style="flex:1"><span class="rbadge r${n2}">${'★'.repeat(n2)+'☆'.repeat(5-n2)} ${avg.toFixed(1)}</span></div><div class="bn">${cnt}x</div></div>`;}).join(''):'<div style="font-size:11px;color:var(--muted)">No ratings yet.</div>';
+  const vrHtml=vrData.length?vrData.map(({v,avg,cnt})=>{const n2=Math.round(avg);return`<div class="br" onclick="clickInsight('vendor','${escJsAttr(v)}')" ><div class="bl">${esc(v)}</div><div style="flex:1"><span class="rbadge r${n2}">${'★'.repeat(n2)+'☆'.repeat(5-n2)} ${avg.toFixed(1)}</span></div><div class="bn">${cnt}x</div></div>`;}).join(''):'<div style="font-size:11px;color:var(--muted)">No ratings yet.</div>';
   const depMap={};
   allData.forEach(r=>extractBlockers(getTodayUpdate(r)).forEach(b=>depMap[b]=(depMap[b]||0)+1));
   const depData=Object.entries(depMap).sort((a,b)=>b[1]-a[1]);
@@ -3763,7 +3766,7 @@ function openRevEdit(idx) {
   var dateInp = document.getElementById('rev-date-' + idx);
   if (dateInp && curRev) {
     var d = pd(curRev);
-    if (d) dateInp.value = d.toISOString().split('T')[0];
+    if (d && !isNaN(d)) dateInp.value = d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate();
   }
   var reasonInp = document.getElementById('rev-reason-' + idx);
   if (reasonInp) reasonInp.value = '';
@@ -3787,7 +3790,7 @@ function openInlineRevEdit(idx) {
   var dateInp = document.getElementById('trev-date-' + idx);
   if (dateInp) {
     var d = pd(r['Revised Completion'] || '');
-    dateInp.value = d && !isNaN(d) ? d.toISOString().split('T')[0] : '';
+    dateInp.value = d && !isNaN(d) ? d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate() : '';
   }
   var reasonInp = document.getElementById('trev-reason-' + idx);
   if (reasonInp) reasonInp.value = '';
@@ -4146,7 +4149,7 @@ function deleteProcureItem(siteName,itemIdx,idx){
 
 function renderProcureSection(r,idx){
   var siteName=(r['Site Name']||'').trim();
-  var siteNameEsc=siteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var siteNameEsc=escJsAttr(siteName);
   var items=PROCURE_DATA[siteName]||[];
   var today=new Date();today.setHours(0,0,0,0);
   var total=items.length,ordered=0,delivered=0,partial=0,overdue=0;
@@ -4436,7 +4439,7 @@ function renderHemSection(r,idx){
         +(e.auto?(isDone?'Logged: '+esc(e.loggedOn)+' → '+esc(e.type)+' done · '+statusLabel:'Committed: '+esc(e.committedDate)+' · '+statusLabel):'Logged: '+esc(e.loggedOn))
         +'</div>'
         +'</div>'
-        +'<button onclick="deleteHemDelay(\''+esc(siteName).replace(/'/g,"\\'")+'\','+i+');refreshHemSection('+idx+')" '
+        +'<button onclick="deleteHemDelay(\''+escJsAttr(siteName)+'\','+i+');refreshHemSection('+idx+')" '
         +'style="background:none;border:none;color:#d97706;cursor:pointer;font-size:13px;padding:0 4px" title="Remove">✕</button>'
         +'</div>';
     }).join('')
@@ -4474,7 +4477,7 @@ function renderHemSection(r,idx){
     +'<input type="text" id="hem-reason-'+idx+'" placeholder="e.g. Awaiting inspection slot" style="width:100%;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
     +'</div>'
     +'<div style="display:flex;gap:6px;margin-top:8px">'
-    +'<button onclick="submitHemDelay('+idx+',\''+esc(siteName).replace(/'/g,"\\'")+'\'+\'\')" style="padding:5px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+    +'<button onclick="submitHemDelay('+idx+',\''+escJsAttr(siteName)+'\'+\'\')" style="padding:5px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
     +'<button onclick="document.getElementById(\'hem-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;font-size:11px;cursor:pointer">Cancel</button>'
     +'</div>'
     +'</div>'
@@ -4571,7 +4574,7 @@ function openModal(idx){
   const _llSiteName=(r['Site Name']||'').trim();
   const _llArr=SCHED_DATA[_llSiteName]||[];
   const _llFileId='ll-inp-'+idx;
-  const _llSN=_llSiteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const _llSN=escJsAttr(_llSiteName);
   const _llUploadBtn='<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">+ Add Schedule CSV</label>'
     +'<input type="file" id="'+_llFileId+'" accept=".csv" style="display:none" onchange="handleLLUpload(event,\''+_llSN+'\')">';
   let llHtml='';
@@ -4665,7 +4668,7 @@ function openModal(idx){
   (function(){
     var _lsArr=LL_SCOPE_DATA[_llSiteName]||[];
     var _lsFileId='lls-inp-'+idx;
-    var _lsSN=_llSiteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var _lsSN=escJsAttr(_llSiteName);
     var _lsUploadBtn='<label class="btn btn-o btn-sm" for="'+_lsFileId+'" style="cursor:pointer;font-size:11px">+ Upload LL Scope CSV</label>'
       +'<input type="file" id="'+_lsFileId+'" accept=".csv" style="display:none" onchange="handleLLScopeUpload(event,\''+_lsSN+'\')">';
     var _lsDone=_lsArr.filter(function(t){return t.done;}).length;
@@ -4811,21 +4814,19 @@ function openModal(idx){
 
 function saveMeta(f,idx,el){
   const v=el.textContent.trim();
-  const fieldMap={'Planned':'Planned Completion','SAT Date':'SAT Date','UAT Date':'UAT DATE','PO Date':'PO Date','Work Start':'Work Start Date','Kickoff Date':'Kickoff Date','Cost Center':'Cost Center'};
+  const fieldMap={'Planned':'Planned Completion','SAT Date':'SAT Date','UAT Date':'UAT DATE','PO Date':'PO Date','Work Start':'Work Start Date','Kickoff Date':'Kickoff Date','Cost Center':'Cost Center','% Completion':'Percentage Completion','% Completion (HOTP)':'Percentage Completion','Percentage Completion':'Percentage Completion'};
   const dataKey=fieldMap[f]||f;
   const oldV = allData[idx][dataKey] || '';
   // Guard: if field was cleared, restore original value and skip save
   if (!v || v === '—') { el.textContent = oldV || '—'; return; }
-  allData[idx][dataKey]=v;
-  if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
-    allData[idx]['Percentage Completion']=v.replace('%','').trim();
-  }
+  const storedV = dataKey==='Percentage Completion' ? v.replace('%','').trim() : v;
+  allData[idx][dataKey]=storedV;
   if(f==='Revised'||f==='Revised Completion') allData[idx]['Revised Completion']=v;
   if(f==='Cost Center') CC_MAP[allData[idx]['Site Name']||'']=v;
   renderKPIs();applyFilters();buildKpiPanel();
   // Audit log + Supabase persist
-  if (oldV !== v) {
-    saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, v);
+  if (oldV !== storedV) {
+    saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, storedV);
     toast('✓ '+f+' updated'+syncTag(), syncType());
   }
 }
@@ -5431,7 +5432,7 @@ function renderSnagTab(){
               return '';
             })();
             var pc=s.pctClosed>=80?'#16a34a':s.pctClosed>=60?'#d97706':'#dc2626';
-            var safesite=s.site.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            var safesite=escJsAttr(s.site);
             return '<tr onclick="showSnagDetail(\''+safesite+'\')" style="cursor:pointer;border-bottom:1px solid var(--border)">'+
               '<td style="padding:7px 12px;font-weight:600;white-space:nowrap">'+esc(s.site)+flag+uatRisk+'</td>'+
               '<td style="padding:7px 10px;text-align:center">'+s.total+'</td>'+
@@ -7177,7 +7178,7 @@ function showTicketDetail(id){
   var driveUrl=getDriveLink(site);
 
   document.getElementById('overlay').classList.add('open');
-  document.getElementById('mttl').innerHTML='<span style="color:#003660;font-weight:800">#'+id+'</span> — '+esc(title);
+  document.getElementById('mttl').innerHTML='<span style="color:#003660;font-weight:800">#'+esc(String(id))+'</span> — '+esc(title);
   // ProcessFlows link — add as second action button
   var pfLink='https://processflows.ai/tickets/'+id;
   var mbodyPre=document.getElementById('mbody');
@@ -7207,8 +7208,8 @@ function showTicketDetail(id){
   }
   // Add PF link button at bottom
   var pfBtn='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">'
-    +'<a href="https://processflows.ai/tickets/'+id+'" target="_blank" class="btn btn-p btn-sm">🔗 Open in ProcessFlows</a>'
-    +'<span style="font-size:11px;color:var(--muted)">Ticket <span style="color:#003660;font-weight:700">#'+id+'</span> · Direct link</span>'
+    +'<a href="https://processflows.ai/tickets/'+esc(String(id))+'" target="_blank" class="btn btn-p btn-sm">🔗 Open in ProcessFlows</a>'
+    +'<span style="font-size:11px;color:var(--muted)">Ticket <span style="color:#003660;font-weight:700">#'+esc(String(id))+'</span> · Direct link</span>'
     +'</div>';
   document.getElementById('mbody').innerHTML=html+pfBtn;
 }
@@ -8711,8 +8712,11 @@ async function doCreateUser() {
   if (!pass || pass.length < 6) { showInvMsg('Password must be at least 6 characters.', 'err'); return; }
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    // Sign up user with email+password (email confirmation bypassed via Supabase settings)
-    var r2 = await __sbClient.auth.signUp({ email: email, password: pass, options: { data: { full_name: name } } });
+    // Sign up user with email+password (email confirmation bypassed via Supabase settings).
+    // Use a throwaway client (no session persistence) so Supabase's signUp() doesn't
+    // replace the admin's own active session on __sbClient with the new user's session.
+    var _tmpClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    var r2 = await _tmpClient.auth.signUp({ email: email, password: pass, options: { data: { full_name: name } } });
     if (r2.error) throw r2.error;
     var data = r2.data && r2.data.user;
     if (!data) throw new Error('User creation returned no data. Check Supabase Auth settings.');
@@ -8762,7 +8766,7 @@ function buildCCMapRows() {
       + 'oninput="_ccMapEdits[this.dataset.site]=this.value">'
       + '</td>'
       + '<td style="padding:5px 8px;text-align:center">'
-      + '<button onclick="saveCCRow(\'' + esc(site).replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
+      + '<button onclick="saveCCRow(\'' + escJsAttr(site) + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
       + '</td></tr>';
   }).join('');
 }
@@ -8859,8 +8863,8 @@ function buildDriveMapRows() {
       + 'oninput="_driveMapEdits[this.dataset.site]=this.value" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'\'">'
       + '</td>'
       + '<td style="padding:5px 8px;text-align:center;white-space:nowrap">'
-      + (url ? '<a href="' + url + '" target="_blank" style="font-size:10px;color:#2563eb;margin-right:6px">📂 Open</a>' : '')
-      + '<button onclick="saveDriveRow(\'' + esc(site).replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
+      + (url ? '<a href="' + esc(url) + '" target="_blank" style="font-size:10px;color:#2563eb;margin-right:6px">📂 Open</a>' : '')
+      + '<button onclick="saveDriveRow(\'' + escJsAttr(site) + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
       + '</td>'
       + '</tr>';
   }).join('');
