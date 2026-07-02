@@ -394,14 +394,19 @@ async function readBodyCapped(request, limit) {
 // shared module between the two runtimes.
 // NOTE: 'Arun', 'Harshit', 'Karan' below are the OLD entries, unconfirmed
 // against the July 2026 department roster (they didn't appear in it) —
-// kept as-is rather than guessed-removed. 'Adarsh', 'Ashish' and 'Tushar'
-// each have 2-3 people sharing that first name in the roster and are
-// deliberately left OUT until disambiguated, since this map's first-name-
-// only key can only hold one email per name — see CLAUDE.md. ('Gaurav' was
-// disambiguated to gaurav.jangir@cars24.com — Vicky's core team.)
+// kept as-is rather than guessed-removed. 'Gaurav' was disambiguated to
+// gaurav.jangir@cars24.com — Vicky's core team. 'Adarsh', 'Ashish' and
+// 'Tushar' each have 2-3 people sharing that first name, so instead of a
+// first-name key (which can only hold one email per name) they're mapped
+// below by FULL name — resolvePmEmail() tries the full name first, then
+// falls back to first-name-only, so both keying styles coexist. Full
+// names + Slack IDs pulled directly from the connected Slack workspace
+// (v5.19) rather than guessed from the roster's raw email list.
 const PM_EMAIL_MAP = {
-  'Aabhas':'aabhas.gautam@cars24.com','Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.akhtar1@cars24.com',
+  'Aabhas':'aabhas.gautam@cars24.com','Adarsh Roy':'adarsh.roy@cars24.com','Adarsh Jha':'adarsh.jha@cars24.com',
+  'Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.akhtar1@cars24.com',
   'Amit':'amit.4@cars24.com','Amritanshu':'amritanshu.pandey@cars24.com','Arun':'arun.varghese@cars24.com',
+  'Ashish Arora':'ashish.arora1@cars24.com','Ashish Kumar':'ashish.kumar22@cars24.com','Ashish Pathak':'ashish1.kumar@cars24.com',
   'Atharva':'atharva.singh@cars24.com','Ayushi':'ayushi.khanna@cars24.com','Binshanth':'binshanthsp.1@cars24.com',
   'Bipin':'bipin.dhondiyal@cars24.com','Bishwanath':'bishwanath.pandey1@cars24.com','Boobalan':'boobalan.chinnapoongu@cariotauto.com',
   'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharma@cariotauto.com','Dipanshu':'dipanshu.jaskalyan@cars24.com',
@@ -415,10 +420,20 @@ const PM_EMAIL_MAP = {
   'Sachin':'sachin.s3@cars24.com','Sanjay':'sanjay.ekka@cars24.com','Satakshi':'satakshi.jaiswal@cars24.com',
   'Saurabh':'saurabh.girdhar@cars24.com','Shashwat':'shashwat.bansal@cars24.com','Shivam':'shivam.shukla1@cars24.com',
   'Shubhita':'shubhita.jain@cars24.com','Sumit':'sumit.kumar13@cars24.com','Suyash':'suyash.pawar@cars24.com',
-  'Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com','Upkar':'upkar.1@cariotauto.com',
+  'Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com',
+  'Tushar Garg':'tushar.garg1@cars24.com','Tushar Pathak':'tushar.pathak1@cars24.com','Upkar':'upkar.1@cariotauto.com',
   'Vicky':'vicky.bhardwaj@cars24.com','Vimal':'vimal.kumar3@cars24.com','Vinay':'vinay.chauhan1@cars24.com',
   'Vinod':'vinod.yadav@cars24.com','Vyramudi':'vyramudi.1@cars24.com','Yashraj':'yashraj.vatsh@cars24.com',
 };
+
+// Same resolution order as index.html's resolvePmEmail() — full-name match
+// first (for the disambiguated Adarsh/Ashish/Tushar entries above), then
+// first-name-only fallback. Keep this in sync with the frontend copy.
+function resolvePmEmail(name) {
+  const n = (name || '').trim();
+  if (!n) return '';
+  return PM_EMAIL_MAP[n] || PM_EMAIL_MAP[n.split(' ')[0]] || '';
+}
 
 function sleep(ms) { return new Promise(function(r) { setTimeout(r, ms); }); }
 
@@ -796,7 +811,7 @@ async function postPmDigests(env, sitesText) {
   const today = new Date();
   const ds = today.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
   for (const owner of Object.keys(byPM)) {
-    const email = PM_EMAIL_MAP[owner];
+    const email = resolvePmEmail(owner);
     if (!email) continue; // no mapped Slack account — skip rather than guess
     const first = owner.split(' ')[0];
     const lines = ['Hey ' + first + ' — here\'s where your sites stand today (' + ds + '):', ''];
