@@ -606,12 +606,25 @@ async function handleSlackChannels(request, env) {
   if (!env.SLACK_USER_TOKEN) return json(500, { success: false, error: friendlySlackError({ code: 'NOT_CONFIGURED' }) });
 
   try {
-    const data = await slackApi(env.SLACK_USER_TOKEN, 'conversations.list', {
-      types: 'public_channel,private_channel',
-      exclude_archived: true,
-      limit: 200,
-    });
-    const channels = (data.channels || [])
+    // conversations.list paginates (Slack's default sort isn't alphabetical
+    // and isn't guaranteed to put every joined channel in page 1) — walk the
+    // cursor until it's exhausted so a channel Vicky's actually joined never
+    // silently goes missing just because it landed past the first 200.
+    // Capped at 20 pages (~4000 channels) as a sane worst-case bound.
+    let allChannels = [];
+    let cursor;
+    for (let page = 0; page < 20; page++) {
+      const data = await slackApi(env.SLACK_USER_TOKEN, 'conversations.list', {
+        types: 'public_channel,private_channel',
+        exclude_archived: true,
+        limit: 200,
+        cursor: cursor || undefined,
+      });
+      allChannels = allChannels.concat(data.channels || []);
+      cursor = data.response_metadata && data.response_metadata.next_cursor;
+      if (!cursor) break;
+    }
+    const channels = allChannels
       .filter(function(c) { return c.is_member; })
       .map(function(c) { return { id: c.id, name: c.name, isPrivate: !!c.is_private }; })
       .sort(function(a, b) { return a.name.localeCompare(b.name); });
