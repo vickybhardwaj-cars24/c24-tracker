@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.30</title>
+<title>Cars24 Projects Tracker v5.34</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1276,9 +1276,10 @@ function sendTicketSummaryToSlack(btn, channelId){
         var id=col(r,['ID','id'])||'—';
         var title=col(r,['Title','title'])||'Untitled';
         var desc=col(r,['Description'])||'';
+        var pri=col(r,['Priority','priority']);
         var site=tickSiteName(col(r,['Store','store']));
         var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
-        lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+' - '+link);
+        lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+(pri?' ('+pri+')':'')+' - '+link);
       });
       lines.push('');
     });
@@ -1331,10 +1332,11 @@ function sendTicketDigestsToSlack(btn){
     tix.forEach(function(r){
       var id=col(r,['ID','id'])||'—';
       var title=col(r,['Title','title'])||'Untitled';
+      var desc=col(r,['Description'])||'';
       var pri=col(r,['Priority','priority']);
       var site=tickSiteName(col(r,['Store','store']));
       var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
-      lines.push('• ['+site+'] '+link+' — '+title+(pri?' ('+pri+')':''));
+      lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+(pri?' ('+pri+')':'')+' - '+link);
     });
     sendToSlack('dm', email, lines.join('\n'), null);
     sent++;
@@ -1989,7 +1991,10 @@ function toast(msg, type) {
 function syncTag() { return (__sbClient && __sbUser) ? ' — synced ✓' : ' — ⚠ NOT synced, sign in to save for your team'; }
 function syncType() { return (__sbClient && __sbUser) ? 'ok' : 'err'; }
 
-function esc(s) { return (s||''). replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function esc(s) { return (s||''). replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+// For raw values spliced into a single-quoted JS arg inside a double-quoted onclick/onchange="..." attribute —
+// escapes backslash+quote for the JS-string layer first, then HTML-escapes for the attribute layer.
+function escJsAttr(s) { return String(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
 function sCls(s) {
   if (!s) return 'b-other';
@@ -2190,7 +2195,7 @@ function buildChkBox(boxId,values,lbl,btn,clr){
     +values.map(s=>{
       const sid=boxId+'_'+s.replace(/[^a-zA-Z0-9]/g,'_');
       const chk=prev.length===0||prev.includes(s)?'checked':'';
-      return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+s+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+s+'</span></label>';
+      return '<label class="chk-item"><input type="checkbox" id="'+sid+'" value="'+esc(s)+'" '+chk+' onchange="onChkChange(\''+boxId+'\',\''+lbl+'\',\''+btn+'\',\''+clr+'\')"><span>'+esc(s)+'</span></label>';
     }).join('');
   updateChkLbl(boxId,lbl,btn,clr);
 }
@@ -2312,7 +2317,7 @@ function kpiFlt(val){
     all.forEach(c=>c.checked=true);
     updateStatusLbl();
     const today=new Date(); today.setHours(0,0,0,0);
-    filteredData=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!r['SAT Date'];});
+    filteredData=allData.filter(r=>{const d=committedDate(r);return d&&d<today&&!(r['SAT Date']||'').trim();});
     document.getElementById('cchip').textContent=filteredData.length+' of '+allData.length+' sites';
     renderAll();
     document.querySelectorAll('.kpi').forEach(k=>{if(k.dataset.val===val) k.classList.add('active');});
@@ -2357,7 +2362,7 @@ function filterByBlocker(p){
 function renderKPIs(){
   const today=new Date(); today.setHours(0,0,0,0);
   const c=fn=>allData.filter(fn).length;
-  const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
+  const ov=allData.filter(r=>{const d=committedDate(r);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
   const warns=getUatWarnings().filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]).length;
   const _in7=new Date(today); _in7.setDate(today.getDate()+7);
   const dueWeek=allData.filter(r=>{if((r['SAT Date']||'').trim())return false;const d=pd(r['Revised Completion'])||pd(r['Planned Completion']);return d&&d>=today&&d<=_in7;}).length;
@@ -2803,8 +2808,8 @@ function renderSatUat(){
       const _dl=Math.round((_ut-today3)/86400000);
       const _pe={r,idx3,satD,uatD,planD,gap:_g,dt:_dl,uatTarget:_ut,name:r['Site Name']||'—'};
       pendArr.push(_pe);
-      if(_g>15) dangerArr.push(_pe);
-      else if(_g>=10) warningArr.push(_pe);
+      if(_g>10) dangerArr.push(_pe);
+      else if(_g>=7) warningArr.push(_pe);
       else onTrackArr.push(_pe);
     };
     if(uatD){
@@ -2868,7 +2873,6 @@ function renderSatUat(){
   const _sub=renderSatUat._sub||'pipeline';
   const _snav='<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSatUat._sub=\'pipeline\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='pipeline'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Pipeline</button>'
-    +'<button onclick="renderSatUat._sub=\'comm\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='comm'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Communication</button>'
     +'<button onclick="renderSatUat._sub=\'hem\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='hem'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">HEM Delays</button>'
     +'</div>';
   function _mkDWORow(u,col,showA){
@@ -2900,17 +2904,8 @@ function renderSatUat(){
       +'</tr></thead><tbody>'+arr.map(function(u){return _mkDWORow(u,col,showA);}).join('')+'</tbody></table>';
   }
   const _dH=dangerArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Danger - >10 Days Since SAT ('+dangerArr.length+')</div>'+_mkDWOTbl(dangerArr,'#dc2626',true)+'</div>':'';
-  const _wH=warningArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Warning - 10-15 Days Since SAT ('+warningArr.length+')</div>'+_mkDWOTbl(warningArr,'#d97706',false)+'</div>':'';
-  const _oH=onTrackArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">On Track - SAT Done, UAT Pending Under 10 Days ('+onTrackArr.length+')</div>'+_mkDWOTbl(onTrackArr,'#16a34a',false)+'</div>':'';
-  if(_sub==='comm'){
-    el.innerHTML=_snav+(satCommHtml||uatCommHtml
-      ?'<div style="padding:14px;border:1px solid var(--border);border-radius:12px">'
-        +'<div style="font-size:13px;font-weight:700;margin-bottom:4px">HEM + Design Communication</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">To: blank - fill HEM and Design. CC: vicky.bhardwaj@cars24.com auto-added.</div>'
-        +satCommHtml+uatCommHtml+'</div>'
-      :'<div style="padding:40px;text-align:center;color:var(--muted)">No sites in the 14 day window right now.</div>');
-    return;
-  }
+  const _wH=warningArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Warning - 7-10 Days Since SAT ('+warningArr.length+')</div>'+_mkDWOTbl(warningArr,'#d97706',false)+'</div>':'';
+  const _oH=onTrackArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">On Track - SAT Done, UAT Pending Under 7 Days ('+onTrackArr.length+')</div>'+_mkDWOTbl(onTrackArr,'#16a34a',false)+'</div>':'';
   if(_sub==='hem'){
     var _hemSites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
     var _hemTotal=_hemSites.reduce(function(s,sn){return s+getHemDelayTotal(sn);},0);
@@ -3275,7 +3270,7 @@ function markNotifiedByIdx(btn) {
   const site=r['Site Name']||'Site';
   const subject='UAT Delay Warning — '+site+' ('+gap+' days post SAT)';
   const body='Dear '+owner+',\n\nThis is a formal reminder that '+site+' completed SAT on '+satD+' and UAT has not been recorded after '+gap+' days, which exceeds the 15-day SLA.\n\nPlease initiate UAT immediately and share the UAT completion date at the earliest.\n\nAny further delay may result in a Show Cause Notice (SCN) as per CARS24 project compliance policy.\n\nRegards,\nVicky Bhardwaj\nHead of Projects, CARS24';
-  const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   // Show options modal
   const html='<div style="font-size:14px;font-weight:700;margin-bottom:12px">🔔 Warning — '+esc(site)+'</div>'
     +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+gap+' days since SAT · Owner: '+esc(owner)+'</div>'
@@ -3359,15 +3354,15 @@ function renderInsights(){
   const maxS=Math.max(...Object.values(sMap),1);
   const maxO=Math.max(...Object.values(oMap),1);
   const maxV=Math.max(...Object.values(vMap),1);
-  const sRows=Object.entries(sMap).sort((a,b)=>b[1]-a[1]).map(([s,n])=>`<div class="br" onclick="clickInsight('status','${s.replace(/'/g,"\'")}')"><div class="bl">${esc(s)}</div><div class="bt"><div class="bf" style="width:${(n/maxS*100).toFixed(0)}%;background:${sClr(s)}"></div></div><div class="bn">${n}</div></div>`).join('');
-  const oRows=Object.entries(oMap).sort((a,b)=>b[1]-a[1]).map(([o,n])=>`<div class="br" onclick="clickInsight('owner','${o.replace(/'/g,"\'")}')" ><div class="bl">${esc(o)}</div><div class="bt"><div class="bf" style="width:${(n/maxO*100).toFixed(0)}%;background:#2563eb"></div></div><div class="bn">${n}</div></div>`).join('');
-  const vRows=Object.entries(vMap).sort((a,b)=>b[1]-a[1]).map(([v,n])=>`<div class="br" onclick="clickInsight('vendor','${v.replace(/'/g,"\'")}')" ><div class="bl">${esc(v)}</div><div class="bt"><div class="bf" style="width:${(n/maxV*100).toFixed(0)}%;background:#16a34a"></div></div><div class="bn">${n}</div></div>`).join('');
+  const sRows=Object.entries(sMap).sort((a,b)=>b[1]-a[1]).map(([s,n])=>`<div class="br" onclick="clickInsight('status','${escJsAttr(s)}')"><div class="bl">${esc(s)}</div><div class="bt"><div class="bf" style="width:${(n/maxS*100).toFixed(0)}%;background:${sClr(s)}"></div></div><div class="bn">${n}</div></div>`).join('');
+  const oRows=Object.entries(oMap).sort((a,b)=>b[1]-a[1]).map(([o,n])=>`<div class="br" onclick="clickInsight('owner','${escJsAttr(o)}')" ><div class="bl">${esc(o)}</div><div class="bt"><div class="bf" style="width:${(n/maxO*100).toFixed(0)}%;background:#2563eb"></div></div><div class="bn">${n}</div></div>`).join('');
+  const vRows=Object.entries(vMap).sort((a,b)=>b[1]-a[1]).map(([v,n])=>`<div class="br" onclick="clickInsight('vendor','${escJsAttr(v)}')" ><div class="bl">${esc(v)}</div><div class="bt"><div class="bf" style="width:${(n/maxV*100).toFixed(0)}%;background:#16a34a"></div></div><div class="bn">${n}</div></div>`).join('');
   const alerts=allData.filter(r=>{const u=getTodayUpdate(r).toLowerCase();return r.Status?.toLowerCase().includes('hold')||u.includes('not responding')||u.includes('pending');}).slice(0,7);
   const c=fn=>allData.filter(fn).length;
   const vrMap={};
   allData.forEach(r=>{if(r.Vendor&&r['Vendor Rating']){const n=parseInt(r['Vendor Rating']);if(n>=1&&n<=5){if(!vrMap[r.Vendor])vrMap[r.Vendor]={sum:0,cnt:0};vrMap[r.Vendor].sum+=n;vrMap[r.Vendor].cnt++;}}});
   const vrData=Object.entries(vrMap).map(([v,d])=>({v,avg:d.sum/d.cnt,cnt:d.cnt})).sort((a,b)=>b.avg-a.avg);
-  const vrHtml=vrData.length?vrData.map(({v,avg,cnt})=>{const n2=Math.round(avg);return`<div class="br" onclick="clickInsight('vendor','${v.replace(/'/g,"\'")}')" ><div class="bl">${esc(v)}</div><div style="flex:1"><span class="rbadge r${n2}">${'★'.repeat(n2)+'☆'.repeat(5-n2)} ${avg.toFixed(1)}</span></div><div class="bn">${cnt}x</div></div>`;}).join(''):'<div style="font-size:11px;color:var(--muted)">No ratings yet.</div>';
+  const vrHtml=vrData.length?vrData.map(({v,avg,cnt})=>{const n2=Math.round(avg);return`<div class="br" onclick="clickInsight('vendor','${escJsAttr(v)}')" ><div class="bl">${esc(v)}</div><div style="flex:1"><span class="rbadge r${n2}">${'★'.repeat(n2)+'☆'.repeat(5-n2)} ${avg.toFixed(1)}</span></div><div class="bn">${cnt}x</div></div>`;}).join(''):'<div style="font-size:11px;color:var(--muted)">No ratings yet.</div>';
   const depMap={};
   allData.forEach(r=>extractBlockers(getTodayUpdate(r)).forEach(b=>depMap[b]=(depMap[b]||0)+1));
   const depData=Object.entries(depMap).sort((a,b)=>b[1]-a[1]);
@@ -3773,7 +3768,7 @@ function openRevEdit(idx) {
   var dateInp = document.getElementById('rev-date-' + idx);
   if (dateInp && curRev) {
     var d = pd(curRev);
-    if (d) dateInp.value = d.toISOString().split('T')[0];
+    if (d && !isNaN(d)) dateInp.value = d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate();
   }
   var reasonInp = document.getElementById('rev-reason-' + idx);
   if (reasonInp) reasonInp.value = '';
@@ -3797,7 +3792,7 @@ function openInlineRevEdit(idx) {
   var dateInp = document.getElementById('trev-date-' + idx);
   if (dateInp) {
     var d = pd(r['Revised Completion'] || '');
-    dateInp.value = d && !isNaN(d) ? d.toISOString().split('T')[0] : '';
+    dateInp.value = d && !isNaN(d) ? d.getFullYear()+'-'+(d.getMonth()<9?'0':'')+(d.getMonth()+1)+'-'+(d.getDate()<10?'0':'')+d.getDate() : '';
   }
   var reasonInp = document.getElementById('trev-reason-' + idx);
   if (reasonInp) reasonInp.value = '';
@@ -4156,7 +4151,7 @@ function deleteProcureItem(siteName,itemIdx,idx){
 
 function renderProcureSection(r,idx){
   var siteName=(r['Site Name']||'').trim();
-  var siteNameEsc=siteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  var siteNameEsc=escJsAttr(siteName);
   var items=PROCURE_DATA[siteName]||[];
   var today=new Date();today.setHours(0,0,0,0);
   var total=items.length,ordered=0,delivered=0,partial=0,overdue=0;
@@ -4446,7 +4441,7 @@ function renderHemSection(r,idx){
         +(e.auto?(isDone?'Logged: '+esc(e.loggedOn)+' → '+esc(e.type)+' done · '+statusLabel:'Committed: '+esc(e.committedDate)+' · '+statusLabel):'Logged: '+esc(e.loggedOn))
         +'</div>'
         +'</div>'
-        +'<button onclick="deleteHemDelay(\''+esc(siteName).replace(/'/g,"\\'")+'\','+i+');refreshHemSection('+idx+')" '
+        +'<button onclick="deleteHemDelay(\''+escJsAttr(siteName)+'\','+i+');refreshHemSection('+idx+')" '
         +'style="background:none;border:none;color:#d97706;cursor:pointer;font-size:13px;padding:0 4px" title="Remove">✕</button>'
         +'</div>';
     }).join('')
@@ -4484,7 +4479,7 @@ function renderHemSection(r,idx){
     +'<input type="text" id="hem-reason-'+idx+'" placeholder="e.g. Awaiting inspection slot" style="width:100%;padding:5px 8px;border:1px solid #fcd34d;border-radius:4px;font-size:12px;font-family:Inter,sans-serif;background:#fff;color:#111"></div>'
     +'</div>'
     +'<div style="display:flex;gap:6px;margin-top:8px">'
-    +'<button onclick="submitHemDelay('+idx+',\''+esc(siteName).replace(/'/g,"\\'")+'\'+\'\')" style="padding:5px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
+    +'<button onclick="submitHemDelay('+idx+',\''+escJsAttr(siteName)+'\'+\'\')" style="padding:5px 12px;background:#d97706;color:#fff;border:none;border-radius:4px;font-size:11px;font-weight:700;cursor:pointer">Save</button>'
     +'<button onclick="document.getElementById(\'hem-form-'+idx+'\').style.display=\'none\'" style="padding:5px 10px;background:#fef3c7;color:#92400e;border:1px solid #fde68a;border-radius:4px;font-size:11px;cursor:pointer">Cancel</button>'
     +'</div>'
     +'</div>'
@@ -4581,7 +4576,7 @@ function openModal(idx){
   const _llSiteName=(r['Site Name']||'').trim();
   const _llArr=SCHED_DATA[_llSiteName]||[];
   const _llFileId='ll-inp-'+idx;
-  const _llSN=_llSiteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+  const _llSN=escJsAttr(_llSiteName);
   const _llUploadBtn='<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">+ Add Schedule CSV</label>'
     +'<input type="file" id="'+_llFileId+'" accept=".csv" style="display:none" onchange="handleLLUpload(event,\''+_llSN+'\')">';
   let llHtml='';
@@ -4675,7 +4670,7 @@ function openModal(idx){
   (function(){
     var _lsArr=LL_SCOPE_DATA[_llSiteName]||[];
     var _lsFileId='lls-inp-'+idx;
-    var _lsSN=_llSiteName.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+    var _lsSN=escJsAttr(_llSiteName);
     var _lsUploadBtn='<label class="btn btn-o btn-sm" for="'+_lsFileId+'" style="cursor:pointer;font-size:11px">+ Upload LL Scope CSV</label>'
       +'<input type="file" id="'+_lsFileId+'" accept=".csv" style="display:none" onchange="handleLLScopeUpload(event,\''+_lsSN+'\')">';
     var _lsDone=_lsArr.filter(function(t){return t.done;}).length;
@@ -4821,21 +4816,19 @@ function openModal(idx){
 
 function saveMeta(f,idx,el){
   const v=el.textContent.trim();
-  const fieldMap={'Planned':'Planned Completion','SAT Date':'SAT Date','UAT Date':'UAT DATE','PO Date':'PO Date','Work Start':'Work Start Date','Kickoff Date':'Kickoff Date','Cost Center':'Cost Center'};
+  const fieldMap={'Planned':'Planned Completion','SAT Date':'SAT Date','UAT Date':'UAT DATE','PO Date':'PO Date','Work Start':'Work Start Date','Kickoff Date':'Kickoff Date','Cost Center':'Cost Center','% Completion':'Percentage Completion','% Completion (HOTP)':'Percentage Completion','Percentage Completion':'Percentage Completion'};
   const dataKey=fieldMap[f]||f;
   const oldV = allData[idx][dataKey] || '';
   // Guard: if field was cleared, restore original value and skip save
   if (!v || v === '—') { el.textContent = oldV || '—'; return; }
-  allData[idx][dataKey]=v;
-  if(f==='% Completion'||f==='% Completion (HOTP)'||f==='Percentage Completion'){
-    allData[idx]['Percentage Completion']=v.replace('%','').trim();
-  }
+  const storedV = dataKey==='Percentage Completion' ? v.replace('%','').trim() : v;
+  allData[idx][dataKey]=storedV;
   if(f==='Revised'||f==='Revised Completion') allData[idx]['Revised Completion']=v;
   if(f==='Cost Center') CC_MAP[allData[idx]['Site Name']||'']=v;
   renderKPIs();applyFilters();buildKpiPanel();
   // Audit log + Supabase persist
-  if (oldV !== v) {
-    saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, v);
+  if (oldV !== storedV) {
+    saveSiteFieldToSupabase(allData[idx]['Site Name']||'', dataKey, oldV, storedV);
     toast('✓ '+f+' updated'+syncTag(), syncType());
   }
 }
@@ -5215,7 +5208,7 @@ function renderInsightKPIs(){
     var count=0;
     Object.keys(SNAG_DATA).forEach(function(site){
       var items=SNAG_DATA[site]||[];
-      var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length;
+      var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';})(i.status);}).length;
       if(open>70) count++;
     });
     if(Object.keys(SNAG_DATA).length>0) setManualKPI('snag70',count);
@@ -5320,8 +5313,8 @@ function renderSnagTab(){
     var closeTimes=rows.filter(function(r){
       return r.start&&r.end&&(r.status||'').toLowerCase()==='completed';
     }).map(function(r){
-      var s=new Date(r.start),e=new Date(r.end);
-      return isNaN(s)||isNaN(e)?0:Math.max(0,Math.round((e-s)/86400000));
+      var s=pd(r.start),e=pd(r.end);
+      return (!s||!e)?0:Math.max(0,Math.round((e-s)/86400000));
     }).filter(function(d){return d>0;});
     var avgDays=closeTimes.length?Math.round(closeTimes.reduce(function(a,b){return a+b;},0)/closeTimes.length):null;
     var ownerMap={};
@@ -5441,7 +5434,7 @@ function renderSnagTab(){
               return '';
             })();
             var pc=s.pctClosed>=80?'#16a34a':s.pctClosed>=60?'#d97706':'#dc2626';
-            var safesite=s.site.replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+            var safesite=escJsAttr(s.site);
             return '<tr onclick="showSnagDetail(\''+safesite+'\')" style="cursor:pointer;border-bottom:1px solid var(--border)">'+
               '<td style="padding:7px 12px;font-weight:600;white-space:nowrap">'+esc(s.site)+flag+uatRisk+'</td>'+
               '<td style="padding:7px 10px;text-align:center">'+s.total+'</td>'+
@@ -5802,21 +5795,10 @@ function handleSnagUpload(event){
         // Smart CSV parser — handles both formats:
         // Format A (processflows export): headers row, Store col = site name
         // Format B (old flat): no headers, col[1] = site name
-        function splitCSVLine(line){
-          var cols=[],cur='',inQ=false;
-          for(var i=0;i<line.length;i++){
-            var ch=line[i];
-            if(ch==='"'){inQ=!inQ;}
-            else if(ch===','&&!inQ){cols.push(cur.replace(/^"|"$/g,'').trim());cur='';}
-            else{cur+=ch;}
-          }
-          cols.push(cur.replace(/^"|"$/g,'').trim());
-          return cols;
-        }
-        var lines=e.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(function(l){return l.trim();});
-        if(!lines.length){toast('Empty CSV','err');return;}
+        var rows=parseCSVRows(e.target.result);
+        if(!rows.length){toast('Empty CSV','err');return;}
         var newData={};
-        var firstCols=splitCSVLine(lines[0]);
+        var firstCols=rows[0];
         // Detect format: if first row has 'ID' or 'Title' or 'Store' it's headers
         var hasHeaders=firstCols[0].toLowerCase()==='id'||firstCols[1]==='Title'||firstCols.some(function(h){return h==='Store'||h==='store';});
         if(hasHeaders){
@@ -5834,8 +5816,7 @@ function handleSnagUpload(event){
           var remarksIdx=idxOf('Remarks');
           var hemIdx=idxOf('HEM NAME');
           var idIdx=idxOf('ID');
-          lines.slice(1).forEach(function(line){
-            var cols=splitCSVLine(line);
+          rows.slice(1).forEach(function(cols){
             var rawSite=(storeIdx>=0?cols[storeIdx]||'':'').trim();
             if(!rawSite) return;
             // Clean site name: "CARS24 Hub, Naroda, Ahmedabad" → "Naroda"
@@ -5861,8 +5842,7 @@ function handleSnagUpload(event){
           });
         } else {
           // Format B: old flat no-header format
-          lines.forEach(function(line){
-            var cols=splitCSVLine(line);
+          rows.forEach(function(cols){
             var site=(cols[1]||'').trim();
             if(!site) return;
             var row={};
@@ -6101,7 +6081,8 @@ function processSnagXlsx(arrayBuffer,fileName,statusEl){
       return;
     }
 
-    SNAG_DATA=newData;
+    Object.keys(SNAG_DATA).forEach(function(k){delete SNAG_DATA[k];});
+    Object.assign(SNAG_DATA,newData);
     if(statusEl){
       statusEl.style.color='#16a34a';
       statusEl.textContent='✅ Loaded '+Object.keys(newData).length+' sites, '+totalRows+' snag items from '+fileName+'. Tab will refresh.';
@@ -6388,7 +6369,7 @@ function getDriveLink(s){return DRIVE_MAP[(s||'').trim()]||DRIVE_ROOT;}
 
 function getStaleDays(row){
   var st=(row['Status']||'').trim().toLowerCase();
-  if(st==='uat done'||st==='completed'||st==='comleted') return 0;
+  if(st.includes('uat done')||st.includes('completed')||st.includes('comleted')) return 0;
   if((row['UAT DATE']||'').trim()) return 0;
   var today=new Date(); today.setHours(0,0,0,0);
   for(var i=DATE_COLS.length-1;i>=0;i--){
@@ -6449,7 +6430,7 @@ function renderPMScorecard(){
     var bl=extractBlockers(getTodayUpdate(r)); if(bl&&bl.length) ow.blockers++;
     // Snag score
     var snags=(SNAG_DATA[(r['Site Name']||'').trim()]||[]);
-    if(snags.length){ow.snagPts+=snags.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length; ow.snagSites++;}
+    if(snags.length){ow.snagPts+=snags.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';})(i.status);}).length; ow.snagSites++;}
   });
   var pmRows=Object.keys(owners).sort().map(function(o){
     var d=owners[o];
@@ -6500,7 +6481,7 @@ function showSnag70List(){
   var sites=[];
   Object.keys(SNAG_DATA).forEach(function(site){
     var items=SNAG_DATA[site]||[];
-    var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length;
+    var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';})(i.status);}).length;
     if(open>70) sites.push({site:site,open:open,total:items.length});
   });
   sites.sort(function(a,b){return b.open-a.open;});
@@ -6537,14 +6518,12 @@ function copyWarnEmail(){
 function parseLLScheduleCSV(txt, filename){
   var poMatch=(filename||'').match(/Schedule_PO([A-Z0-9_]+)\.csv/i);
   var po=poMatch?poMatch[1]:'';
-  var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-  if(lines.length<2) return {po:po,tasks:[]};
-  var headers=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'');});
+  var rows=parseCSVRows(txt);
+  if(rows.length<2) return {po:po,tasks:[]};
+  var headers=rows[0].map(function(h){return h.replace(/^﻿/,'').trim();});
   var tasks=[];
-  for(var i=1;i<lines.length;i++){
-    var line=lines[i].trim();
-    if(!line) continue;
-    var cols=line.split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+  for(var i=1;i<rows.length;i++){
+    var cols=rows[i];
     var obj={};
     headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
     var task=obj['Task']||obj['task']||'';
@@ -6691,7 +6670,7 @@ function handleLLBulkUpload(event){
   if(!canUpload()){toast('Please log in first','err');event.target.value='';return;}
   var siteNames=allData.map(function(r){return (r['Site Name']||'').trim();}).filter(Boolean);
   var rows3=files.map(function(f,fi){
-    var poMatch=f.name.match(/Schedule_PO([A-Z0-9]+)\.csv/i);
+    var poMatch=f.name.match(/Schedule_PO([A-Z0-9_]+)\.csv/i);
     var po=poMatch?poMatch[1]:'';
     var opts='<option value="">-- Select Site --</option>'+siteNames.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
     return '<tr style="border-bottom:1px solid var(--border)">'
@@ -6765,31 +6744,36 @@ function confirmLLBulkUpload(){
 // ═══════════════════════════════════════════════════════════
 // LANDLORD (LL) SCOPE FUNCTIONS — no POs, separate from Cars24 project schedule
 // ═══════════════════════════════════════════════════════════
-function _parseCSVLine(line){
-  var cols=[],cell='',inQ=false,i=0;
-  while(i<line.length){
-    var ch=line[i];
+// Full-text CSV tokenizer (RFC4180-ish) — unlike a per-line parser (which requires
+// splitting on '\n' first), this correctly handles a quoted field that itself contains
+// an embedded newline or comma, and doubled "" quote-escaping inside a quoted field.
+function parseCSVRows(text,delim){
+  delim=delim||',';
+  text=(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  var rows=[],row=[],cell='',inQ=false,i=0,len=text.length;
+  while(i<len){
+    var ch=text[i];
     if(inQ){
-      if(ch==='"'&&line[i+1]==='"'){cell+='"';i+=2;}
-      else if(ch==='"'){inQ=false;i++;}
-      else{cell+=ch;i++;}
+      if(ch==='"'){
+        if(text[i+1]==='"'){cell+='"';i+=2;} else {inQ=false;i++;}
+      } else {cell+=ch;i++;}
     } else {
       if(ch==='"'){inQ=true;i++;}
-      else if(ch===','){cols.push(cell.trim());cell='';i++;}
+      else if(ch===delim){row.push(cell.trim());cell='';i++;}
+      else if(ch==='\n'){row.push(cell.trim());rows.push(row);row=[];cell='';i++;}
       else{cell+=ch;i++;}
     }
   }
-  cols.push(cell.trim());
-  return cols;
+  if(cell.length||row.length){row.push(cell.trim());rows.push(row);}
+  return rows.filter(function(r){return r.length>1||(r[0]&&r[0].length);});
 }
 function parseLLScopeCSV(txt){
-  var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-  if(lines.length<2) return [];
-  var headers=_parseCSVLine(lines[0]).map(function(h){return h.replace(/^﻿/,'').trim();});
+  var rows=parseCSVRows(txt);
+  if(rows.length<2) return [];
+  var headers=rows[0].map(function(h){return h.replace(/^﻿/,'').trim();});
   var tasks=[];
-  for(var i=1;i<lines.length;i++){
-    var line=lines[i].trim(); if(!line) continue;
-    var cols=_parseCSVLine(line);
+  for(var i=1;i<rows.length;i++){
+    var cols=rows[i];
     var obj={}; headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
     var task=obj['Task']||obj['task']||'';
     if(!task) continue;
@@ -6890,26 +6874,16 @@ function handleTicketUpload(event){
 }
 
 function parseTicketCSV(text){
-  var lines=text.split('\n').filter(function(l){return l.trim();});
-  if(!lines.length) return [];
-  // Detect delimiter
-  var delim=lines[0].includes('\t')?'\t':',';
-  function splitRow(line){
-    var result=[],cur='',inQ=false;
-    for(var i=0;i<line.length;i++){
-      var ch=line[i];
-      if(ch==='"'){inQ=!inQ;}
-      else if(ch===delim&&!inQ){result.push(cur.trim().replace(/^"|"$/g,''));cur='';}
-      else{cur+=ch;}
-    }
-    result.push(cur.trim().replace(/^"|"$/g,''));
-    return result;
-  }
-  var headers=splitRow(lines[0]).map(function(h){return h.trim();});
-  return lines.slice(1).map(function(line){
-    var vals=splitRow(line);
+  // Detect delimiter from the first line only (before full parsing, since quoted
+  // fields may legitimately contain the other delimiter character)
+  var firstLine=(text||'').split('\n',1)[0]||'';
+  var delim=firstLine.includes('\t')?'\t':',';
+  var rows=parseCSVRows(text,delim);
+  if(!rows.length) return [];
+  var headers=rows[0].map(function(h){return h.trim();});
+  return rows.slice(1).map(function(cols){
     var obj={};
-    headers.forEach(function(h,i){obj[h]=vals[i]||'';});
+    headers.forEach(function(h,i){obj[h]=cols[i]||'';});
     return obj;
   }).filter(function(r){return r['ID']||r['Title'];});
 }
@@ -6978,7 +6952,7 @@ function renderTicketTab(){
   function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
   function getTAT(r){
     var cr=col(r,['Created At','created_at']);
-    if(cr){var d=new Date(cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
+    if(cr){var d=pd(cr);if(d){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
     return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);
   }
   var CLOSED=['closed','resolved','cancelled','rejected'];
@@ -7187,7 +7161,7 @@ function showTicketDetail(id){
   var driveUrl=getDriveLink(site);
 
   document.getElementById('overlay').classList.add('open');
-  document.getElementById('mttl').innerHTML='<span style="color:#003660;font-weight:800">#'+id+'</span> — '+esc(title);
+  document.getElementById('mttl').innerHTML='<span style="color:#003660;font-weight:800">#'+esc(String(id))+'</span> — '+esc(title);
   // ProcessFlows link — add as second action button
   var pfLink='https://processflows.ai/tickets/'+id;
   var mbodyPre=document.getElementById('mbody');
@@ -7217,8 +7191,8 @@ function showTicketDetail(id){
   }
   // Add PF link button at bottom
   var pfBtn='<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);display:flex;gap:8px;align-items:center">'
-    +'<a href="https://processflows.ai/tickets/'+id+'" target="_blank" class="btn btn-p btn-sm">🔗 Open in ProcessFlows</a>'
-    +'<span style="font-size:11px;color:var(--muted)">Ticket <span style="color:#003660;font-weight:700">#'+id+'</span> · Direct link</span>'
+    +'<a href="https://processflows.ai/tickets/'+esc(String(id))+'" target="_blank" class="btn btn-p btn-sm">🔗 Open in ProcessFlows</a>'
+    +'<span style="font-size:11px;color:var(--muted)">Ticket <span style="color:#003660;font-weight:700">#'+esc(String(id))+'</span> · Direct link</span>'
     +'</div>';
   document.getElementById('mbody').innerHTML=html+pfBtn;
 }
@@ -7432,9 +7406,9 @@ function buildSlackDelayText(kind, siteName){
   var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; }) || {};
   if (kind === 'uat_delay') {
     var satD = pd(r['SAT Date']);
-    var uatTgt = satD ? new Date(satD.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
+    var uatTgt = satD ? new Date(satD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
     var now = new Date(); now.setHours(0,0,0,0);
-    var od = satD ? Math.round((now-new Date(satD.getTime()+15*86400000))/86400000) : 0;
+    var od = satD ? Math.round((now-new Date(satD.getTime()+10*86400000))/86400000) : 0;
     return siteName+' ka UAT ab '+od+'d se pending hai (target tha '+uatTgt+'). Kya chal raha hai bhai, aaj thoda update bhej do.';
   }
   if (kind === 'sat_delay') {
@@ -7496,13 +7470,13 @@ function vendorDelayMail(r){
   var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
   var poD=r['PO Date']?fmtRaw(r['PO Date']):'--',ksD=r['Kickoff Date']?fmtRaw(r['Kickoff Date']):'--',wsD=r['Work Start Date']?fmtRaw(r['Work Start Date']):'--';
   var satD2=pd(r['SAT Date']),satStr=r['SAT Date']?fmtRaw(r['SAT Date']):'--';
-  var uatTgt=satD2?new Date(satD2.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'--';
+  var uatTgt=satD2?new Date(satD2.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'--';
   var now=new Date(); now.setHours(0,0,0,0);
-  var od=satD2?Math.round((now-new Date(satD2.getTime()+15*86400000))/86400000):0;
+  var od=satD2?Math.round((now-new Date(satD2.getTime()+10*86400000))/86400000):0;
   var revH=getRevHistory(r);
   var revLine=fmtRevHistory(r)?'\nRevision History:\n'+fmtRevHistory(r)+'\n':'\nNo revision history.\n';
   var subj='UAT Delay Notice - '+site+' - '+od+'d Overdue';
-  var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+15d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects';
+  var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+10d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects';
   return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
 
@@ -8721,8 +8695,11 @@ async function doCreateUser() {
   if (!pass || pass.length < 6) { showInvMsg('Password must be at least 6 characters.', 'err'); return; }
   btn.disabled = true; btn.textContent = 'Creating…';
   try {
-    // Sign up user with email+password (email confirmation bypassed via Supabase settings)
-    var r2 = await __sbClient.auth.signUp({ email: email, password: pass, options: { data: { full_name: name } } });
+    // Sign up user with email+password (email confirmation bypassed via Supabase settings).
+    // Use a throwaway client (no session persistence) so Supabase's signUp() doesn't
+    // replace the admin's own active session on __sbClient with the new user's session.
+    var _tmpClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+    var r2 = await _tmpClient.auth.signUp({ email: email, password: pass, options: { data: { full_name: name } } });
     if (r2.error) throw r2.error;
     var data = r2.data && r2.data.user;
     if (!data) throw new Error('User creation returned no data. Check Supabase Auth settings.');
@@ -8772,7 +8749,7 @@ function buildCCMapRows() {
       + 'oninput="_ccMapEdits[this.dataset.site]=this.value">'
       + '</td>'
       + '<td style="padding:5px 8px;text-align:center">'
-      + '<button onclick="saveCCRow(\'' + esc(site).replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
+      + '<button onclick="saveCCRow(\'' + escJsAttr(site) + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
       + '</td></tr>';
   }).join('');
 }
@@ -8869,8 +8846,8 @@ function buildDriveMapRows() {
       + 'oninput="_driveMapEdits[this.dataset.site]=this.value" onfocus="this.style.borderColor=\'#2563eb\'" onblur="this.style.borderColor=\'\'">'
       + '</td>'
       + '<td style="padding:5px 8px;text-align:center;white-space:nowrap">'
-      + (url ? '<a href="' + url + '" target="_blank" style="font-size:10px;color:#2563eb;margin-right:6px">📂 Open</a>' : '')
-      + '<button onclick="saveDriveRow(\'' + esc(site).replace(/'/g,"\\'") + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
+      + (url ? '<a href="' + esc(url) + '" target="_blank" style="font-size:10px;color:#2563eb;margin-right:6px">📂 Open</a>' : '')
+      + '<button onclick="saveDriveRow(\'' + escJsAttr(site) + '\')" style="font-size:10px;padding:2px 8px;background:#16a34a;color:#fff;border:none;border-radius:4px;cursor:pointer;font-weight:600">Save</button>'
       + '</td>'
       + '</tr>';
   }).join('');
