@@ -295,7 +295,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.26 | Replaced the 📣 emoji with the real Slack logo mark on every clickable Slack button — same SVG path data as the icon already used in the hub page's footer contact nav (root `index.html`), so branding matches across the two files. New shared `SLACK_ICON_SVG` constant (defined right after `isVicky()`) is used via string concatenation in every JS-built button (`data-slack-kind` buttons in SAT/UAT delay, handover, procurement, vendor penalty, snag, pending-docs sections; the Tickets tab's three channel-post buttons and per-row DM button); the three static-HTML buttons (compose modal header, toolbar "Slack Message", PM Scorecard "Send PM Updates to Slack") got the SVG inlined directly since they're not JS-generated. Scope was deliberately narrowed to just the icon on clickable Slack buttons — toast/status text (e.g. "📣 Sent to Slack") and code comments that mention Slack still use the emoji, and no email-icon buttons (📧/📨 Delay Notice, SAT Delay Notice, Snag Notice) were touched |
 
+| v5.27 | `handleSlackChannels()` (`worker.js`, `GET /slack/channels`) switched from `conversations.list` to `users.conversations` (scoped to the token owner's own `user_id`, resolved via `auth.test`) — confirmed against the live workspace that `conversations.list` was silently missing `expansion-projects-team`/`expansion_core_india`/`projects-internal` because it scopes to channels the *app* is installed on (an Enterprise Grid multi-workspace gap, root-caused in v5.24), whereas `users.conversations` returns every conversation the *user* actually belongs to and does include those three. Same cursor-pagination walk as before, just against the user-scoped endpoint, and the `is_member` post-filter was dropped since `users.conversations` only ever returns channels the user is already in. No frontend change needed — `postTicketSummaryToChannel()`/`populateChannelSelect()` etc. already just consume whatever `/slack/channels` returns |
+
 ---
 
-## Current Version: v5.26
+## Current Version: v5.27
 
