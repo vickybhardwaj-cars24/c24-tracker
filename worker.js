@@ -593,6 +593,20 @@ async function handleSlackSend(request, env) {
   }
 }
 
+// Hardcoded fallback for the 3 team channels — v5.27's switch to
+// users.conversations still doesn't reliably surface these on Cars24's
+// Enterprise Grid setup (confirmed still missing in production after that
+// fix shipped), but chat.postMessage succeeds against their IDs directly
+// with the same SLACK_USER_TOKEN, confirmed by posting through a separate
+// tool holding the identical token (v5.28). Merged into the discovered list
+// below rather than replacing discovery, so any channel that *is* enumerable
+// still comes from the live API and this only fills the specific gap.
+const KNOWN_CHANNEL_IDS = {
+  'expansion-projects-team': 'C0AR159F19A',
+  'expansion_core_india': 'C02HA1M9J94',
+  'projects-internal': 'C0AQYTQ70CV',
+};
+
 // GET /slack/channels — Vicky-only (same gate as /slack/send). Lists the
 // public/private channels the SLACK_USER_TOKEN's identity has actually
 // joined so the frontend's channel picker only ever offers channels a send
@@ -609,7 +623,8 @@ async function handleSlackSend(request, env) {
 // conversations.history returning channel_not_found for one of them).
 // users.conversations returns every conversation the *user* belongs to
 // instead, which does cover those channels — confirmed against the live
-// workspace before this fix landed.
+// workspace before this fix landed. It's still not enough on its own (see
+// KNOWN_CHANNEL_IDS above), so those 3 are merged in afterward as a fallback.
 async function handleSlackChannels(request, env) {
   if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Invalid credentials' });
   if (getBearerEmail(request) !== SLACK_ALLOWED_EMAIL) {
@@ -637,8 +652,12 @@ async function handleSlackChannels(request, env) {
       if (!cursor) break;
     }
     const channels = allChannels
-      .map(function(c) { return { id: c.id, name: c.name, isPrivate: !!c.is_private }; })
-      .sort(function(a, b) { return a.name.localeCompare(b.name); });
+      .map(function(c) { return { id: c.id, name: c.name, isPrivate: !!c.is_private }; });
+    const foundNames = new Set(channels.map(function(c) { return c.name; }));
+    Object.keys(KNOWN_CHANNEL_IDS).forEach(function(name) {
+      if (!foundNames.has(name)) channels.push({ id: KNOWN_CHANNEL_IDS[name], name: name, isPrivate: true });
+    });
+    channels.sort(function(a, b) { return a.name.localeCompare(b.name); });
     return json(200, { success: true, channels: channels, defaultChannelId: env.SLACK_CHANNEL_ID || null });
   } catch (e) {
     return json(502, { success: false, error: friendlySlackError(e) });
