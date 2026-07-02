@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.30</title>
+<title>Cars24 Projects Tracker v5.31</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2868,7 +2868,6 @@ function renderSatUat(){
   const _sub=renderSatUat._sub||'pipeline';
   const _snav='<div style="display:flex;gap:0;margin-bottom:14px;border-bottom:2px solid var(--border)">'
     +'<button onclick="renderSatUat._sub=\'pipeline\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='pipeline'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Pipeline</button>'
-    +'<button onclick="renderSatUat._sub=\'comm\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='comm'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">Communication</button>'
     +'<button onclick="renderSatUat._sub=\'hem\';renderSatUat()" style="padding:7px 14px;font-size:12px;font-weight:600;border:none;background:none;cursor:pointer;margin-bottom:-2px;border-bottom:'+(_sub==='hem'?'2px solid var(--primary);color:var(--primary)':'2px solid transparent;color:var(--muted)')+'">HEM Delays</button>'
     +'</div>';
   function _mkDWORow(u,col,showA){
@@ -2902,15 +2901,6 @@ function renderSatUat(){
   const _dH=dangerArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Danger - >10 Days Since SAT ('+dangerArr.length+')</div>'+_mkDWOTbl(dangerArr,'#dc2626',true)+'</div>':'';
   const _wH=warningArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Warning - 10-15 Days Since SAT ('+warningArr.length+')</div>'+_mkDWOTbl(warningArr,'#d97706',false)+'</div>':'';
   const _oH=onTrackArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">On Track - SAT Done, UAT Pending Under 10 Days ('+onTrackArr.length+')</div>'+_mkDWOTbl(onTrackArr,'#16a34a',false)+'</div>':'';
-  if(_sub==='comm'){
-    el.innerHTML=_snav+(satCommHtml||uatCommHtml
-      ?'<div style="padding:14px;border:1px solid var(--border);border-radius:12px">'
-        +'<div style="font-size:13px;font-weight:700;margin-bottom:4px">HEM + Design Communication</div>'
-        +'<div style="font-size:11px;color:var(--muted);margin-bottom:12px">To: blank - fill HEM and Design. CC: vicky.bhardwaj@cars24.com auto-added.</div>'
-        +satCommHtml+uatCommHtml+'</div>'
-      :'<div style="padding:40px;text-align:center;color:var(--muted)">No sites in the 14 day window right now.</div>');
-    return;
-  }
   if(_sub==='hem'){
     var _hemSites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
     var _hemTotal=_hemSites.reduce(function(s,sn){return s+getHemDelayTotal(sn);},0);
