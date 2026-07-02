@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.22</title>
+<title>Cars24 Projects Tracker v5.23</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1372,29 +1372,34 @@ function onSlackComposeTargetChange(){
 // and the Tickets tab's inline channel picker (#ticket-slack-channel,
 // populated at the end of renderTicketTab() below). `opts.pinned` (channel
 // names, e.g. team channels Vicky sends to most) are sorted to the top;
-// `opts.onMissing(missingNames)` fires with any pinned names not present in
-// the fetched list (app hasn't joined that channel yet) so the caller can
-// surface a hint instead of a channel that silently fails to send.
+// `opts.onlyPinned:true` restricts the dropdown to just those names instead
+// of listing every channel Vicky's joined; `opts.onMissing(missingNames)`
+// fires with any pinned names not present in the fetched list (Vicky hasn't
+// joined that channel yet) so the caller can surface a hint instead of a
+// channel that silently fails to send.
 function populateChannelSelect(sel, opts){
   opts=opts||{};
   var pinned=opts.pinned||[];
   sel.innerHTML='<option value="">Loading channels…</option>';
   loadSlackChannels().then(function(channels){
     if(!channels.length){ sel.innerHTML='<option value="">No channels found — check Slack app access</option>'; if(opts.onMissing) opts.onMissing(pinned); return; }
-    var current=getDefaultSlackChannel();
-    var sorted=channels.slice().sort(function(a,b){
+    var missing=pinned.filter(function(n){ return !channels.some(function(c){ return c.name===n; }); });
+    var list=opts.onlyPinned ? channels.filter(function(c){ return pinned.indexOf(c.name)!==-1; }) : channels;
+    var sorted=list.slice().sort(function(a,b){
       var pa=pinned.indexOf(a.name), pb=pinned.indexOf(b.name);
       if(pa!==-1||pb!==-1){ if(pa===-1) return 1; if(pb===-1) return -1; return pa-pb; }
       return a.name.localeCompare(b.name);
     });
-    sel.innerHTML=sorted.map(function(c){
-      return '<option value="'+esc(c.id)+'"'+(c.id===current?' selected':'')+'>#'+esc(c.name)+(c.isPrivate?' 🔒':'')+'</option>';
-    }).join('');
-    if(!current && sorted[0]) setDefaultSlackChannel(sorted[0].id);
-    if(opts.onMissing){
-      var missing=pinned.filter(function(n){ return !channels.some(function(c){ return c.name===n; }); });
-      opts.onMissing(missing);
+    if(!sorted.length){
+      sel.innerHTML='<option value="">None of the required channels are joined yet</option>';
+    } else {
+      var current=getDefaultSlackChannel();
+      sel.innerHTML=sorted.map(function(c){
+        return '<option value="'+esc(c.id)+'"'+(c.id===current?' selected':'')+'>#'+esc(c.name)+(c.isPrivate?' 🔒':'')+'</option>';
+      }).join('');
+      if(!sorted.some(function(c){ return c.id===current; })) setDefaultSlackChannel(sorted[0].id);
     }
+    if(opts.onMissing) opts.onMissing(missing);
   });
 }
 function populateSlackChannelPicker(){
@@ -7138,7 +7143,7 @@ function renderTicketTab(){
   el.innerHTML=html;
   if(isVicky()){
     var chSel=document.getElementById('ticket-slack-channel');
-    if(chSel) populateChannelSelect(chSel, { pinned: TICKET_SLACK_CHANNELS, onMissing: function(missing){
+    if(chSel) populateChannelSelect(chSel, { pinned: TICKET_SLACK_CHANNELS, onlyPinned: true, onMissing: function(missing){
       var warnEl=document.getElementById('ticket-slack-channel-warn');
       if(!warnEl) return;
       if(missing.length){
