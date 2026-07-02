@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.19</title>
+<title>Cars24 Projects Tracker v5.20</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1135,6 +1135,11 @@ function sendToSlack(mode, email, text, btn, channel) {
 // buttons) reuses it via getDefaultSlackChannel(). Falls back to the
 // Worker's SLACK_CHANNEL_ID (server-side) if nothing's been picked yet.
 var __slackChannels = null; // [{id,name,isPrivate}] once loaded, else null
+// Channels Vicky sends ticket updates to most — pinned to the top of every
+// channel picker (compose modal + the Tickets tab's inline picker below).
+// If SLACK_USER_TOKEN's identity hasn't joined one of these yet it won't
+// appear in the fetched list — the pickers surface that via onMissing.
+var TICKET_SLACK_CHANNELS = ['expansion-projects-team','expansion_core_india','projects-internal'];
 function getDefaultSlackChannel() {
   return localStorage.getItem('slackChannelId') || '';
 }
@@ -1313,6 +1318,29 @@ function sendTicketDigestsToSlack(btn){
   if(btn){btn.disabled=false;btn.textContent=origLabel;}
 }
 
+// Per-ticket "📣" button (Tickets tab table row) — DMs just that ticket's
+// assignee, for when Vicky wants to nudge one PM about one ticket instead of
+// waiting for the batched sendTicketDigestsToSlack() run. Same per-ticket
+// link format as the two batch senders above.
+function sendSingleTicketToSlack(id, btn){
+  var r=TICKET_DATA.find(function(t){return String(t['ID'])===String(id);});
+  if(!r){ toast('Ticket not found','err'); return; }
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
+  var assign=col(r,['Assigned To','assigned_to']).trim();
+  if(!assign||assign.toLowerCase()==='unassigned'){ toast('This ticket has no assignee to message','err'); return; }
+  var email=resolvePmEmail(assign);
+  if(!email){ toast('No Slack email mapped for '+assign,'err'); return; }
+  var first=assign.split(' ')[0];
+  var id_=col(r,['ID','id'])||id;
+  var title=col(r,['Title','title'])||'Untitled';
+  var desc=col(r,['Description'])||'';
+  var pri=col(r,['Priority','priority']);
+  var site=tickSiteName(col(r,['Store','store']));
+  var link='<https://processflows.ai/tickets/'+id_+'|#'+id_+'>';
+  var lines=['Hey '+first+' — quick nudge on this one:','','• ['+site+'] '+title+(desc?': '+desc:'')+(pri?' ('+pri+')':'')+' - '+link];
+  sendToSlack('dm', email, lines.join('\n'), btn);
+}
+
 // Toolbar "📣 Slack Message" button — free-text compose to the team channel
 // or any person (pick a PM from the list or type any @cars24.com email),
 // for anything the pre-built alert/digest buttons elsewhere don't cover.
@@ -1339,17 +1367,37 @@ function onSlackComposeTargetChange(){
   document.getElementById('slack-compose-dm-row').style.display = mode==='dm' ? 'block' : 'none';
   document.getElementById('slack-compose-channel-row').style.display = mode==='dm' ? 'none' : 'block';
 }
-function populateSlackChannelPicker(){
-  var sel=document.getElementById('slack-compose-channel');
+// Shared channel-select populator used by both the free-text compose modal
+// and the Tickets tab's inline channel picker (#ticket-slack-channel,
+// populated at the end of renderTicketTab() below). `opts.pinned` (channel
+// names, e.g. team channels Vicky sends to most) are sorted to the top;
+// `opts.onMissing(missingNames)` fires with any pinned names not present in
+// the fetched list (app hasn't joined that channel yet) so the caller can
+// surface a hint instead of a channel that silently fails to send.
+function populateChannelSelect(sel, opts){
+  opts=opts||{};
+  var pinned=opts.pinned||[];
   sel.innerHTML='<option value="">Loading channels…</option>';
   loadSlackChannels().then(function(channels){
-    if(!channels.length){ sel.innerHTML='<option value="">No channels found — check Slack app access</option>'; return; }
+    if(!channels.length){ sel.innerHTML='<option value="">No channels found — check Slack app access</option>'; if(opts.onMissing) opts.onMissing(pinned); return; }
     var current=getDefaultSlackChannel();
-    sel.innerHTML=channels.map(function(c){
+    var sorted=channels.slice().sort(function(a,b){
+      var pa=pinned.indexOf(a.name), pb=pinned.indexOf(b.name);
+      if(pa!==-1||pb!==-1){ if(pa===-1) return 1; if(pb===-1) return -1; return pa-pb; }
+      return a.name.localeCompare(b.name);
+    });
+    sel.innerHTML=sorted.map(function(c){
       return '<option value="'+esc(c.id)+'"'+(c.id===current?' selected':'')+'>#'+esc(c.name)+(c.isPrivate?' 🔒':'')+'</option>';
     }).join('');
-    if(!current && channels[0]) setDefaultSlackChannel(channels[0].id);
+    if(!current && sorted[0]) setDefaultSlackChannel(sorted[0].id);
+    if(opts.onMissing){
+      var missing=pinned.filter(function(n){ return !channels.some(function(c){ return c.name===n; }); });
+      opts.onMissing(missing);
+    }
   });
+}
+function populateSlackChannelPicker(){
+  populateChannelSelect(document.getElementById('slack-compose-channel'));
 }
 function sendSlackComposeMessage(btn){
   var textEl=document.getElementById('slack-compose-text');
@@ -7011,10 +7059,15 @@ function renderTicketTab(){
   html+=dd('Site:',siteOpts,fSite,'Site');
   html+=dd('Assigned:',assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
-  if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
-  if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketDigestsToSlack(this)" style="font-size:11px">📨 Ticket Updates</button>';
+  if(isVicky()){
+    html+='<span style="font-size:10px;color:var(--muted);white-space:nowrap">Channel:</span>';
+    html+='<select id="ticket-slack-channel" onchange="setDefaultSlackChannel(this.value)" style="font-size:11px;padding:3px 6px;border-radius:5px;border:1px solid var(--border);background:var(--surface)"><option value="">Loading…</option></select>';
+    html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
+    html+='<button class="btn btn-o btn-sm" onclick="sendTicketDigestsToSlack(this)" style="font-size:11px">📨 Ticket Updates</button>';
+  }
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
+  if(isVicky()) html+='<div id="ticket-slack-channel-warn" style="font-size:10px;color:#d97706;display:none"></div>';
 
   // Row 2 & 3: chip filters
   html+='<div style="padding-top:4px;border-top:1px solid var(--border)">';
@@ -7036,6 +7089,7 @@ function renderTicketTab(){
   ['Created At','Updated At'].forEach(function(h){
     html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">'+h+'</th>';
   });
+  if(isVicky()) html+='<th style="padding:7px 10px;text-align:left;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;white-space:nowrap">Slack</th>';
   html+='</tr></thead><tbody>';
 
   filtered.forEach(function(r){
@@ -7070,11 +7124,30 @@ function renderTicketTab(){
     html+='<td style="padding:7px 10px;font-size:11px;font-weight:700;color:'+tickTATColor(tat)+'">'+tat+'d</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+esc(createdAt)+'</td>';
     html+='<td style="padding:7px 10px;font-size:11px;color:var(--muted);white-space:nowrap">'+esc(updatedAt)+'</td>';
+    if(isVicky()){
+      var hasAssignee=assign&&assign.toLowerCase()!=='unassigned';
+      html+='<td style="padding:7px 10px;white-space:nowrap">'
+        +'<button data-slack-ticket-id="'+esc(id)+'" onclick="event.stopPropagation();sendSingleTicketToSlack(this.dataset.slackTicketId,this)" title="'+(hasAssignee?'DM '+esc(assign)+' about this ticket':'No assignee to message')+'" '+(hasAssignee?'':'disabled')+' style="font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:'+(hasAssignee?'pointer':'not-allowed')+';opacity:'+(hasAssignee?'1':'.4')+'">📣</button>'
+        +'</td>';
+    }
     html+='</tr>';
   });
 
   html+='</tbody></table></div>';
   el.innerHTML=html;
+  if(isVicky()){
+    var chSel=document.getElementById('ticket-slack-channel');
+    if(chSel) populateChannelSelect(chSel, { pinned: TICKET_SLACK_CHANNELS, onMissing: function(missing){
+      var warnEl=document.getElementById('ticket-slack-channel-warn');
+      if(!warnEl) return;
+      if(missing.length){
+        warnEl.textContent='⚠ Slack app hasn\'t joined: '+missing.map(function(n){return '#'+n;}).join(', ')+' — invite it there or these won\'t be selectable.';
+        warnEl.style.display='block';
+      } else {
+        warnEl.style.display='none';
+      }
+    }});
+  }
 }
 
 function showTicketDetail(id){
