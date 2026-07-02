@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.15</title>
+<title>Cars24 Projects Tracker v5.16</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1223,7 +1223,8 @@ function sendTicketDigestsToSlack(btn){
       var id=col(r,['ID','id'])||'—';
       var title=col(r,['Title','title'])||'Untitled';
       var pri=col(r,['Priority','priority']);
-      lines.push('• #'+id+' — '+title+(pri?' ('+pri+')':''));
+      var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
+      lines.push('• '+link+' — '+title+(pri?' ('+pri+')':''));
     });
     sendToSlack('dm', email, lines.join('\n'), null);
     sent++;
