@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.9</title>
+<title>Cars24 Projects Tracker v5.10</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1025,9 +1025,10 @@ function buildMailCC(r) {
   return encodeURIComponent(cc.join(','));
 }
 
-// Posts a message via the Worker's Slack relay (the bot token itself never
-// reaches the browser). mode='dm' resolves `email` to a Slack user via
-// users.lookupByEmail server-side; mode='channel' posts to SLACK_CHANNEL_ID.
+// Posts a message via the Worker's Slack relay (the token itself never
+// reaches the browser — the Worker posts via SLACK_USER_TOKEN, as Vicky).
+// mode='dm' resolves `email` to a Slack user via users.lookupByEmail
+// server-side; mode='channel' posts to SLACK_CHANNEL_ID.
 function sendToSlack(mode, email, text, btn) {
   var ah = workerAuthHeader();
   if (!ah) { toast('Sign in first to send Slack messages', 'err'); return; }
