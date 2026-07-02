@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.9</title>
+<title>Cars24 Projects Tracker v5.11</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -589,6 +589,36 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   <button onclick="document.getElementById('photo-modal').style.display='none'" style="position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;font-size:18px;cursor:pointer">×</button>
 </div>
 
+<!-- Slack Compose Modal — free-text send to the team channel or any person,
+     Vicky-only (button that opens this is data-vicky-only gated; the Worker
+     also rejects /slack/send server-side for anyone else). -->
+<div id="slack-compose-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9200;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closeSlackComposeModal()">
+  <div style="background:var(--white);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:420px;max-width:100%;font-family:'Inter',sans-serif;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:16px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:700;color:#fff">📣 Send Slack Message</div>
+        <button onclick="closeSlackComposeModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+      </div>
+    </div>
+    <div style="padding:18px 20px">
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Send to</label>
+      <div style="display:flex;gap:16px;margin-bottom:12px">
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="slack-compose-target" value="channel" checked onchange="onSlackComposeTargetChange()"> Team Channel</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="slack-compose-target" value="dm" onchange="onSlackComposeTargetChange()"> Direct Message</label>
+      </div>
+      <div id="slack-compose-dm-row" style="display:none;margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Person (pick a PM or type any @cars24.com email)</label>
+        <input id="slack-compose-person" list="slack-compose-person-list" placeholder="name@cars24.com" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none">
+        <datalist id="slack-compose-person-list"></datalist>
+      </div>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Message</label>
+      <textarea id="slack-compose-text" rows="6" placeholder="Type your message…" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;resize:vertical;margin-bottom:12px;box-sizing:border-box"></textarea>
+      <div id="slack-compose-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
+      <button class="btn btn-p" id="slack-compose-send" onclick="sendSlackComposeMessage(this)" style="width:100%;justify-content:center;padding:10px;font-size:13px;font-weight:600;border-radius:8px">Send</button>
+    </div>
+  </div>
+</div>
+
 <div class="kpi-bar" id="kpi-bar" style="display:none"></div>
 <div id="kpi-panel" style="display:none;background:var(--white);border-bottom:1px solid var(--border);padding:8px 16px;flex-shrink:0;flex-wrap:wrap;gap:8px">
   <span style="font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;align-self:center">Show/Hide KPI Tiles:</span>
@@ -670,6 +700,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
     <button class="vtab" id="tab-adminv" data-admin-only="true" onclick="setView('adminv',this)">⚙ Admin</button>
   </div>
+  <button class="btn btn-o btn-sm" data-vicky-only="true" onclick="openSlackComposeModal()" style="font-size:11px;display:none">📣 Slack Message</button>
   <span class="cchip" id="cchip"></span>
 
 </div>
@@ -1025,9 +1056,10 @@ function buildMailCC(r) {
   return encodeURIComponent(cc.join(','));
 }
 
-// Posts a message via the Worker's Slack relay (the bot token itself never
-// reaches the browser). mode='dm' resolves `email` to a Slack user via
-// users.lookupByEmail server-side; mode='channel' posts to SLACK_CHANNEL_ID.
+// Posts a message via the Worker's Slack relay (the token itself never
+// reaches the browser — the Worker posts via SLACK_USER_TOKEN, as Vicky).
+// mode='dm' resolves `email` to a Slack user via users.lookupByEmail
+// server-side; mode='channel' posts to SLACK_CHANNEL_ID.
 function sendToSlack(mode, email, text, btn) {
   var ah = workerAuthHeader();
   if (!ah) { toast('Sign in first to send Slack messages', 'err'); return; }
@@ -1104,6 +1136,46 @@ function sendTicketSummaryToSlack(btn){
   var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
   var text='*🎫 Ticket Summary — '+ds+'*\n\n📊 *'+total+' open* · 🚨 '+urgent+' urgent · ⏰ '+over30+' over 30d · ❓ '+unassigned+' unassigned';
   sendToSlack('channel', null, text, btn);
+}
+
+// Toolbar "📣 Slack Message" button — free-text compose to the team channel
+// or any person (pick a PM from the list or type any @cars24.com email),
+// for anything the pre-built alert/digest buttons elsewhere don't cover.
+function openSlackComposeModal(){
+  if(!isVicky()){ toast('Slack messaging is restricted to Vicky','err'); return; }
+  document.getElementById('slack-compose-text').value='';
+  document.getElementById('slack-compose-person').value='';
+  document.getElementById('slack-compose-error').style.display='none';
+  document.querySelector('input[name="slack-compose-target"][value="channel"]').checked=true;
+  onSlackComposeTargetChange();
+  var dl=document.getElementById('slack-compose-person-list');
+  dl.innerHTML=Object.keys(PM_EMAIL_MAP).sort().map(function(n){
+    return '<option value="'+esc(PM_EMAIL_MAP[n])+'">'+esc(n)+'</option>';
+  }).join('');
+  document.getElementById('slack-compose-modal').style.display='flex';
+  document.getElementById('slack-compose-text').focus();
+}
+function closeSlackComposeModal(){
+  document.getElementById('slack-compose-modal').style.display='none';
+}
+function onSlackComposeTargetChange(){
+  var mode=document.querySelector('input[name="slack-compose-target"]:checked').value;
+  document.getElementById('slack-compose-dm-row').style.display = mode==='dm' ? 'block' : 'none';
+}
+function sendSlackComposeMessage(btn){
+  var textEl=document.getElementById('slack-compose-text');
+  var text=textEl.value.trim();
+  var errEl=document.getElementById('slack-compose-error');
+  errEl.style.display='none';
+  if(!text){ errEl.textContent='Message cannot be empty'; errEl.style.display='block'; return; }
+  var mode=document.querySelector('input[name="slack-compose-target"]:checked').value;
+  var email=null;
+  if(mode==='dm'){
+    email=document.getElementById('slack-compose-person').value.trim();
+    if(!email || email.indexOf('@')===-1){ errEl.textContent='Enter or pick a valid email to DM'; errEl.style.display='block'; return; }
+  }
+  sendToSlack(mode, email, text, btn);
+  textEl.value='';
 }
 
 function applyRoleBasedView() {

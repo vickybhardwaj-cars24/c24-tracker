@@ -36,16 +36,23 @@
 //                                 follow-up commit.
 // POST /slack/send              → { mode:'channel'|'dm', email?, text }.
 //                                 Requires the same auth as /upload. Relays to
-//                                 Slack's Web API using SLACK_BOT_TOKEN so the
+//                                 Slack's Web API using SLACK_USER_TOKEN so the
 //                                 token never touches client-side code.
 //
 // Required env (Worker → Settings → Variables and Secrets):
 //   AUTH_USERNAME  - plaintext username
 //   AUTH_PASSWORD  - plaintext password
 //   ALLOWED_TOOLS  - (optional) comma-separated allowlist
+//   SLACK_USER_TOKEN        - User OAuth Token (xoxp-...), issued to Vicky.
+//                             Needs the chat:write, users:read,
+//                             users:read.email User Token Scopes in the
+//                             Slack app. Used for the manual /slack/send
+//                             relay (buttons clicked on the dashboard) so
+//                             those messages post as Vicky, not as a bot.
 //   SLACK_BOT_TOKEN         - Bot User OAuth Token (xoxb-...). Needs the
 //                             chat:write, users:read, users:read.email
-//                             Bot Token Scopes in the Slack app.
+//                             Bot Token Scopes in the Slack app. Used only by
+//                             the automatic daily cron digest below.
 //   SLACK_CHANNEL_ID        - channel ID that channel-mode alerts post to
 //   SLACK_AUTOMATION_ENABLED - set to '1' to arm the daily cron digest below;
 //                             leave unset until manual /slack/send sends have
@@ -353,9 +360,10 @@ async function readBodyCapped(request, limit) {
 }
 
 // ═══ SLACK INTEGRATION ═══════════════════════════════════════════════════
-// Bot token never leaves this Worker — the frontend only ever calls our own
-// POST /slack/send, never slack.com directly. See header comment for the
-// required SLACK_BOT_TOKEN / SLACK_CHANNEL_ID / SLACK_AUTOMATION_ENABLED env.
+// Tokens never leave this Worker — the frontend only ever calls our own
+// POST /slack/send, never slack.com directly. Manual (button-triggered)
+// sends use SLACK_USER_TOKEN (posts as Vicky); the automatic cron digest
+// uses SLACK_BOT_TOKEN. See header comment for the required env vars.
 
 // Reconstructed from the removed SLACK_HANDLES map (frontend index.html had
 // the same 26-name table before the old Slack tab was deleted) — converts
@@ -374,12 +382,15 @@ const PM_EMAIL_MAP = {
   'Vicky':'vicky.bhardwaj@cars24.com','Vinod':'vinod.yadav@cars24.com',
 };
 
-async function slackApi(env, method, params) {
-  if (!env.SLACK_BOT_TOKEN) { const e = new Error('SLACK_BOT_TOKEN not configured'); e.code = 'NOT_CONFIGURED'; throw e; }
+// `token` is passed explicitly by each call site (SLACK_USER_TOKEN for
+// manual sends, SLACK_BOT_TOKEN for the cron digest) rather than read here,
+// so the two Slack identities never get silently mixed up.
+async function slackApi(token, method, params) {
+  if (!token) { const e = new Error('Slack token not configured'); e.code = 'NOT_CONFIGURED'; throw e; }
   const resp = await fetch(`https://slack.com/api/${method}`, {
     method: 'POST',
     headers: {
-      'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}`,
+      'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json; charset=utf-8',
     },
     body: JSON.stringify(params),
@@ -389,16 +400,16 @@ async function slackApi(env, method, params) {
   return data;
 }
 
-async function resolveSlackUserId(env, email) {
+async function resolveSlackUserId(token, email) {
   const url = `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`;
-  const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}` } });
+  const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${token}` } });
   const data = await resp.json();
   if (!data.ok) throw new Error(`users.lookupByEmail failed for ${email}: ${data.error || 'unknown_error'}`);
   return data.user.id;
 }
 
-async function postSlackMessage(env, channel, text) {
-  return slackApi(env, 'chat.postMessage', { channel, text, unfurl_links: false });
+async function postSlackMessage(token, channel, text) {
+  return slackApi(token, 'chat.postMessage', { channel, text, unfurl_links: false });
 }
 
 // POST /slack/send — { mode:'channel'|'dm', email?, text }. Same auth gate as
@@ -429,27 +440,30 @@ async function handleSlackSend(request, env) {
     return json(403, { success: false, error: 'Slack alerts are restricted to ' + SLACK_ALLOWED_EMAIL });
   }
 
+  if (!env.SLACK_USER_TOKEN) return json(500, { success: false, error: 'SLACK_USER_TOKEN not configured' });
+
   let body;
   try { body = await request.json(); } catch (_e) { return json(400, { success: false, error: 'Invalid JSON body' }); }
   const { mode, email, text } = body || {};
   if (!text || typeof text !== 'string') return json(400, { success: false, error: 'Missing text' });
 
+  const token = env.SLACK_USER_TOKEN;
   try {
     if (mode === 'dm') {
       if (!email) return json(400, { success: false, error: 'Missing email for DM' });
       let userId;
-      try { userId = await resolveSlackUserId(env, email); }
+      try { userId = await resolveSlackUserId(token, email); }
       catch (e) {
         // No Slack account for this email — fall back to the channel so the
         // message isn't silently dropped.
         if (!env.SLACK_CHANNEL_ID) return json(502, { success: false, error: String(e && e.message || e) });
-        await postSlackMessage(env, env.SLACK_CHANNEL_ID, text);
+        await postSlackMessage(token, env.SLACK_CHANNEL_ID, text);
         return json(200, { success: true, fellBackToChannel: true });
       }
-      await postSlackMessage(env, userId, text);
+      await postSlackMessage(token, userId, text);
     } else {
       if (!env.SLACK_CHANNEL_ID) return json(500, { success: false, error: 'SLACK_CHANNEL_ID not configured' });
-      await postSlackMessage(env, env.SLACK_CHANNEL_ID, text);
+      await postSlackMessage(token, env.SLACK_CHANNEL_ID, text);
     }
     return json(200, { success: true });
   } catch (e) {
@@ -604,7 +618,7 @@ async function postCrossFunctionalBlockers(env, sitesText) {
     lines.push('*' + tag + '* — ' + buckets[tag].length + ' site' + (buckets[tag].length > 1 ? 's' : ''));
     buckets[tag].forEach(s => lines.push('  • ' + s));
   });
-  await postSlackMessage(env, env.SLACK_CHANNEL_ID, lines.join('\n'));
+  await postSlackMessage(env.SLACK_BOT_TOKEN, env.SLACK_CHANNEL_ID, lines.join('\n'));
 }
 
 async function postPmDigests(env, sitesText) {
@@ -627,8 +641,8 @@ async function postPmDigests(env, sitesText) {
       lines.push('*' + r['Site Name'] + '* (' + status + (pct ? ' · ' + pct : '') + ')' + (stale >= STALE_WARN_DAYS_W ? ' ⏸ ' + stale + 'd stale' : ''));
     });
     try {
-      const userId = await resolveSlackUserId(env, email);
-      await postSlackMessage(env, userId, lines.join('\n'));
+      const userId = await resolveSlackUserId(env.SLACK_BOT_TOKEN, email);
+      await postSlackMessage(env.SLACK_BOT_TOKEN, userId, lines.join('\n'));
     } catch (e) { console.error('PM digest DM failed for ' + owner + ':', e); }
   }
 }
@@ -670,7 +684,7 @@ async function postDelayReminders(env, sitesText) {
     lines.push('*UAT Overdue* (' + uatOverdue.length + '):');
     uatOverdue.sort((a,b) => b.days - a.days).forEach(x => lines.push('  • ' + x.site + ' — ' + x.days + 'd since SAT (' + (x.owner || 'Unassigned') + ')'));
   }
-  await postSlackMessage(env, env.SLACK_CHANNEL_ID, lines.join('\n'));
+  await postSlackMessage(env.SLACK_BOT_TOKEN, env.SLACK_CHANNEL_ID, lines.join('\n'));
 }
 
 async function postTicketSummary(env, ticketsText) {
@@ -684,7 +698,7 @@ async function postTicketSummary(env, ticketsText) {
   const today = new Date();
   const dateStr = today.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
   const lines = ['*🎫 Ticket Summary — ' + dateStr + '*', '', '📊 *' + total + ' open* · 🚨 ' + urgent + ' urgent · ⏰ ' + over30 + ' over 30d · ❓ ' + unassigned + ' unassigned'];
-  await postSlackMessage(env, env.SLACK_CHANNEL_ID, lines.join('\n'));
+  await postSlackMessage(env.SLACK_BOT_TOKEN, env.SLACK_CHANNEL_ID, lines.join('\n'));
 }
 
 async function runSlackDailyDigest(env) {
