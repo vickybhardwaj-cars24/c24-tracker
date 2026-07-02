@@ -113,6 +113,10 @@ Sites shown in BD tab: `Status = 'bd' | 'design' | 'boq'` Drop off automatically
 
 Status values excluded from open count: `closed`, `na`, `n/a`, `not applicable`
 
+### Date Parsing (`pd()`)
+
+`pd(s)` is the single global date parser used everywhere (SAT/UAT calcs, revision history, procurement, penalty notices…). It tries, in order: (1) a purely-numeric `dd-mm-yyyy` / `dd/mm/yyyy` string — parsed explicitly as **day-first** (matches the Indian-locale Excel/CSV export format most uploads use); (2) a month-name token match (`"7 Apr"`, `"23rd January"` style — see Revision History Parsing above); (3) a native `new Date(s)` fallback for long timestamps. Rule (1) exists because the native `Date` constructor either rejects numeric day-first dates outright or, worse, silently misreads them as US `mm-dd-yyyy` when day ≤ 12 (e.g. `"05-06-2026"` → wrongly parsed as May 6 instead of June 5) — this caused procurement delivery dates to silently fail their overdue check. **Never remove rule (1) or reorder it after the native-Date fallback.**
+
 ---
 
 ## Email / Mailer Rules
@@ -120,10 +124,23 @@ Status values excluded from open count: `closed`, `na`, `n/a`, `not applicable`
 All Gmail drafts:
 
 - **To:** blank (PM fills manually)  
-- **CC:** `vicky.bhardwaj@cars24.com, rajat.sharma3@cars24.com`  
+- **CC:** built by `buildMailCC(r)` — always `vicky.bhardwaj@cars24.com, rajat.sharma3@cars24.com`, plus the site's assigned HEM email (looked up from `HEM_EMAIL_MAP[r['HEM Name']]`) when set. Every mailer function calls `buildMailCC(r)` for its `cc=` param instead of a hardcoded string — **always use it for any new mailer**, never hardcode the CC list again.  
 - Never add "CC: Vicky Bhardwaj, Head of Projects" in body text  
-- 3 mailer types: `gmailDraft(r, 'SAT'|'UAT')`, `vendorDelayMail(r)`, `satDelayMail(r)`  
-- 4 team triggers per BD site: `bdTeamMail(r, 'IT'|'NSO'|'Admin'|'HEM', tempLiveD, finalLiveD)`
+- Mailer functions: `gmailDraft(r, 'SAT'|'UAT')`, `vendorDelayMail(r)` (UAT delay), `satDelayMail(r)`, `handoverUrgencyMail(r)`, `procureDelayMail(r, problemItems)`, `vendorPenaltyMail(r, problemItems)` (delayed-delivery penalty slabs — see below), `snagVendorMailUrl(site)`, `pendingDocReminderMail(r, missingDocs)`
+
+### Vendor Penalty Notice (`vendorPenaltyMail`)
+
+Formal penalty notice to the vendor for overdue procurement items, computed per-item from `PROCURE_DATA[siteName]` delivery dates via `pd()`. Slabs (fixed CARS24 policy, do not change without explicit instruction):
+- 1–10 days overdue: grace period, 0% penalty
+- 11–25 days: Margin + 2% penalty
+- 26–30 days: Margin × 2% penalty
+- Beyond 30 days: PO stands cancelled unless otherwise agreed to in writing by CARS24
+
+Button lives in `renderProcureSection()` next to the existing "Delay Notice" button, gated on `overdue>0` (the same `overdue` count used by the stat tile).
+
+### HEM Name Field
+
+Per-site "HEM Name" — a dropdown in the site modal (`renderMetaField()`'s `l === 'HEM Name'` branch, saved via `saveHemName(idx,v)` → `saveSiteFieldToSupabase(siteName,'HEM Name',...)`, same `site_field_overrides` mechanism Cost Center uses). Options come from `HEM_EMAIL_MAP` (name → `@cars24.com` email, ~11 entries as of v5.9, sourced from the HEM roster CSV). Selecting a HEM auto-CCs their email on all mailers going forward via `buildMailCC(r)`.
 
 ---
 
@@ -140,6 +157,16 @@ All Gmail drafts:
 - **Tickets Sheet ID:** `1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M`  
 - Live sync blocked by Google Workspace admin restriction (Anyone at Cars24 only — cannot change to Anyone)  
 - Workaround: manual CSV upload via toolbar buttons
+
+---
+
+## Cross-User Data Sync (Procurement / Schedule / LL Scope)
+
+`PROCURE_DATA`, `SCHED_DATA`, `LL_SCOPE_DATA` (procurement items, Cars24 schedule tasks, landlord scope tasks) persist immediately on every checkbox toggle via `POST /mappings` to the Worker's R2-backed key-value store (`saveProcureData()`/`saveSchedData()`/`saveLLScopeData()`) — this part was always correct. The gap (fixed in v5.9): these three were only ever *fetched* once, at page bootstrap (`loadFromOrigin()`), so one user's toggle never appeared for anyone else already on the page without a manual refresh.
+
+Fix: `startDataSyncPolling()` (called once at bootstrap) re-fetches all three every 45s via `Promise.all([loadProcureData(), loadSchedData(), loadLLScopeData()])`. If a site's modal is open when new data lands, and no input/textarea/select/contenteditable inside the modal currently has focus (so an in-progress edit is never clobbered), it calls `openModal(openIdx)` again — the same "refresh everything for this site" pattern the codebase already uses after `addU()`. `window.__openModalIdx` tracks which site is open, set in `openModal()` and cleared in `closeModal()`.
+
+Milestone Gates (`toggleGate()`) already write straight to a Supabase table (`milestone_gates`) and were not part of this fix — they're a separate, already-correctly-centralized data model, just still missing a realtime push (re-opening the site's Construction tab already re-fetches fresh).
 
 ---
 
@@ -233,8 +260,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.6 | Removed Slack option entirely — `renderSlackTab()` and its Cross-Functional/PM Update/Tickets sub-tabs, the `slackv` vtab button/div, `SLACK_HANDLES`/`slackHandle()`, `copyTasksForSlack()` (Tasks tab), `generateTicketSlack()`/`buildTicketSlackLines()` (Tickets tab), `copyToClipboard()`, and the `#slack-modal` markup/CSS all removed |
 | v5.7 | Real Slack API integration (replacing the copy-paste feature removed in v5.6) — new Worker `POST /slack/send` relay (`slackApi`/`resolveSlackUserId`/`postSlackMessage` in `worker.js`, bot token never reaches the browser) plus `sendToSlack()` in `index.html`; manual "📣" buttons next to every delay-mailer button, PM Scorecard, Tickets tab, and Insights → Delay Analysis; automatic daily digest via a second Worker cron (`30 3 * * *`, gated on `SLACK_AUTOMATION_ENABLED`) that reads `projects-tracker.csv`/`tickets.csv` straight from R2. See "Slack Integration" section above |
 | v5.8 | Restricted all manual Slack buttons to Vicky only — `isVicky()` (checks `__sbUser.email`) gates every inline button plus a new `data-vicky-only="true"` + `applyRoleBasedView()` toggle for the static PM Scorecard button; `worker.js`'s `handleSlackSend()` now also rejects `/slack/send` server-side unless the Bearer JWT's `email` claim matches, so the restriction can't be bypassed by calling the API directly |
+| v5.9 | Four fixes/features: (1) `pd()` now parses purely-numeric `dd-mm-yyyy`/`dd/mm/yyyy` dates day-first before any fallback — root cause of procurement delivery dates silently not flagging as overdue (previously either `Invalid Date` or, worse, misread as US `mm-dd-yyyy`); (2) new `vendorPenaltyMail()` + "⚠ Penalty Notice" button in `renderProcureSection()` applying the standard CARS24 delayed-delivery penalty slabs; (3) new per-site "HEM Name" dropdown in the site modal (`HEM_EMAIL_MAP`, `saveHemName()`, reuses the `site_field_overrides` mechanism) whose email is now auto-CC'd on every mailer via the new `buildMailCC(r)` helper (replaces the hardcoded CC string in all 8 mailer functions); (4) `startDataSyncPolling()` re-fetches `PROCURE_DATA`/`SCHED_DATA`/`LL_SCOPE_DATA` every 45s and refreshes an open site modal (focus-guarded) so checkbox changes become visible to other users without a manual page reload — see "Cross-User Data Sync" section above |
 
 ---
 
-## Current Version: v5.8
+## Current Version: v5.9
 
