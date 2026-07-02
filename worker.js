@@ -389,17 +389,18 @@ async function readBodyCapped(request, limit) {
 // shared module between the two runtimes.
 // NOTE: 'Arun', 'Harshit', 'Karan' below are the OLD entries, unconfirmed
 // against the July 2026 department roster (they didn't appear in it) —
-// kept as-is rather than guessed-removed. 'Adarsh', 'Ashish', 'Gaurav' and
-// 'Tushar' each have 2-3 people sharing that first name in the roster and
-// are deliberately left OUT until disambiguated, since this map's
-// first-name-only key can only hold one email per name — see CLAUDE.md.
+// kept as-is rather than guessed-removed. 'Adarsh', 'Ashish' and 'Tushar'
+// each have 2-3 people sharing that first name in the roster and are
+// deliberately left OUT until disambiguated, since this map's first-name-
+// only key can only hold one email per name — see CLAUDE.md. ('Gaurav' was
+// disambiguated to gaurav.jangir@cars24.com — Vicky's core team.)
 const PM_EMAIL_MAP = {
   'Aabhas':'aabhas.gautam@cars24.com','Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.akhtar1@cars24.com',
   'Amit':'amit.4@cars24.com','Amritanshu':'amritanshu.pandey@cars24.com','Arun':'arun.varghese@cars24.com',
   'Atharva':'atharva.singh@cars24.com','Ayushi':'ayushi.khanna@cars24.com','Binshanth':'binshanthsp.1@cars24.com',
   'Bipin':'bipin.dhondiyal@cars24.com','Bishwanath':'bishwanath.pandey1@cars24.com','Boobalan':'boobalan.chinnapoongu@cariotauto.com',
   'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharma@cariotauto.com','Dipanshu':'dipanshu.jaskalyan@cars24.com',
-  'Harshit':'harshit.pandey@cars24.com','Himanshu':'himanshu.19@cars24.com','Hosiyar':'hosiyar.singh1@cars24.com',
+  'Gaurav':'gaurav.jangir@cars24.com','Harshit':'harshit.pandey@cars24.com','Himanshu':'himanshu.19@cars24.com','Hosiyar':'hosiyar.singh1@cars24.com',
   'Indranil':'indranil.chowdhury@cars24.com','Ish':'ish.kartikesh@cars24.com','Kamal':'kamal.saini@cars24.com',
   'Karan':'karan.dhar.singh.bharti@cars24.com','Kartik':'kartik.jaskalyan@cars24.com','Kiran':'kiran.walanjkar@cars24.com',
   'Kotra':'kotra.viswanath@cars24.com','Nishant':'nishant.verma@cariotauto.com','Nitesh':'nitesh.kumar13@cars24.com',
