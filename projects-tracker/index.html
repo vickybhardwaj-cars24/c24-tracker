@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.23</title>
+<title>Cars24 Projects Tracker v5.24</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1382,7 +1382,7 @@ function populateChannelSelect(sel, opts){
   var pinned=opts.pinned||[];
   sel.innerHTML='<option value="">Loading channels…</option>';
   loadSlackChannels().then(function(channels){
-    if(!channels.length){ sel.innerHTML='<option value="">No channels found — check Slack app access</option>'; if(opts.onMissing) opts.onMissing(pinned); return; }
+    if(!channels.length){ sel.innerHTML='<option value="">No channels found — check Slack app access</option>'; if(opts.onMissing) opts.onMissing(pinned, 0); return; }
     var missing=pinned.filter(function(n){ return !channels.some(function(c){ return c.name===n; }); });
     var list=opts.onlyPinned ? channels.filter(function(c){ return pinned.indexOf(c.name)!==-1; }) : channels;
     var sorted=list.slice().sort(function(a,b){
@@ -1399,7 +1399,7 @@ function populateChannelSelect(sel, opts){
       }).join('');
       if(!sorted.some(function(c){ return c.id===current; })) setDefaultSlackChannel(sorted[0].id);
     }
-    if(opts.onMissing) opts.onMissing(missing);
+    if(opts.onMissing) opts.onMissing(missing, channels.length);
   });
 }
 function populateSlackChannelPicker(){
@@ -7143,11 +7143,16 @@ function renderTicketTab(){
   el.innerHTML=html;
   if(isVicky()){
     var chSel=document.getElementById('ticket-slack-channel');
-    if(chSel) populateChannelSelect(chSel, { pinned: TICKET_SLACK_CHANNELS, onlyPinned: true, onMissing: function(missing){
+    if(chSel) populateChannelSelect(chSel, { pinned: TICKET_SLACK_CHANNELS, onlyPinned: true, onMissing: function(missing, totalFetched){
       var warnEl=document.getElementById('ticket-slack-channel-warn');
       if(!warnEl) return;
       if(missing.length){
-        warnEl.textContent='⚠ Not showing: '+missing.map(function(n){return '#'+n;}).join(', ')+' — sends go out as you (Vicky), so you need to be a member of these channels in Slack for them to appear here.';
+        var names=missing.map(function(n){return '#'+n;}).join(', ');
+        if(totalFetched>0){
+          warnEl.textContent='⚠ Not showing: '+names+' ('+totalFetched+' other channel'+(totalFetched!==1?'s':'')+' loaded fine). If you\'re definitely a member of '+(missing.length>1?'these':'this')+' in Slack, the connected Slack app most likely isn\'t installed on the workspace they live in (common on multi-workspace/Enterprise Grid Slack) — ask your Slack admin to install/authorize it there.';
+        } else {
+          warnEl.textContent='⚠ Not showing: '+names+' — no channels loaded at all, check Slack app access.';
+        }
         warnEl.style.display='block';
       } else {
         warnEl.style.display='none';
