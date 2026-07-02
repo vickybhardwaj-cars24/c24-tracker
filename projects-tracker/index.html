@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.12</title>
+<title>Cars24 Projects Tracker v5.13</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1020,16 +1020,31 @@ function workerFetchText(url, opts) {
 // (the 'Owner' field) to their @cars24.com email so DMs can be resolved via
 // Slack's users.lookupByEmail. Kept in sync manually with the identical map
 // in worker.js; the two runtimes don't share a module.
+// NOTE: 'Arun', 'Harshit', 'Karan' below are the OLD entries, unconfirmed
+// against the July 2026 department roster (they didn't appear in it) —
+// kept as-is rather than guessed-removed. 'Adarsh', 'Ashish', 'Gaurav' and
+// 'Tushar' each have 2-3 people sharing that first name in the roster and
+// are deliberately left OUT until disambiguated, since this map's
+// first-name-only key can only hold one email per name — see CLAUDE.md.
 const PM_EMAIL_MAP = {
-  'Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.fasih.akhtar@cars24.com','Arun':'arun.varghese@cars24.com',
-  'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharrma@cars24.com','Gaurav':'gaurav.pandey@cars24.com',
-  'Harshit':'harshit.pandey@cars24.com','Indranil':'indranil.roy.chowdhury@cars24.com','Kamal':'kamal.saini@cars24.com',
-  'Karan':'karan.dhar.singh.bharti@cars24.com','Nitesh':'nitesh.kumar@cars24.com','Pallavi':'pallavi.priya@cars24.com',
-  'Pradeep':'pradeep.yadav@cars24.com','Rahul':'rahul.panwar@cars24.com','Rajat':'rajat.sharma@cars24.com',
-  'Raman':'raman.kumar@cars24.com','Riya':'riya.kumari@cars24.com','Sachin':'sachin.lohchab@cars24.com',
-  'Saurabh':'saurabh.girdhar@cars24.com','Shivam':'shivam.shukla@cars24.com','Shubhita':'shubhita.jain@cars24.com',
-  'Sumit':'sumit.kumar@cars24.com','Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com',
-  'Vicky':'vicky.bhardwaj@cars24.com','Vinod':'vinod.yadav@cars24.com',
+  'Aabhas':'aabhas.gautam@cars24.com','Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.akhtar1@cars24.com',
+  'Amit':'amit.4@cars24.com','Amritanshu':'amritanshu.pandey@cars24.com','Arun':'arun.varghese@cars24.com',
+  'Atharva':'atharva.singh@cars24.com','Ayushi':'ayushi.khanna@cars24.com','Binshanth':'binshanthsp.1@cars24.com',
+  'Bipin':'bipin.dhondiyal@cars24.com','Bishwanath':'bishwanath.pandey1@cars24.com','Boobalan':'boobalan.chinnapoongu@cariotauto.com',
+  'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharma@cariotauto.com','Dipanshu':'dipanshu.jaskalyan@cars24.com',
+  'Harshit':'harshit.pandey@cars24.com','Himanshu':'himanshu.19@cars24.com','Hosiyar':'hosiyar.singh1@cars24.com',
+  'Indranil':'indranil.chowdhury@cars24.com','Ish':'ish.kartikesh@cars24.com','Kamal':'kamal.saini@cars24.com',
+  'Karan':'karan.dhar.singh.bharti@cars24.com','Kartik':'kartik.jaskalyan@cars24.com','Kiran':'kiran.walanjkar@cars24.com',
+  'Kotra':'kotra.viswanath@cars24.com','Nishant':'nishant.verma@cariotauto.com','Nitesh':'nitesh.kumar13@cars24.com',
+  'Pallavi':'pallavi.priya@cars24.com','Pradeep':'pradeep.yadav@cars24.com','Prasanth':'prasanth.1@cariotauto.com',
+  'Rahul':'rahul.panwar1@cars24.com','Rajat':'rajat.sharma3@cars24.com','Raman':'raman.kumar2@cars24.com',
+  'Ravi':'ravi.ram@cars24.com','Rishabh':'rishabh.singh4@cars24.com','Riya':'riya.kumari@cars24.com',
+  'Sachin':'sachin.s3@cars24.com','Sanjay':'sanjay.ekka@cars24.com','Satakshi':'satakshi.jaiswal@cars24.com',
+  'Saurabh':'saurabh.girdhar@cars24.com','Shashwat':'shashwat.bansal@cars24.com','Shivam':'shivam.shukla1@cars24.com',
+  'Shubhita':'shubhita.jain@cars24.com','Sumit':'sumit.kumar13@cars24.com','Suyash':'suyash.pawar@cars24.com',
+  'Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com','Upkar':'upkar.1@cariotauto.com',
+  'Vicky':'vicky.bhardwaj@cars24.com','Vimal':'vimal.kumar3@cars24.com','Vinay':'vinay.chauhan1@cars24.com',
+  'Vinod':'vinod.yadav@cars24.com','Vyramudi':'vyramudi.1@cars24.com','Yashraj':'yashraj.vatsh@cars24.com',
 };
 
 // HEM (Hub Experience Manager) name → email, used to auto-CC the site's
