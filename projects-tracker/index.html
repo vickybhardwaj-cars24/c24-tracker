@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.25</title>
+<title>Cars24 Projects Tracker v5.26</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -596,7 +596,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   <div style="background:var(--white);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:420px;max-width:100%;font-family:'Inter',sans-serif;overflow:hidden">
     <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:16px 20px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div style="font-size:14px;font-weight:700;color:#fff">📣 Send Slack Message</div>
+        <div style="font-size:14px;font-weight:700;color:#fff;display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="currentColor" width="14" height="14" aria-hidden="true"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg> Send Slack Message</div>
         <button onclick="closeSlackComposeModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
       </div>
     </div>
@@ -706,7 +706,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <button class="vtab" id="tab-attv" data-admin-only="true" onclick="setView('attv',this)">📋 Attendance</button>
     <button class="vtab" id="tab-adminv" data-admin-only="true" onclick="setView('adminv',this)">⚙ Admin</button>
   </div>
-  <button class="btn btn-o btn-sm" data-vicky-only="true" onclick="openSlackComposeModal()" style="font-size:11px;display:none">📣 Slack Message</button>
+  <button class="btn btn-o btn-sm" data-vicky-only="true" onclick="openSlackComposeModal()" style="font-size:11px;display:none"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12" style="vertical-align:-2px" aria-hidden="true"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg> Slack Message</button>
   <span class="cchip" id="cchip"></span>
 
 </div>
@@ -741,7 +741,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
   <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;flex-wrap:wrap;gap:8px">
     <div style="font-size:14px;font-weight:700">👤 PM Scorecard</div>
     <div style="font-size:11px;color:var(--muted)">Click a row to filter table by PM</div>
-    <button class="btn btn-o btn-sm" data-vicky-only="true" onclick="sendPmDigestsToSlack(this)" style="font-size:11px;display:none">📣 Send PM Updates to Slack</button>
+    <button class="btn btn-o btn-sm" data-vicky-only="true" onclick="sendPmDigestsToSlack(this)" style="font-size:11px;display:none"><svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12" style="vertical-align:-2px" aria-hidden="true"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg> Send PM Updates to Slack</button>
   </div>
   <table class="pm-tbl"><thead><tr>
     <th>PM</th><th>Sites</th><th>WIP</th><th>SAT</th><th>UAT</th><th>Overdue</th><th>Stale</th><th>Avg%</th><th>📈 WoW Δ</th><th>Blkrs</th><th>⏱ OTD</th><th>🔒 UAT%</th><th>🔧 Snag</th><th>Health</th>
@@ -1185,6 +1185,13 @@ function resolveSlackUserIds(emails) {
 function isVicky() {
   return !!(__sbUser && (__sbUser.email || '').trim().toLowerCase() === 'vicky.bhardwaj@cars24.com');
 }
+
+// Slack logo mark — identical path data to the icon in the hub page's footer
+// contact nav (root index.html), used in place of the 📣 emoji on every
+// clickable Slack button so the icon matches hub branding. Toast/status text
+// and code comments that just say "Slack" are left as plain text/emoji —
+// this only replaces button icons.
+var SLACK_ICON_SVG = '<svg viewBox="0 0 24 24" fill="currentColor" width="12" height="12" style="vertical-align:-2px" aria-hidden="true"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>';
 
 // PM Scorecard "📣 Send PM Updates to Slack" button — DMs each PM their own
 // site-update digest and posts a combined roll-up to the team channel.
@@ -2876,7 +2883,7 @@ function renderSatUat(){
       +'<td style="padding:6px 10px;text-align:center">'+fmtRaw(u.r['SAT Date']||'')+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600">'+tgt+'</td>'
       +'<td style="padding:6px 10px;text-align:center;font-weight:600;color:#7c3aed">'+(revUAT!='--'?revUAT:'<span style="color:var(--muted);font-size:10px">None</span>')+'</td>'
-      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+(isVicky()?'<button data-slack-kind="uat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')+'</td>':'<td></td>')
+      +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:'+col+'">'+u.gap+'d</td>'+(showA?'<td style="padding:6px 10px;text-align:center"><a href="'+vendorDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="uat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca">Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','uat_delay')+(isVicky()?'<button data-slack-kind="uat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">'+SLACK_ICON_SVG+'</button>':'')+'</td>':'<td></td>')
       +(u.gap>10?'<td style="padding:6px 10px;text-align:center"><span style="font-size:10px;font-weight:700;background:#fef2f2;color:#dc2626;padding:2px 7px;border-radius:8px;border:1px solid #fecaca">🚨 UAT Date Missing</span></td>':'<td></td>')
       +'</tr>';
   }
@@ -2999,7 +3006,7 @@ function renderSatUat(){
         +'<td style="padding:6px 10px;text-align:center;color:var(--muted)">'+fmtRaw(u.r['Planned Completion'])+'</td>'
         +'<td style="padding:6px 10px;text-align:center">'+(hasRev?'<span style="font-weight:700;color:#7c3aed">'+fmtRaw(u.r['Revised Completion'])+'</span>':'<span style="color:#9ca3af;font-size:10px">No revision</span>')+'</td>'
         +'<td style="padding:6px 10px;text-align:center;font-weight:700;color:#7c3aed">'+u.overdue+'d</td>'
-        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+(isVicky()?'<button data-slack-kind="sat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')+'</td>'
+        +'<td style="padding:6px 10px;text-align:center"><a href="'+satDelayMail(u.r)+'" target="_blank" data-elog-site="'+esc(u.r['Site Name']||'')+'" data-elog-type="sat_delay" onclick="event.stopPropagation()" style="font-size:10px;background:#f5f3ff;color:#7c3aed;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #e9d5ff">📨 SAT Delay Notice</a>'+emailLogBadge(u.r['Site Name']||'','sat_delay')+(isVicky()?'<button data-slack-kind="sat_delay" data-slack-site="'+esc(u.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">'+SLACK_ICON_SVG+'</button>':'')+'</td>'
         +'</tr>';
     }).join('')+'</tbody></table></div>':'';
 
@@ -3063,7 +3070,7 @@ function renderSatUat(){
           +'<td style="padding:7px 10px;text-align:center">'
           +'<a href="'+handoverUrgencyMail(ps.r)+'" target="_blank" onclick="event.stopPropagation()" '
           +'style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;text-decoration:none;background:#f97316;color:#fff;white-space:nowrap">📨 Handover Email</a>'
-          +(isVicky()?'<button data-slack-kind="handover" data-slack-site="'+esc(ps.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')
+          +(isVicky()?'<button data-slack-kind="handover" data-slack-site="'+esc(ps.r['Site Name']||'')+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">'+SLACK_ICON_SVG+'</button>':'')
           +'</td></tr>';
       }).join('')
       +'</tbody></table></div></div>';
@@ -4171,12 +4178,12 @@ function renderProcureSection(r,idx){
   var delayMailBtn=problemItems.length
     ?('<a href="'+procureDelayMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="procure_delay" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Delay Notice ('+problemItems.length+')</a>'
       +emailLogBadge(siteName,'procure_delay')
-      +(isVicky()?'<button data-slack-kind="procure_delay" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">📣</button>':''))
+      +(isVicky()?'<button data-slack-kind="procure_delay" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">'+SLACK_ICON_SVG+'</button>':''))
     :'';
   var penaltyMailBtn=overdue
     ?('<a href="'+vendorPenaltyMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="vendor_penalty" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fff7ed;color:#c2410c;border:1px solid #fed7aa;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;margin-left:6px">⚠ Penalty Notice ('+overdue+')</a>'
       +emailLogBadge(siteName,'vendor_penalty')
-      +(isVicky()?'<button data-slack-kind="vendor_penalty" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">📣</button>':''))
+      +(isVicky()?'<button data-slack-kind="vendor_penalty" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">'+SLACK_ICON_SVG+'</button>':''))
     :'';
   var statsHtml='';
   if(total){
@@ -5444,7 +5451,7 @@ function renderSnagTab(){
               '<td style="padding:7px 10px;text-align:center"><span style="font-weight:700;color:'+pc+'">'+s.pctClosed+'%</span></td>'+
               '<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+(s.avgDays!=null?s.avgDays+'d':'—')+'</td>'+
               '<td style="padding:7px 10px;font-size:11px;color:var(--muted)">'+(s.topOwner?esc(s.topOwner[0])+' ('+s.topOwner[1]+')':'—')+'</td>'+
-              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a>'+(isVicky()?'<button data-slack-kind="snag" data-slack-site="'+esc(s.site)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':''):'—')+'</td>'+
+              '<td style="padding:7px 10px;text-align:center" onclick="event.stopPropagation()">'+(s.open>0?'<a href="'+snagVendorMailUrl(s.site)+'" target="_blank" style="font-size:10px;background:#fef2f2;color:#dc2626;padding:2px 8px;border-radius:5px;text-decoration:none;font-weight:600;border:1px solid #fecaca;white-space:nowrap">📧 Notice</a>'+(isVicky()?'<button data-slack-kind="snag" data-slack-site="'+esc(s.site)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:2px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">'+SLACK_ICON_SVG+'</button>':''):'—')+'</td>'+
             '</tr>';
           }).join('')+
         '</tbody>'+
@@ -5474,7 +5481,7 @@ function showSnagDetail(site){
     '<div class="reg-section-title" style="margin-bottom:0">🔧 '+esc(site)+' — Full Snag List</div>'+
     '<div style="display:flex;gap:6px;align-items:center">'+
     '<a href="'+snagVendorMailUrl(site)+'" target="_blank" style="display:inline-flex;align-items:center;gap:4px;padding:6px 12px;background:#dc2626;color:#fff;border-radius:6px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Snag Notice to Vendor</a>'+
-    (isVicky()?'<button data-slack-kind="snag" data-slack-site="'+esc(site)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:6px 10px;border-radius:6px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">📣 Slack</button>':'')+
+    (isVicky()?'<button data-slack-kind="snag" data-slack-site="'+esc(site)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:6px 10px;border-radius:6px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">'+SLACK_ICON_SVG+' Slack</button>':'')+
     '<button class="btn btn-o" onclick="document.getElementById(\'snag-detail-panel\').style.display=\'none\'" style="font-size:11px">✕ Close</button>'+
     '</div>'+
     '</div>'+
@@ -6185,7 +6192,7 @@ function renderPendingDocsTracker(){
       +'<td style="padding:7px 10px;text-align:center">'+chip(hasProcure,'Procurement')+'</td>'
       +'<td style="padding:7px 10px;text-align:center">'
       +'<a href="'+pendingDocReminderMail(r,missing)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="'+esc(elogType)+'" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:3px;padding:3px 9px;background:#eff6ff;color:#2563eb;border:1px solid #bfdbfe;border-radius:5px;font-size:10px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Remind</a>'
-      +(isVicky()?'<button data-slack-kind="pending_docs" data-slack-site="'+esc(siteName)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 7px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">📣</button>':'')
+      +(isVicky()?'<button data-slack-kind="pending_docs" data-slack-site="'+esc(siteName)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 7px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">'+SLACK_ICON_SVG+'</button>':'')
       +emailLogBadge(siteName,elogType)
       +'</td>'
       +'</tr>';
@@ -7086,7 +7093,7 @@ function renderTicketTab(){
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
   if(isVicky()){
     TICKET_SLACK_CHANNELS.forEach(function(ch){
-      html+='<button class="btn btn-o btn-sm" onclick="postTicketSummaryToChannel(\''+ch+'\',this)" style="font-size:11px">📣 '+ch+'</button>';
+      html+='<button class="btn btn-o btn-sm" onclick="postTicketSummaryToChannel(\''+ch+'\',this)" style="font-size:11px">'+SLACK_ICON_SVG+' '+ch+'</button>';
     });
     html+='<button class="btn btn-o btn-sm" onclick="sendTicketDigestsToSlack(this)" style="font-size:11px">📨 Ticket Updates</button>';
   }
@@ -7152,7 +7159,7 @@ function renderTicketTab(){
     if(isVicky()){
       var hasAssignee=assign&&assign.toLowerCase()!=='unassigned';
       html+='<td style="padding:7px 10px;white-space:nowrap">'
-        +'<button data-slack-ticket-id="'+esc(id)+'" onclick="event.stopPropagation();sendSingleTicketToSlack(this.dataset.slackTicketId,this)" title="'+(hasAssignee?'DM '+esc(assign)+' about this ticket':'No assignee to message')+'" '+(hasAssignee?'':'disabled')+' style="font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:'+(hasAssignee?'pointer':'not-allowed')+';opacity:'+(hasAssignee?'1':'.4')+'">📣</button>'
+        +'<button data-slack-ticket-id="'+esc(id)+'" onclick="event.stopPropagation();sendSingleTicketToSlack(this.dataset.slackTicketId,this)" title="'+(hasAssignee?'DM '+esc(assign)+' about this ticket':'No assignee to message')+'" '+(hasAssignee?'':'disabled')+' style="font-size:12px;padding:2px 7px;border-radius:5px;border:1px solid var(--border);background:var(--surface);cursor:'+(hasAssignee?'pointer':'not-allowed')+';opacity:'+(hasAssignee?'1':'.4')+'">'+SLACK_ICON_SVG+'</button>'
         +'</td>';
     }
     html+='</tr>';
