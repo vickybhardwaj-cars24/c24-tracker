@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.29</title>
+<title>Cars24 Projects Tracker v5.30</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -7430,19 +7430,18 @@ async function submitMaterial(idx) {
 // text embedded in HTML attributes to escape.
 function buildSlackDelayText(kind, siteName){
   var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; }) || {};
-  var owner = (r['Owner'] || '').trim().split(' ')[0] || 'there';
   if (kind === 'uat_delay') {
     var satD = pd(r['SAT Date']);
     var uatTgt = satD ? new Date(satD.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
     var now = new Date(); now.setHours(0,0,0,0);
     var od = satD ? Math.round((now-new Date(satD.getTime()+15*86400000))/86400000) : 0;
-    return 'Hey '+owner+' — '+siteName+' is now '+od+'d past the UAT target ('+uatTgt+'). What\'s the holdup — can you send me an update today?';
+    return siteName+' ka UAT ab '+od+'d se pending hai (target tha '+uatTgt+'). Kya chal raha hai bhai, aaj thoda update bhej do.';
   }
   if (kind === 'sat_delay') {
     var planD = r['Planned Completion']?fmtRaw(r['Planned Completion']):'--';
     var revD = r['Revised Completion']?fmtRaw(r['Revised Completion']):'--';
     var finalDate = revD!=='--'?revD:planD;
-    return 'Hey '+owner+' — checking in on '+siteName+', SAT is now looking at '+finalDate+'. Can you tell me what\'s pushing it and when we can close it out?';
+    return siteName+' ka SAT ab '+finalDate+' pe dekh rahe hain. Kya wajah se delay ho raha hai, aur kab tak close kar paayenge?';
   }
   if (kind === 'handover') {
     var satDone = !!(r['SAT Date']||'').trim();
@@ -7451,7 +7450,7 @@ function buildSlackDelayText(kind, siteName){
     var uatD = pd(r['SAT Date']);
     var uatTarget = uatD ? new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'TBD';
     var deadline = satDone ? uatTarget : cdStr;
-    return 'Hey '+owner+' — '+siteName+' is cutting it close, '+(satDone?'UAT':'SAT')+' is due by '+deadline+'. Can you confirm we\'re on track, or flag now if it\'s slipping?';
+    return siteName+' ki timeline thodi tight ho rahi hai, '+(satDone?'UAT':'SAT')+' '+deadline+' tak due hai. Confirm kar do ki on track hain, ya abhi flag kar do agar slip ho raha hai.';
   }
   if (kind === 'procure_delay') {
     var items = PROCURE_DATA[siteName]||[];
@@ -7462,7 +7461,7 @@ function buildSlackDelayText(kind, siteName){
       if(it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) return true;}
       return false;
     });
-    return 'Hey '+owner+' — heads up, '+siteName+' has '+problemItems.length+' procurement item'+(problemItems.length!==1?'s':'')+' running late. Can you chase the vendor and update the tracker once you hear back?';
+    return siteName+' mein '+problemItems.length+' procurement item'+(problemItems.length!==1?'s':'')+' late chal rahe hain. Vendor ko thoda push kar do aur tracker update kar dena jaise hi sunoge.';
   }
   if (kind === 'vendor_penalty') {
     var pItems = PROCURE_DATA[siteName]||[];
@@ -7472,14 +7471,14 @@ function buildSlackDelayText(kind, siteName){
       var dd=pd(it.deliveryDate);
       return dd&&dd<pToday;
     });
-    return 'Hey '+owner+' — sending the vendor a penalty notice for '+siteName+', '+pOverdue.length+' item'+(pOverdue.length!==1?'s are':' is')+' overdue on delivery. Flagging before it goes out in case there\'s context I\'m missing.';
+    return siteName+' ke liye vendor ko penalty notice bhej rahe hain, '+pOverdue.length+' item'+(pOverdue.length!==1?'s':'')+' delivery mein overdue hai. Bas pehle flag kar raha hoon, agar koi context miss ho raha ho toh batana.';
   }
   if (kind === 'pending_docs') {
     var missing=[];
     if(!(SCHED_DATA[siteName]&&SCHED_DATA[siteName].length)) missing.push('Schedule');
     if(!(LL_SCOPE_DATA[siteName]&&LL_SCOPE_DATA[siteName].length)) missing.push('LL Scope');
     if(!(PROCURE_DATA[siteName]&&PROCURE_DATA[siteName].length)) missing.push('Procurement Plan');
-    return 'Hey '+owner+' — '+siteName+' is still missing '+(missing.join(', ')||'a few docs')+' in the tracker. Can you get these uploaded when you get a chance?';
+    return siteName+' mein abhi bhi '+(missing.join(', ')||'kuch docs')+' missing hai tracker mein. Jab time mile, upload kar dena.';
   }
   if (kind === 'snag') {
     var rows = SNAG_DATA[siteName]||[];
@@ -7487,7 +7486,7 @@ function buildSlackDelayText(kind, siteName){
       var s=(rr.status||'').toLowerCase();
       return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';
     });
-    return 'Hey '+owner+' — '+siteName+' still has '+open.length+' open snag'+(open.length!==1?'s':'')+' before we can sign off UAT. Can you push the vendor to close these out?';
+    return siteName+' mein abhi bhi '+open.length+' open snag'+(open.length!==1?'s':'')+' baaki hain UAT sign off se pehle. Vendor ko push kar do inhe close karne ke liye.';
   }
   return siteName;
 }
