@@ -595,9 +595,21 @@ async function handleSlackSend(request, env) {
 
 // GET /slack/channels — Vicky-only (same gate as /slack/send). Lists the
 // public/private channels the SLACK_USER_TOKEN's identity has actually
-// joined (is_member:true) so the frontend's channel picker only ever offers
-// channels a send can actually land in, instead of Vicky picking a channel
-// by name and the send failing with not_in_channel.
+// joined so the frontend's channel picker only ever offers channels a send
+// can actually land in, instead of Vicky picking a channel by name and the
+// send failing with not_in_channel.
+//
+// Uses users.conversations (scoped to the token owner's own user_id, via
+// auth.test) rather than conversations.list. conversations.list scopes to
+// channels the *app* is installed on — on a multi-workspace/Enterprise Grid
+// org (Cars24's setup) that silently misses channels the app isn't
+// installed on even when Vicky herself is a member, which is exactly what
+// hid expansion-projects-team/expansion_core_india/projects-internal
+// despite her having created two of them (root-caused in v5.24 via
+// conversations.history returning channel_not_found for one of them).
+// users.conversations returns every conversation the *user* belongs to
+// instead, which does cover those channels — confirmed against the live
+// workspace before this fix landed.
 async function handleSlackChannels(request, env) {
   if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Invalid credentials' });
   if (getBearerEmail(request) !== SLACK_ALLOWED_EMAIL) {
@@ -606,18 +618,18 @@ async function handleSlackChannels(request, env) {
   if (!env.SLACK_USER_TOKEN) return json(500, { success: false, error: friendlySlackError({ code: 'NOT_CONFIGURED' }) });
 
   try {
-    // conversations.list paginates (Slack's default sort isn't alphabetical
-    // and isn't guaranteed to put every joined channel in page 1) — walk the
-    // cursor until it's exhausted so a channel Vicky's actually joined never
-    // silently goes missing just because it landed past the first 200.
-    // Capped at 20 pages (~4000 channels) as a sane worst-case bound.
+    const auth = await slackApi(env.SLACK_USER_TOKEN, 'auth.test', {});
+    // Cursor-paginate same as before (Slack's sort isn't alphabetical and
+    // isn't guaranteed to put every joined channel on page 1) — capped at 20
+    // pages (~20k channels at the max page size) as a sane worst-case bound.
     let allChannels = [];
     let cursor;
     for (let page = 0; page < 20; page++) {
-      const data = await slackApi(env.SLACK_USER_TOKEN, 'conversations.list', {
+      const data = await slackApi(env.SLACK_USER_TOKEN, 'users.conversations', {
+        user: auth.user_id,
         types: 'public_channel,private_channel',
         exclude_archived: true,
-        limit: 200,
+        limit: 1000,
         cursor: cursor || undefined,
       });
       allChannels = allChannels.concat(data.channels || []);
@@ -625,7 +637,6 @@ async function handleSlackChannels(request, env) {
       if (!cursor) break;
     }
     const channels = allChannels
-      .filter(function(c) { return c.is_member; })
       .map(function(c) { return { id: c.id, name: c.name, isPrivate: !!c.is_private }; })
       .sort(function(a, b) { return a.name.localeCompare(b.name); });
     return json(200, { success: true, channels: channels, defaultChannelId: env.SLACK_CHANNEL_ID || null });
