@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.32</title>
+<title>Cars24 Projects Tracker v5.33</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2315,7 +2315,7 @@ function kpiFlt(val){
     all.forEach(c=>c.checked=true);
     updateStatusLbl();
     const today=new Date(); today.setHours(0,0,0,0);
-    filteredData=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!r['SAT Date'];});
+    filteredData=allData.filter(r=>{const d=committedDate(r);return d&&d<today&&!(r['SAT Date']||'').trim();});
     document.getElementById('cchip').textContent=filteredData.length+' of '+allData.length+' sites';
     renderAll();
     document.querySelectorAll('.kpi').forEach(k=>{if(k.dataset.val===val) k.classList.add('active');});
@@ -2360,7 +2360,7 @@ function filterByBlocker(p){
 function renderKPIs(){
   const today=new Date(); today.setHours(0,0,0,0);
   const c=fn=>allData.filter(fn).length;
-  const ov=allData.filter(r=>{const d=pd(r['Planned Completion']);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
+  const ov=allData.filter(r=>{const d=committedDate(r);return d&&d<today&&!(r['SAT Date']||''). trim();}).length;
   const warns=getUatWarnings().filter(w=>!UAT_EXEMPTIONS[(w['Site Name']||'').trim()]).length;
   const _in7=new Date(today); _in7.setDate(today.getDate()+7);
   const dueWeek=allData.filter(r=>{if((r['SAT Date']||'').trim())return false;const d=pd(r['Revised Completion'])||pd(r['Planned Completion']);return d&&d>=today&&d<=_in7;}).length;
@@ -2806,8 +2806,8 @@ function renderSatUat(){
       const _dl=Math.round((_ut-today3)/86400000);
       const _pe={r,idx3,satD,uatD,planD,gap:_g,dt:_dl,uatTarget:_ut,name:r['Site Name']||'—'};
       pendArr.push(_pe);
-      if(_g>15) dangerArr.push(_pe);
-      else if(_g>=10) warningArr.push(_pe);
+      if(_g>10) dangerArr.push(_pe);
+      else if(_g>=7) warningArr.push(_pe);
       else onTrackArr.push(_pe);
     };
     if(uatD){
@@ -2902,8 +2902,8 @@ function renderSatUat(){
       +'</tr></thead><tbody>'+arr.map(function(u){return _mkDWORow(u,col,showA);}).join('')+'</tbody></table>';
   }
   const _dH=dangerArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#dc2626;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Danger - >10 Days Since SAT ('+dangerArr.length+')</div>'+_mkDWOTbl(dangerArr,'#dc2626',true)+'</div>':'';
-  const _wH=warningArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Warning - 10-15 Days Since SAT ('+warningArr.length+')</div>'+_mkDWOTbl(warningArr,'#d97706',false)+'</div>':'';
-  const _oH=onTrackArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">On Track - SAT Done, UAT Pending Under 10 Days ('+onTrackArr.length+')</div>'+_mkDWOTbl(onTrackArr,'#16a34a',false)+'</div>':'';
+  const _wH=warningArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#d97706;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Warning - 7-10 Days Since SAT ('+warningArr.length+')</div>'+_mkDWOTbl(warningArr,'#d97706',false)+'</div>':'';
+  const _oH=onTrackArr.length?'<div style="margin-bottom:14px"><div style="font-size:11px;font-weight:700;color:#16a34a;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">On Track - SAT Done, UAT Pending Under 7 Days ('+onTrackArr.length+')</div>'+_mkDWOTbl(onTrackArr,'#16a34a',false)+'</div>':'';
   if(_sub==='hem'){
     var _hemSites=Object.keys(HEM_DELAYS).filter(function(s){return HEM_DELAYS[s]&&HEM_DELAYS[s].length>0;});
     var _hemTotal=_hemSites.reduce(function(s,sn){return s+getHemDelayTotal(sn);},0);
@@ -5206,7 +5206,7 @@ function renderInsightKPIs(){
     var count=0;
     Object.keys(SNAG_DATA).forEach(function(site){
       var items=SNAG_DATA[site]||[];
-      var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length;
+      var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';})(i.status);}).length;
       if(open>70) count++;
     });
     if(Object.keys(SNAG_DATA).length>0) setManualKPI('snag70',count);
@@ -5311,8 +5311,8 @@ function renderSnagTab(){
     var closeTimes=rows.filter(function(r){
       return r.start&&r.end&&(r.status||'').toLowerCase()==='completed';
     }).map(function(r){
-      var s=new Date(r.start),e=new Date(r.end);
-      return isNaN(s)||isNaN(e)?0:Math.max(0,Math.round((e-s)/86400000));
+      var s=pd(r.start),e=pd(r.end);
+      return (!s||!e)?0:Math.max(0,Math.round((e-s)/86400000));
     }).filter(function(d){return d>0;});
     var avgDays=closeTimes.length?Math.round(closeTimes.reduce(function(a,b){return a+b;},0)/closeTimes.length):null;
     var ownerMap={};
@@ -5793,21 +5793,10 @@ function handleSnagUpload(event){
         // Smart CSV parser — handles both formats:
         // Format A (processflows export): headers row, Store col = site name
         // Format B (old flat): no headers, col[1] = site name
-        function splitCSVLine(line){
-          var cols=[],cur='',inQ=false;
-          for(var i=0;i<line.length;i++){
-            var ch=line[i];
-            if(ch==='"'){inQ=!inQ;}
-            else if(ch===','&&!inQ){cols.push(cur.replace(/^"|"$/g,'').trim());cur='';}
-            else{cur+=ch;}
-          }
-          cols.push(cur.replace(/^"|"$/g,'').trim());
-          return cols;
-        }
-        var lines=e.target.result.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n').filter(function(l){return l.trim();});
-        if(!lines.length){toast('Empty CSV','err');return;}
+        var rows=parseCSVRows(e.target.result);
+        if(!rows.length){toast('Empty CSV','err');return;}
         var newData={};
-        var firstCols=splitCSVLine(lines[0]);
+        var firstCols=rows[0];
         // Detect format: if first row has 'ID' or 'Title' or 'Store' it's headers
         var hasHeaders=firstCols[0].toLowerCase()==='id'||firstCols[1]==='Title'||firstCols.some(function(h){return h==='Store'||h==='store';});
         if(hasHeaders){
@@ -5825,8 +5814,7 @@ function handleSnagUpload(event){
           var remarksIdx=idxOf('Remarks');
           var hemIdx=idxOf('HEM NAME');
           var idIdx=idxOf('ID');
-          lines.slice(1).forEach(function(line){
-            var cols=splitCSVLine(line);
+          rows.slice(1).forEach(function(cols){
             var rawSite=(storeIdx>=0?cols[storeIdx]||'':'').trim();
             if(!rawSite) return;
             // Clean site name: "CARS24 Hub, Naroda, Ahmedabad" → "Naroda"
@@ -5852,8 +5840,7 @@ function handleSnagUpload(event){
           });
         } else {
           // Format B: old flat no-header format
-          lines.forEach(function(line){
-            var cols=splitCSVLine(line);
+          rows.forEach(function(cols){
             var site=(cols[1]||'').trim();
             if(!site) return;
             var row={};
@@ -6379,7 +6366,7 @@ function getDriveLink(s){return DRIVE_MAP[(s||'').trim()]||DRIVE_ROOT;}
 
 function getStaleDays(row){
   var st=(row['Status']||'').trim().toLowerCase();
-  if(st==='uat done'||st==='completed'||st==='comleted') return 0;
+  if(st.includes('uat done')||st.includes('completed')||st.includes('comleted')) return 0;
   if((row['UAT DATE']||'').trim()) return 0;
   var today=new Date(); today.setHours(0,0,0,0);
   for(var i=DATE_COLS.length-1;i>=0;i--){
@@ -6440,7 +6427,7 @@ function renderPMScorecard(){
     var bl=extractBlockers(getTodayUpdate(r)); if(bl&&bl.length) ow.blockers++;
     // Snag score
     var snags=(SNAG_DATA[(r['Site Name']||'').trim()]||[]);
-    if(snags.length){ow.snagPts+=snags.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length; ow.snagSites++;}
+    if(snags.length){ow.snagPts+=snags.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';})(i.status);}).length; ow.snagSites++;}
   });
   var pmRows=Object.keys(owners).sort().map(function(o){
     var d=owners[o];
@@ -6491,7 +6478,7 @@ function showSnag70List(){
   var sites=[];
   Object.keys(SNAG_DATA).forEach(function(site){
     var items=SNAG_DATA[site]||[];
-    var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='closed'&&s!=='na'&&s!=='n/a';})(i.status);}).length;
+    var open=items.filter(function(i){return (function(s){s=(s||'').toLowerCase();return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';})(i.status);}).length;
     if(open>70) sites.push({site:site,open:open,total:items.length});
   });
   sites.sort(function(a,b){return b.open-a.open;});
@@ -6528,14 +6515,12 @@ function copyWarnEmail(){
 function parseLLScheduleCSV(txt, filename){
   var poMatch=(filename||'').match(/Schedule_PO([A-Z0-9_]+)\.csv/i);
   var po=poMatch?poMatch[1]:'';
-  var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-  if(lines.length<2) return {po:po,tasks:[]};
-  var headers=lines[0].split(',').map(function(h){return h.trim().replace(/^"|"$/g,'').replace(/^﻿/,'');});
+  var rows=parseCSVRows(txt);
+  if(rows.length<2) return {po:po,tasks:[]};
+  var headers=rows[0].map(function(h){return h.replace(/^﻿/,'').trim();});
   var tasks=[];
-  for(var i=1;i<lines.length;i++){
-    var line=lines[i].trim();
-    if(!line) continue;
-    var cols=line.split(',').map(function(c){return c.trim().replace(/^"|"$/g,'');});
+  for(var i=1;i<rows.length;i++){
+    var cols=rows[i];
     var obj={};
     headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
     var task=obj['Task']||obj['task']||'';
@@ -6756,31 +6741,36 @@ function confirmLLBulkUpload(){
 // ═══════════════════════════════════════════════════════════
 // LANDLORD (LL) SCOPE FUNCTIONS — no POs, separate from Cars24 project schedule
 // ═══════════════════════════════════════════════════════════
-function _parseCSVLine(line){
-  var cols=[],cell='',inQ=false,i=0;
-  while(i<line.length){
-    var ch=line[i];
+// Full-text CSV tokenizer (RFC4180-ish) — unlike a per-line parser (which requires
+// splitting on '\n' first), this correctly handles a quoted field that itself contains
+// an embedded newline or comma, and doubled "" quote-escaping inside a quoted field.
+function parseCSVRows(text,delim){
+  delim=delim||',';
+  text=(text||'').replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  var rows=[],row=[],cell='',inQ=false,i=0,len=text.length;
+  while(i<len){
+    var ch=text[i];
     if(inQ){
-      if(ch==='"'&&line[i+1]==='"'){cell+='"';i+=2;}
-      else if(ch==='"'){inQ=false;i++;}
-      else{cell+=ch;i++;}
+      if(ch==='"'){
+        if(text[i+1]==='"'){cell+='"';i+=2;} else {inQ=false;i++;}
+      } else {cell+=ch;i++;}
     } else {
       if(ch==='"'){inQ=true;i++;}
-      else if(ch===','){cols.push(cell.trim());cell='';i++;}
+      else if(ch===delim){row.push(cell.trim());cell='';i++;}
+      else if(ch==='\n'){row.push(cell.trim());rows.push(row);row=[];cell='';i++;}
       else{cell+=ch;i++;}
     }
   }
-  cols.push(cell.trim());
-  return cols;
+  if(cell.length||row.length){row.push(cell.trim());rows.push(row);}
+  return rows.filter(function(r){return r.length>1||(r[0]&&r[0].length);});
 }
 function parseLLScopeCSV(txt){
-  var lines=txt.replace(/\r\n/g,'\n').replace(/\r/g,'\n').split('\n');
-  if(lines.length<2) return [];
-  var headers=_parseCSVLine(lines[0]).map(function(h){return h.replace(/^﻿/,'').trim();});
+  var rows=parseCSVRows(txt);
+  if(rows.length<2) return [];
+  var headers=rows[0].map(function(h){return h.replace(/^﻿/,'').trim();});
   var tasks=[];
-  for(var i=1;i<lines.length;i++){
-    var line=lines[i].trim(); if(!line) continue;
-    var cols=_parseCSVLine(line);
+  for(var i=1;i<rows.length;i++){
+    var cols=rows[i];
     var obj={}; headers.forEach(function(h,hi){obj[h]=cols[hi]||'';});
     var task=obj['Task']||obj['task']||'';
     if(!task) continue;
@@ -6881,26 +6871,16 @@ function handleTicketUpload(event){
 }
 
 function parseTicketCSV(text){
-  var lines=text.split('\n').filter(function(l){return l.trim();});
-  if(!lines.length) return [];
-  // Detect delimiter
-  var delim=lines[0].includes('\t')?'\t':',';
-  function splitRow(line){
-    var result=[],cur='',inQ=false;
-    for(var i=0;i<line.length;i++){
-      var ch=line[i];
-      if(ch==='"'){inQ=!inQ;}
-      else if(ch===delim&&!inQ){result.push(cur.trim().replace(/^"|"$/g,''));cur='';}
-      else{cur+=ch;}
-    }
-    result.push(cur.trim().replace(/^"|"$/g,''));
-    return result;
-  }
-  var headers=splitRow(lines[0]).map(function(h){return h.trim();});
-  return lines.slice(1).map(function(line){
-    var vals=splitRow(line);
+  // Detect delimiter from the first line only (before full parsing, since quoted
+  // fields may legitimately contain the other delimiter character)
+  var firstLine=(text||'').split('\n',1)[0]||'';
+  var delim=firstLine.includes('\t')?'\t':',';
+  var rows=parseCSVRows(text,delim);
+  if(!rows.length) return [];
+  var headers=rows[0].map(function(h){return h.trim();});
+  return rows.slice(1).map(function(cols){
     var obj={};
-    headers.forEach(function(h,i){obj[h]=vals[i]||'';});
+    headers.forEach(function(h,i){obj[h]=cols[i]||'';});
     return obj;
   }).filter(function(r){return r['ID']||r['Title'];});
 }
@@ -6969,7 +6949,7 @@ function renderTicketTab(){
   function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
   function getTAT(r){
     var cr=col(r,['Created At','created_at']);
-    if(cr){var d=new Date(cr);if(!isNaN(d)){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
+    if(cr){var d=pd(cr);if(d){var n=new Date();n.setHours(0,0,0,0);return Math.max(0,Math.round((n-d)/86400000));}}
     return parseInt(col(r,['TAT','Open Since Days','Open Since','open_since'])||0);
   }
   var CLOSED=['closed','resolved','cancelled','rejected'];
@@ -7423,9 +7403,9 @@ function buildSlackDelayText(kind, siteName){
   var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; }) || {};
   if (kind === 'uat_delay') {
     var satD = pd(r['SAT Date']);
-    var uatTgt = satD ? new Date(satD.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
+    var uatTgt = satD ? new Date(satD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
     var now = new Date(); now.setHours(0,0,0,0);
-    var od = satD ? Math.round((now-new Date(satD.getTime()+15*86400000))/86400000) : 0;
+    var od = satD ? Math.round((now-new Date(satD.getTime()+10*86400000))/86400000) : 0;
     return siteName+' ka UAT ab '+od+'d se pending hai (target tha '+uatTgt+'). Kya chal raha hai bhai, aaj thoda update bhej do.';
   }
   if (kind === 'sat_delay') {
@@ -7487,13 +7467,13 @@ function vendorDelayMail(r){
   var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
   var poD=r['PO Date']?fmtRaw(r['PO Date']):'--',ksD=r['Kickoff Date']?fmtRaw(r['Kickoff Date']):'--',wsD=r['Work Start Date']?fmtRaw(r['Work Start Date']):'--';
   var satD2=pd(r['SAT Date']),satStr=r['SAT Date']?fmtRaw(r['SAT Date']):'--';
-  var uatTgt=satD2?new Date(satD2.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'--';
+  var uatTgt=satD2?new Date(satD2.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'--';
   var now=new Date(); now.setHours(0,0,0,0);
-  var od=satD2?Math.round((now-new Date(satD2.getTime()+15*86400000))/86400000):0;
+  var od=satD2?Math.round((now-new Date(satD2.getTime()+10*86400000))/86400000):0;
   var revH=getRevHistory(r);
   var revLine=fmtRevHistory(r)?'\nRevision History:\n'+fmtRevHistory(r)+'\n':'\nNo revision history.\n';
   var subj='UAT Delay Notice - '+site+' - '+od+'d Overdue';
-  var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+15d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects';
+  var body='Dear '+vendor+' Team,\n\nFormal notice of delayed UAT at '+site+'.\n\nTimeline:\n  PO Date: '+poD+'\n  Kickoff: '+ksD+'\n  Work Start: '+wsD+'\n  SAT Completed: '+satStr+'\n  UAT Target (SAT+10d): '+uatTgt+'\n  Days Overdue: '+od+'d\n'+revLine+'\nRequest immediate action to complete UAT. Further delay may invoke penalty clauses.\n\nRegards,\n'+owner+'\nCARS24 Projects';
   return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
 }
 
