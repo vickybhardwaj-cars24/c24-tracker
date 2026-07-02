@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.11</title>
+<title>Cars24 Projects Tracker v5.19</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -603,8 +603,14 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <div style="padding:18px 20px">
       <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px">Send to</label>
       <div style="display:flex;gap:16px;margin-bottom:12px">
-        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="slack-compose-target" value="channel" checked onchange="onSlackComposeTargetChange()"> Team Channel</label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="slack-compose-target" value="channel" checked onchange="onSlackComposeTargetChange()"> Channel</label>
         <label style="display:flex;align-items:center;gap:5px;font-size:12px;cursor:pointer"><input type="radio" name="slack-compose-target" value="dm" onchange="onSlackComposeTargetChange()"> Direct Message</label>
+      </div>
+      <div id="slack-compose-channel-row" style="margin-bottom:12px">
+        <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Channel</label>
+        <select id="slack-compose-channel" onchange="setDefaultSlackChannel(this.value)" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;background:#fff">
+          <option value="">Loading channels…</option>
+        </select>
       </div>
       <div id="slack-compose-dm-row" style="display:none;margin-bottom:12px">
         <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Person (pick a PM or type any @cars24.com email)</label>
@@ -1014,17 +1020,56 @@ function workerFetchText(url, opts) {
 // (the 'Owner' field) to their @cars24.com email so DMs can be resolved via
 // Slack's users.lookupByEmail. Kept in sync manually with the identical map
 // in worker.js; the two runtimes don't share a module.
+// NOTE: 'Arun', 'Harshit', 'Karan' below are the OLD entries, unconfirmed
+// against the July 2026 department roster (they didn't appear in it) —
+// kept as-is rather than guessed-removed. 'Gaurav' was disambiguated to
+// gaurav.jangir@cars24.com — Vicky's core team. 'Adarsh', 'Ashish' and
+// 'Tushar' each have 2-3 people sharing that first name, so instead of a
+// first-name key (which can only hold one email per name) they're mapped
+// below by FULL name — resolvePmEmail() tries the full name first, then
+// falls back to first-name-only, so both keying styles coexist. Full
+// names + Slack IDs pulled directly from the connected Slack workspace
+// (v5.19) rather than guessed from the roster's raw email list — this is
+// also how `ashish1.kumar@cars24.com` turned out to actually be Ashish
+// Pathak (not another Ashish Kumar), and how the roster's
+// tushar.pathak@cariotauto.com (no Slack account) was corrected to the
+// account that's actually registered: tushar.pathak1@cars24.com.
 const PM_EMAIL_MAP = {
-  'Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.fasih.akhtar@cars24.com','Arun':'arun.varghese@cars24.com',
-  'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharrma@cars24.com','Gaurav':'gaurav.pandey@cars24.com',
-  'Harshit':'harshit.pandey@cars24.com','Indranil':'indranil.roy.chowdhury@cars24.com','Kamal':'kamal.saini@cars24.com',
-  'Karan':'karan.dhar.singh.bharti@cars24.com','Nitesh':'nitesh.kumar@cars24.com','Pallavi':'pallavi.priya@cars24.com',
-  'Pradeep':'pradeep.yadav@cars24.com','Rahul':'rahul.panwar@cars24.com','Rajat':'rajat.sharma@cars24.com',
-  'Raman':'raman.kumar@cars24.com','Riya':'riya.kumari@cars24.com','Sachin':'sachin.lohchab@cars24.com',
-  'Saurabh':'saurabh.girdhar@cars24.com','Shivam':'shivam.shukla@cars24.com','Shubhita':'shubhita.jain@cars24.com',
-  'Sumit':'sumit.kumar@cars24.com','Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com',
-  'Vicky':'vicky.bhardwaj@cars24.com','Vinod':'vinod.yadav@cars24.com',
+  'Aabhas':'aabhas.gautam@cars24.com','Adarsh Roy':'adarsh.roy@cars24.com','Adarsh Jha':'adarsh.jha@cars24.com',
+  'Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.akhtar1@cars24.com',
+  'Amit':'amit.4@cars24.com','Amritanshu':'amritanshu.pandey@cars24.com','Arun':'arun.varghese@cars24.com',
+  'Ashish Arora':'ashish.arora1@cars24.com','Ashish Kumar':'ashish.kumar22@cars24.com','Ashish Pathak':'ashish1.kumar@cars24.com',
+  'Atharva':'atharva.singh@cars24.com','Ayushi':'ayushi.khanna@cars24.com','Binshanth':'binshanthsp.1@cars24.com',
+  'Bipin':'bipin.dhondiyal@cars24.com','Bishwanath':'bishwanath.pandey1@cars24.com','Boobalan':'boobalan.chinnapoongu@cariotauto.com',
+  'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharma@cariotauto.com','Dipanshu':'dipanshu.jaskalyan@cars24.com',
+  'Gaurav':'gaurav.jangir@cars24.com','Harshit':'harshit.pandey@cars24.com','Himanshu':'himanshu.19@cars24.com','Hosiyar':'hosiyar.singh1@cars24.com',
+  'Indranil':'indranil.chowdhury@cars24.com','Ish':'ish.kartikesh@cars24.com','Kamal':'kamal.saini@cars24.com',
+  'Karan':'karan.dhar.singh.bharti@cars24.com','Kartik':'kartik.jaskalyan@cars24.com','Kiran':'kiran.walanjkar@cars24.com',
+  'Kotra':'kotra.viswanath@cars24.com','Nishant':'nishant.verma@cariotauto.com','Nitesh':'nitesh.kumar13@cars24.com',
+  'Pallavi':'pallavi.priya@cars24.com','Pradeep':'pradeep.yadav@cars24.com','Prasanth':'prasanth.1@cariotauto.com',
+  'Rahul':'rahul.panwar1@cars24.com','Rajat':'rajat.sharma3@cars24.com','Raman':'raman.kumar2@cars24.com',
+  'Ravi':'ravi.ram@cars24.com','Rishabh':'rishabh.singh4@cars24.com','Riya':'riya.kumari@cars24.com',
+  'Sachin':'sachin.s3@cars24.com','Sanjay':'sanjay.ekka@cars24.com','Satakshi':'satakshi.jaiswal@cars24.com',
+  'Saurabh':'saurabh.girdhar@cars24.com','Shashwat':'shashwat.bansal@cars24.com','Shivam':'shivam.shukla1@cars24.com',
+  'Shubhita':'shubhita.jain@cars24.com','Sumit':'sumit.kumar13@cars24.com','Suyash':'suyash.pawar@cars24.com',
+  'Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com',
+  'Tushar Garg':'tushar.garg1@cars24.com','Tushar Pathak':'tushar.pathak1@cars24.com','Upkar':'upkar.1@cariotauto.com',
+  'Vicky':'vicky.bhardwaj@cars24.com','Vimal':'vimal.kumar3@cars24.com','Vinay':'vinay.chauhan1@cars24.com',
+  'Vinod':'vinod.yadav@cars24.com','Vyramudi':'vyramudi.1@cars24.com','Yashraj':'yashraj.vatsh@cars24.com',
 };
+
+// Resolves a PM/assignee display name to a Slack email — tries an exact
+// full-name match first (needed now that PM_EMAIL_MAP holds full-name keys
+// for people who share a first name, e.g. 'Adarsh Roy' vs 'Adarsh Jha'),
+// then falls back to first-name-only so data sources that only ever record
+// a bare first name (e.g. the site tracker's Owner column) keep resolving
+// exactly as before. Every PM_EMAIL_MAP lookup should go through this
+// instead of indexing the map directly.
+function resolvePmEmail(name) {
+  var n = (name || '').trim();
+  if (!n) return '';
+  return PM_EMAIL_MAP[n] || PM_EMAIL_MAP[n.split(' ')[0]] || '';
+}
 
 // HEM (Hub Experience Manager) name → email, used to auto-CC the site's
 // assigned HEM on vendor/delay mailers. Populate as the roster is shared —
@@ -1059,8 +1104,13 @@ function buildMailCC(r) {
 // Posts a message via the Worker's Slack relay (the token itself never
 // reaches the browser — the Worker posts via SLACK_USER_TOKEN, as Vicky).
 // mode='dm' resolves `email` to a Slack user via users.lookupByEmail
-// server-side; mode='channel' posts to SLACK_CHANNEL_ID.
-function sendToSlack(mode, email, text, btn) {
+// server-side; mode='channel' posts to `channel` (a Slack channel ID from
+// getDefaultSlackChannel()/the compose picker), falling back to the Worker's
+// SLACK_CHANNEL_ID if none is set. The Worker always translates failures
+// into a plain-English `error` string (see friendlySlackError in worker.js)
+// — this function never shows raw Slack API text, only that string or a
+// generic network message.
+function sendToSlack(mode, email, text, btn, channel) {
   var ah = workerAuthHeader();
   if (!ah) { toast('Sign in first to send Slack messages', 'err'); return; }
   var origLabel = btn ? btn.textContent : '';
@@ -1068,15 +1118,61 @@ function sendToSlack(mode, email, text, btn) {
   fetch(WORKER_URL + 'slack/send', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': ah },
-    body: JSON.stringify({ mode: mode, email: email || undefined, text: text })
+    body: JSON.stringify({ mode: mode, email: email || undefined, text: text, channel: channel || getDefaultSlackChannel() || undefined })
   })
   .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, j: j }; }); })
   .then(function(res) {
-    if (!res.ok || !res.j.success) { toast('Slack send failed: ' + (res.j.error || 'unknown error'), 'err'); return; }
-    toast(res.j.fellBackToChannel ? '📣 Sent to channel (no Slack account for that email)' : '📣 Sent to Slack', 'ok');
+    if (!res.ok || !res.j.success) { toast(res.j.error || "Couldn't send to Slack right now — try again in a moment.", 'err'); return; }
+    toast(res.j.fellBackToChannel ? "📣 Sent to the channel — that person isn't on Slack" : '📣 Sent to Slack', 'ok');
   })
-  .catch(function(e) { toast('Slack send network error: ' + e.message, 'err'); })
+  .catch(function() { toast("Couldn't reach the server to send that — check your connection and try again.", 'err'); })
   .then(function() { if (btn) { btn.disabled = false; btn.textContent = origLabel; } });
+}
+
+// ── Slack channel picker ────────────────────────────────────────
+// Vicky picks a default channel once (compose modal); every other
+// channel-mode send (PM digest summary, ticket summary, delay-alert 📣
+// buttons) reuses it via getDefaultSlackChannel(). Falls back to the
+// Worker's SLACK_CHANNEL_ID (server-side) if nothing's been picked yet.
+var __slackChannels = null; // [{id,name,isPrivate}] once loaded, else null
+function getDefaultSlackChannel() {
+  return localStorage.getItem('slackChannelId') || '';
+}
+function setDefaultSlackChannel(id) {
+  if (id) localStorage.setItem('slackChannelId', id);
+  else localStorage.removeItem('slackChannelId');
+}
+function loadSlackChannels(force) {
+  if (__slackChannels && !force) return Promise.resolve(__slackChannels);
+  var ah = workerAuthHeader();
+  if (!ah) return Promise.resolve([]);
+  return fetch(WORKER_URL + 'slack/channels', { headers: { 'Authorization': ah } })
+    .then(function(r) { return r.json(); })
+    .then(function(j) {
+      if (!j.success) { toast(j.error || "Couldn't load Slack channels", 'err'); return []; }
+      __slackChannels = j.channels || [];
+      if (!getDefaultSlackChannel() && j.defaultChannelId) setDefaultSlackChannel(j.defaultChannelId);
+      return __slackChannels;
+    })
+    .catch(function() { return []; });
+}
+
+// Resolves a list of emails to Slack user IDs via the Worker (token never
+// reaches the browser) so channel-mode messages can @mention a PM with
+// `<@userId>` instead of just printing their name. Always resolves (never
+// rejects) — emails with no Slack account, or any failure, just come back
+// missing from the result object, and callers fall back to a plain name.
+function resolveSlackUserIds(emails) {
+  var ah = workerAuthHeader();
+  if (!ah || !emails.length) return Promise.resolve({});
+  return fetch(WORKER_URL + 'slack/resolve-users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': ah },
+    body: JSON.stringify({ emails: emails })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(j) { return (j && j.success) ? (j.users || {}) : {}; })
+    .catch(function() { return {}; });
 }
 
 // Slack alert buttons are visible only to Vicky — checked again server-side
@@ -1098,19 +1194,19 @@ function sendPmDigestsToSlack(btn){
   if(!owners.length){ toast('No site data loaded','err'); return; }
   var today=new Date();
   var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var summaryLines=['*📋 PM Daily Digest — '+ds+'*',''];
+  var summaryLines=['Team update for '+ds+':',''];
   var origLabel=btn?btn.textContent:''; if(btn){btn.disabled=true;btn.textContent='⟳ Sending…';}
   var sends=[];
   owners.forEach(function(owner){
     var sites=byPM[owner];
-    var lines=['*Your Site Updates — '+ds+'*',''];
+    var first=owner.split(' ')[0];
+    var lines=['Hey '+first+' — here\'s where your sites stand today ('+ds+'):',''];
     sites.forEach(function(r){
       var stale=getStaleDays(r);
-      lines.push('*'+r['Site Name']+'* ('+(r['Status']||'')+((r['Percentage Completion']||'')?(' · '+r['Percentage Completion']):'')+')'+(stale>=5?' ⏸ '+stale+'d stale':''));
+      lines.push('• '+r['Site Name']+' — '+(r['Status']||'in progress')+((r['Percentage Completion']||'')?(', '+r['Percentage Completion']+' done'):'')+(stale>=5?' (no update in '+stale+'d, can you check in?)':''));
     });
-    summaryLines.push('*'+owner+'* — '+sites.length+' site'+(sites.length>1?'s':''));
-    var first=owner.split(' ')[0];
-    var email=PM_EMAIL_MAP[first];
+    summaryLines.push(owner+' — '+sites.length+' site'+(sites.length>1?'s':''));
+    var email=resolvePmEmail(owner);
     if(email){
       sends.push(new Promise(function(resolve){
         sendToSlack('dm', email, lines.join('\n'), null);
@@ -1125,17 +1221,96 @@ function sendPmDigestsToSlack(btn){
 }
 
 // Tickets tab "📣 Slack" button — posts an open-ticket summary to the channel.
+// Tickets tab "📣 Slack" button — posts every open ticket to the channel,
+// grouped by assignee (PM name as a bold header) and sorted by site within
+// each PM's list, so the channel sees the same full breakdown instead of
+// just a headline count.
 function sendTicketSummaryToSlack(btn){
   if(!TICKET_DATA.length){ toast('No ticket data loaded','err'); return; }
-  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return row[names[i]]||'';}return '';}
-  var total=TICKET_DATA.length;
-  var urgent=TICKET_DATA.filter(function(r){return col(r,['Priority']).toLowerCase()==='urgent';}).length;
-  var over30=TICKET_DATA.filter(function(r){return parseInt(col(r,['TAT','Open Since Days','Open Since'])||0)>30;}).length;
-  var unassigned=TICKET_DATA.filter(function(r){var a=col(r,['Assigned To']);return !a||a.toLowerCase()==='unassigned';}).length;
-  var today=new Date();
-  var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var text='*🎫 Ticket Summary — '+ds+'*\n\n📊 *'+total+' open* · 🚨 '+urgent+' urgent · ⏰ '+over30+' over 30d · ❓ '+unassigned+' unassigned';
-  sendToSlack('channel', null, text, btn);
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
+  var CLOSED=['closed','resolved','cancelled','rejected'];
+  function isClosed(r){var s=(col(r,['Status','status'])||'').toLowerCase();return CLOSED.some(function(x){return s===x||s.startsWith(x);});}
+  var open=TICKET_DATA.filter(function(r){return !isClosed(r);});
+  if(!open.length){ toast('No open tickets to send','err'); return; }
+
+  var byAssignee={};
+  open.forEach(function(r){
+    var assign=col(r,['Assigned To','assigned_to']).trim()||'Unassigned';
+    (byAssignee[assign]=byAssignee[assign]||[]).push(r);
+  });
+  var names=Object.keys(byAssignee).sort(function(a,b){
+    if(a==='Unassigned') return 1;
+    if(b==='Unassigned') return -1;
+    return a.localeCompare(b);
+  });
+
+  // Resolve each PM's Slack user ID so their header becomes a real @mention
+  // (<@userId>) instead of just bold text — falls back to a plain bold name
+  // for anyone unmapped in PM_EMAIL_MAP or without a Slack account.
+  var assigneeEmails={};
+  names.forEach(function(assign){ var e=resolvePmEmail(assign); if(e) assigneeEmails[assign]=e; });
+  var origLabel=btn?btn.textContent:''; if(btn){btn.disabled=true;btn.textContent='⟳';}
+  resolveSlackUserIds(Object.values(assigneeEmails)).then(function(userIds){
+    var today=new Date();
+    var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+    var lines=['Ticket status for '+ds+' — '+open.length+' open right now:',''];
+    names.forEach(function(assign){
+      var tix=byAssignee[assign].slice().sort(function(a,b){
+        return tickSiteName(col(a,['Store','store'])).localeCompare(tickSiteName(col(b,['Store','store'])));
+      });
+      var uid=assigneeEmails[assign]&&userIds[assigneeEmails[assign]];
+      lines.push(uid?'<@'+uid+'>':'*'+assign+'*');
+      tix.forEach(function(r){
+        var id=col(r,['ID','id'])||'—';
+        var title=col(r,['Title','title'])||'Untitled';
+        var desc=col(r,['Description'])||'';
+        var site=tickSiteName(col(r,['Store','store']));
+        var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
+        lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+' - '+link);
+      });
+      lines.push('');
+    });
+    sendToSlack('channel', null, lines.join('\n').trim(), null);
+  }).then(function(){ if(btn){btn.disabled=false;btn.textContent=origLabel;} });
+}
+
+// Tickets tab "📨 Ticket Updates" button — DMs every assignee their own
+// list of open tickets (same per-PM breakdown as sendTicketSummaryToSlack
+// above, but privately to each person instead of posted to the channel).
+function sendTicketDigestsToSlack(btn){
+  if(!TICKET_DATA.length){ toast('No ticket data loaded','err'); return; }
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
+  var CLOSED=['closed','resolved','cancelled','rejected'];
+  function isClosed(r){var s=(col(r,['Status','status'])||'').toLowerCase();return CLOSED.some(function(x){return s===x||s.startsWith(x);});}
+  var byAssignee={};
+  TICKET_DATA.forEach(function(r){
+    if(isClosed(r)) return;
+    var assign=col(r,['Assigned To','assigned_to']).trim();
+    if(!assign||assign.toLowerCase()==='unassigned') return;
+    (byAssignee[assign]=byAssignee[assign]||[]).push(r);
+  });
+  var names=Object.keys(byAssignee);
+  if(!names.length){ toast('No assigned open tickets to send','err'); return; }
+  var origLabel=btn?btn.textContent:''; if(btn){btn.disabled=true;btn.textContent='⟳ Sending…';}
+  var sent=0, skipped=[];
+  names.forEach(function(assign){
+    var first=assign.split(' ')[0];
+    var email=resolvePmEmail(assign);
+    if(!email){ skipped.push(assign); return; }
+    var tix=byAssignee[assign];
+    var lines=['Hey '+first+' — you\'ve got '+tix.length+' open ticket'+(tix.length!==1?'s':'')+' right now:',''];
+    tix.forEach(function(r){
+      var id=col(r,['ID','id'])||'—';
+      var title=col(r,['Title','title'])||'Untitled';
+      var pri=col(r,['Priority','priority']);
+      var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
+      lines.push('• '+link+' — '+title+(pri?' ('+pri+')':''));
+    });
+    sendToSlack('dm', email, lines.join('\n'), null);
+    sent++;
+  });
+  toast(sent?('📨 Sent ticket updates to '+sent+' PM'+(sent!==1?'s':'')+(skipped.length?', skipped '+skipped.length+' (no Slack email — '+skipped.join(', ')+')':'')) : 'No matching Slack emails found for any assignee', sent?'ok':'err');
+  if(btn){btn.disabled=false;btn.textContent=origLabel;}
 }
 
 // Toolbar "📣 Slack Message" button — free-text compose to the team channel
@@ -1152,6 +1327,7 @@ function openSlackComposeModal(){
   dl.innerHTML=Object.keys(PM_EMAIL_MAP).sort().map(function(n){
     return '<option value="'+esc(PM_EMAIL_MAP[n])+'">'+esc(n)+'</option>';
   }).join('');
+  populateSlackChannelPicker();
   document.getElementById('slack-compose-modal').style.display='flex';
   document.getElementById('slack-compose-text').focus();
 }
@@ -1161,6 +1337,19 @@ function closeSlackComposeModal(){
 function onSlackComposeTargetChange(){
   var mode=document.querySelector('input[name="slack-compose-target"]:checked').value;
   document.getElementById('slack-compose-dm-row').style.display = mode==='dm' ? 'block' : 'none';
+  document.getElementById('slack-compose-channel-row').style.display = mode==='dm' ? 'none' : 'block';
+}
+function populateSlackChannelPicker(){
+  var sel=document.getElementById('slack-compose-channel');
+  sel.innerHTML='<option value="">Loading channels…</option>';
+  loadSlackChannels().then(function(channels){
+    if(!channels.length){ sel.innerHTML='<option value="">No channels found — check Slack app access</option>'; return; }
+    var current=getDefaultSlackChannel();
+    sel.innerHTML=channels.map(function(c){
+      return '<option value="'+esc(c.id)+'"'+(c.id===current?' selected':'')+'>#'+esc(c.name)+(c.isPrivate?' 🔒':'')+'</option>';
+    }).join('');
+    if(!current && channels[0]) setDefaultSlackChannel(channels[0].id);
+  });
 }
 function sendSlackComposeMessage(btn){
   var textEl=document.getElementById('slack-compose-text');
@@ -1169,12 +1358,15 @@ function sendSlackComposeMessage(btn){
   errEl.style.display='none';
   if(!text){ errEl.textContent='Message cannot be empty'; errEl.style.display='block'; return; }
   var mode=document.querySelector('input[name="slack-compose-target"]:checked').value;
-  var email=null;
+  var email=null, channel=null;
   if(mode==='dm'){
     email=document.getElementById('slack-compose-person').value.trim();
     if(!email || email.indexOf('@')===-1){ errEl.textContent='Enter or pick a valid email to DM'; errEl.style.display='block'; return; }
+  } else {
+    channel=document.getElementById('slack-compose-channel').value;
+    if(!channel){ errEl.textContent='Pick a channel to send to'; errEl.style.display='block'; return; }
   }
-  sendToSlack(mode, email, text, btn);
+  sendToSlack(mode, email, text, btn, channel);
   textEl.value='';
 }
 
@@ -6820,6 +7012,7 @@ function renderTicketTab(){
   html+=dd('Assigned:',assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
   if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
+  if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketDigestsToSlack(this)" style="font-size:11px">📨 Ticket Updates</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
 
@@ -7147,19 +7340,19 @@ async function submitMaterial(idx) {
 // text embedded in HTML attributes to escape.
 function buildSlackDelayText(kind, siteName){
   var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; }) || {};
-  var owner = r['Owner'] || 'PM';
+  var owner = (r['Owner'] || '').trim().split(' ')[0] || 'there';
   if (kind === 'uat_delay') {
     var satD = pd(r['SAT Date']);
     var uatTgt = satD ? new Date(satD.getTime()+15*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : '--';
     var now = new Date(); now.setHours(0,0,0,0);
     var od = satD ? Math.round((now-new Date(satD.getTime()+15*86400000))/86400000) : 0;
-    return '⚠️ *UAT Delay* — *'+siteName+'* is '+od+'d overdue on UAT (target '+uatTgt+'). Owner: '+owner;
+    return 'Hey '+owner+' — '+siteName+' is now '+od+'d past the UAT target ('+uatTgt+'). What\'s the holdup — can you send me an update today?';
   }
   if (kind === 'sat_delay') {
     var planD = r['Planned Completion']?fmtRaw(r['Planned Completion']):'--';
     var revD = r['Revised Completion']?fmtRaw(r['Revised Completion']):'--';
     var finalDate = revD!=='--'?revD:planD;
-    return '⚠️ *SAT Delay* — *'+siteName+'* final SAT date: '+finalDate+'. Owner: '+owner;
+    return 'Hey '+owner+' — checking in on '+siteName+', SAT is now looking at '+finalDate+'. Can you tell me what\'s pushing it and when we can close it out?';
   }
   if (kind === 'handover') {
     var satDone = !!(r['SAT Date']||'').trim();
@@ -7168,7 +7361,7 @@ function buildSlackDelayText(kind, siteName){
     var uatD = pd(r['SAT Date']);
     var uatTarget = uatD ? new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'TBD';
     var deadline = satDone ? uatTarget : cdStr;
-    return '🔴 *Handover Urgency* — *'+siteName+'* '+(satDone?'UAT':'SAT')+' deadline: '+deadline+'. Owner: '+owner;
+    return 'Hey '+owner+' — '+siteName+' is cutting it close, '+(satDone?'UAT':'SAT')+' is due by '+deadline+'. Can you confirm we\'re on track, or flag now if it\'s slipping?';
   }
   if (kind === 'procure_delay') {
     var items = PROCURE_DATA[siteName]||[];
@@ -7179,7 +7372,7 @@ function buildSlackDelayText(kind, siteName){
       if(it.deliveryDate){var dd=pd(it.deliveryDate);if(dd&&dd<today) return true;}
       return false;
     });
-    return '📦 *Procurement Delay* — *'+siteName+'* has '+problemItems.length+' delayed item'+(problemItems.length!==1?'s':'')+'. Owner: '+owner;
+    return 'Hey '+owner+' — heads up, '+siteName+' has '+problemItems.length+' procurement item'+(problemItems.length!==1?'s':'')+' running late. Can you chase the vendor and update the tracker once you hear back?';
   }
   if (kind === 'vendor_penalty') {
     var pItems = PROCURE_DATA[siteName]||[];
@@ -7189,14 +7382,14 @@ function buildSlackDelayText(kind, siteName){
       var dd=pd(it.deliveryDate);
       return dd&&dd<pToday;
     });
-    return '⚠️ *Vendor Penalty Notice* — *'+siteName+'* has '+pOverdue.length+' overdue delivery item'+(pOverdue.length!==1?'s':'')+'. Owner: '+owner;
+    return 'Hey '+owner+' — sending the vendor a penalty notice for '+siteName+', '+pOverdue.length+' item'+(pOverdue.length!==1?'s are':' is')+' overdue on delivery. Flagging before it goes out in case there\'s context I\'m missing.';
   }
   if (kind === 'pending_docs') {
     var missing=[];
     if(!(SCHED_DATA[siteName]&&SCHED_DATA[siteName].length)) missing.push('Schedule');
     if(!(LL_SCOPE_DATA[siteName]&&LL_SCOPE_DATA[siteName].length)) missing.push('LL Scope');
     if(!(PROCURE_DATA[siteName]&&PROCURE_DATA[siteName].length)) missing.push('Procurement Plan');
-    return '📋 *Pending Docs* — *'+siteName+'* needs: '+(missing.join(', ')||'—')+'. Owner: '+owner;
+    return 'Hey '+owner+' — '+siteName+' is still missing '+(missing.join(', ')||'a few docs')+' in the tracker. Can you get these uploaded when you get a chance?';
   }
   if (kind === 'snag') {
     var rows = SNAG_DATA[siteName]||[];
@@ -7204,7 +7397,7 @@ function buildSlackDelayText(kind, siteName){
       var s=(rr.status||'').toLowerCase();
       return s!=='completed'&&s!=='done'&&s!=='closed'&&s!=='na'&&s!=='n/a'&&s!=='not applicable';
     });
-    return '🔧 *Snag Closure* — *'+siteName+'* has '+open.length+' open snag'+(open.length!==1?'s':'')+' pending before UAT. Owner: '+owner;
+    return 'Hey '+owner+' — '+siteName+' still has '+open.length+' open snag'+(open.length!==1?'s':'')+' before we can sign off UAT. Can you push the vendor to close these out?';
   }
   return siteName;
 }
@@ -9086,8 +9279,8 @@ document.addEventListener('click', function(e){
   var kind = btn.dataset.slackKind;
   var siteName = btn.dataset.slackSite;
   var r = allData.find(function(rr){ return (rr['Site Name']||'').trim() === siteName; });
-  var owner = r ? (r['Owner']||'').trim().split(' ')[0] : '';
-  var email = PM_EMAIL_MAP[owner];
+  var owner = r ? (r['Owner']||'').trim() : '';
+  var email = resolvePmEmail(owner);
   var text = buildSlackDelayText(kind, siteName);
   sendToSlack(email ? 'dm' : 'channel', email, text, btn);
 });
