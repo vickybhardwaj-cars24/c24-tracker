@@ -34,11 +34,22 @@
 //                                 tool_path[,action]}. Kept ONE deploy cycle
 //                                 for safe ordering — to be removed in a
 //                                 follow-up commit.
+// POST /slack/send              → { mode:'channel'|'dm', email?, text }.
+//                                 Requires the same auth as /upload. Relays to
+//                                 Slack's Web API using SLACK_BOT_TOKEN so the
+//                                 token never touches client-side code.
 //
 // Required env (Worker → Settings → Variables and Secrets):
 //   AUTH_USERNAME  - plaintext username
 //   AUTH_PASSWORD  - plaintext password
 //   ALLOWED_TOOLS  - (optional) comma-separated allowlist
+//   SLACK_BOT_TOKEN         - Bot User OAuth Token (xoxb-...). Needs the
+//                             chat:write, users:read, users:read.email
+//                             Bot Token Scopes in the Slack app.
+//   SLACK_CHANNEL_ID        - channel ID that channel-mode alerts post to
+//   SLACK_AUTOMATION_ENABLED - set to '1' to arm the daily cron digest below;
+//                             leave unset until manual /slack/send sends have
+//                             been verified to actually land in Slack
 // Required binding:
 //   BUCKET         - R2 bucket binding (variable name BUCKET → bucket c24-tracker-data)
 
@@ -341,6 +352,356 @@ async function readBodyCapped(request, limit) {
   return new TextDecoder('utf-8').decode(out);
 }
 
+// ═══ SLACK INTEGRATION ═══════════════════════════════════════════════════
+// Bot token never leaves this Worker — the frontend only ever calls our own
+// POST /slack/send, never slack.com directly. See header comment for the
+// required SLACK_BOT_TOKEN / SLACK_CHANNEL_ID / SLACK_AUTOMATION_ENABLED env.
+
+// Reconstructed from the removed SLACK_HANDLES map (frontend index.html had
+// the same 26-name table before the old Slack tab was deleted) — converts
+// '@vicky.bhardwaj' style handles into real emails for users.lookupByEmail.
+// Kept in sync manually with the PM_EMAIL_MAP in index.html; there is no
+// shared module between the two runtimes.
+const PM_EMAIL_MAP = {
+  'Ajeet':'ajeet.sharma@cars24.com','Akhtar':'md.fasih.akhtar@cars24.com','Arun':'arun.varghese@cars24.com',
+  'Chetan':'chetan.jaskalyan@cars24.com','Danish':'danish.sharrma@cars24.com','Gaurav':'gaurav.pandey@cars24.com',
+  'Harshit':'harshit.pandey@cars24.com','Indranil':'indranil.roy.chowdhury@cars24.com','Kamal':'kamal.saini@cars24.com',
+  'Karan':'karan.dhar.singh.bharti@cars24.com','Nitesh':'nitesh.kumar@cars24.com','Pallavi':'pallavi.priya@cars24.com',
+  'Pradeep':'pradeep.yadav@cars24.com','Rahul':'rahul.panwar@cars24.com','Rajat':'rajat.sharma@cars24.com',
+  'Raman':'raman.kumar@cars24.com','Riya':'riya.kumari@cars24.com','Sachin':'sachin.lohchab@cars24.com',
+  'Saurabh':'saurabh.girdhar@cars24.com','Shivam':'shivam.shukla@cars24.com','Shubhita':'shubhita.jain@cars24.com',
+  'Sumit':'sumit.kumar@cars24.com','Swatesh':'swatesh.kumar@cars24.com','Tanuj':'tanuj.singh@cars24.com',
+  'Vicky':'vicky.bhardwaj@cars24.com','Vinod':'vinod.yadav@cars24.com',
+};
+
+async function slackApi(env, method, params) {
+  if (!env.SLACK_BOT_TOKEN) { const e = new Error('SLACK_BOT_TOKEN not configured'); e.code = 'NOT_CONFIGURED'; throw e; }
+  const resp = await fetch(`https://slack.com/api/${method}`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}`,
+      'Content-Type': 'application/json; charset=utf-8',
+    },
+    body: JSON.stringify(params),
+  });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(`Slack ${method} failed: ${data.error || 'unknown_error'}`);
+  return data;
+}
+
+async function resolveSlackUserId(env, email) {
+  const url = `https://slack.com/api/users.lookupByEmail?email=${encodeURIComponent(email)}`;
+  const resp = await fetch(url, { headers: { 'Authorization': `Bearer ${env.SLACK_BOT_TOKEN}` } });
+  const data = await resp.json();
+  if (!data.ok) throw new Error(`users.lookupByEmail failed for ${email}: ${data.error || 'unknown_error'}`);
+  return data.user.id;
+}
+
+async function postSlackMessage(env, channel, text) {
+  return slackApi(env, 'chat.postMessage', { channel, text, unfurl_links: false });
+}
+
+// POST /slack/send — { mode:'channel'|'dm', email?, text }. Same auth gate as
+// /upload so only logged-in dashboard users can trigger a send.
+const SLACK_ALLOWED_EMAIL = 'vicky.bhardwaj@cars24.com';
+
+// Extracts the `email` claim from a Supabase Bearer JWT, if present. Basic
+// auth (the shared upload credential) carries no per-user identity, so it
+// can't prove who's calling — returns null for it, which handleSlackSend
+// treats as not-authorized-for-Slack.
+function getBearerEmail(request) {
+  const h = request.headers.get('Authorization') || '';
+  if (!h.startsWith('Bearer ')) return null;
+  try {
+    const parts = h.slice(7).trim().split('.');
+    if (parts.length !== 3) return null;
+    const payload = JSON.parse(atob(parts[1].replace(/-/g,'+').replace(/_/g,'/')));
+    return (payload.email || '').trim().toLowerCase() || null;
+  } catch (_) { return null; }
+}
+
+// Slack alerts are restricted to a single user — the frontend also hides the
+// buttons for everyone else, but that's UI-only, so enforce it here too in
+// case someone calls this endpoint directly.
+async function handleSlackSend(request, env) {
+  if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Invalid credentials' });
+  if (getBearerEmail(request) !== SLACK_ALLOWED_EMAIL) {
+    return json(403, { success: false, error: 'Slack alerts are restricted to ' + SLACK_ALLOWED_EMAIL });
+  }
+
+  let body;
+  try { body = await request.json(); } catch (_e) { return json(400, { success: false, error: 'Invalid JSON body' }); }
+  const { mode, email, text } = body || {};
+  if (!text || typeof text !== 'string') return json(400, { success: false, error: 'Missing text' });
+
+  try {
+    if (mode === 'dm') {
+      if (!email) return json(400, { success: false, error: 'Missing email for DM' });
+      let userId;
+      try { userId = await resolveSlackUserId(env, email); }
+      catch (e) {
+        // No Slack account for this email — fall back to the channel so the
+        // message isn't silently dropped.
+        if (!env.SLACK_CHANNEL_ID) return json(502, { success: false, error: String(e && e.message || e) });
+        await postSlackMessage(env, env.SLACK_CHANNEL_ID, text);
+        return json(200, { success: true, fellBackToChannel: true });
+      }
+      await postSlackMessage(env, userId, text);
+    } else {
+      if (!env.SLACK_CHANNEL_ID) return json(500, { success: false, error: 'SLACK_CHANNEL_ID not configured' });
+      await postSlackMessage(env, env.SLACK_CHANNEL_ID, text);
+    }
+    return json(200, { success: true });
+  } catch (e) {
+    return json(502, { success: false, error: String(e && e.message || e) });
+  }
+}
+
+// Decompress a gzip R2 object body into UTF-8 text — used by the cron job
+// below to read projects-tracker.csv / tickets.csv directly from R2 the same
+// way the browser's C24Uploader.fetchText does client-side.
+async function gunzipText(body) {
+  return new Response(body.pipeThrough(new DecompressionStream('gzip'))).text();
+}
+
+// ── Minimal ports of index.html business logic, needed ONLY by the
+// automatic cron digest below (manual /slack/send sends build their text in
+// the browser, which already has the full logic). Keep these in sync with
+// the real implementations in projects-tracker/index.html and with
+// CLAUDE.md's "Business Logic — Critical" section — that doc is the source
+// of truth for these rules.
+const META_COLS_W = ['S.No.','BU','Cost Center','Site Name','Zone','Owner','Vendor','Vendor Rating',
+  'Percentage Completion','Status','PO Date','Kickoff Date','Work Start Date','SAT Date','UAT DATE',
+  'Planned Completion','Revised Completion','Reason for Delay'];
+const BLOCKER_PREFIXES_W = ['BD','Design','Branding','HEM','Commercial','Ops','HRC','Legal','Govt','Mall','BOQ','IT','Finance','Infra','CS'];
+const UAT_WARN_DAYS_W = 15;
+const STALE_WARN_DAYS_W = 5;
+const STALE_CRIT_DAYS_W = 10;
+
+function pdW(s) {
+  if (!s || !s.trim()) return null;
+  const ml = { jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11 };
+  const parts = s.trim().split(/[\s/\-]/);
+  let day = null, mo = null, yr = null;
+  parts.forEach(p => {
+    const n = parseInt(p);
+    if (!isNaN(n) && n > 31) yr = n;
+    else if (!isNaN(n) && n >= 1 && n <= 31 && day === null) day = n;
+    const mk = ml[p.toLowerCase().substring(0,3)];
+    if (mk !== undefined) mo = mk;
+  });
+  if (day === null || mo === null) {
+    const nd = new Date(s);
+    if (!isNaN(nd.getTime())) return new Date(nd.getFullYear(), nd.getMonth(), nd.getDate());
+    return null;
+  }
+  if (yr === null) {
+    const today = new Date(); today.setHours(0,0,0,0);
+    yr = today.getFullYear();
+  }
+  return new Date(yr, mo, day);
+}
+
+function parseCSVRows(txt) {
+  txt = txt.replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const rows = [];
+  let row = [], cell = '', inQ = false, i = 0;
+  while (i < txt.length) {
+    const ch = txt[i];
+    if (inQ) {
+      if (ch === '"' && txt[i+1] === '"') { cell += '"'; i += 2; }
+      else if (ch === '"') { inQ = false; i++; }
+      else { cell += ch; i++; }
+    } else {
+      if (ch === '"') { inQ = true; i++; }
+      else if (ch === ',') { row.push(cell.trim()); cell = ''; i++; }
+      else if (ch === '\n') {
+        row.push(cell.trim());
+        if (row.some(c => c)) rows.push(row);
+        row = []; cell = ''; i++;
+      } else { cell += ch; i++; }
+    }
+  }
+  if (cell || row.length > 0) { row.push(cell.trim()); if (row.some(c => c)) rows.push(row); }
+  if (rows.length < 2) return { rows: [], dateCols: [] };
+  const hdrs = rows[0].map(h => h.replace(/^﻿/, '').trim());
+  const dateCols = hdrs.filter(h => !META_COLS_W.includes(h));
+  const out = rows.slice(1).map(r => {
+    const o = {}; hdrs.forEach((h, idx) => { o[h] = (r[idx] || '').trim(); }); return o;
+  });
+  return { rows: out, dateCols };
+}
+
+function extractBlockersW(text) {
+  if (!text) return [];
+  const found = [];
+  BLOCKER_PREFIXES_W.forEach(p => {
+    if (new RegExp('(?:^|[\\n.\\s])' + p + '\\s*:', 'i').test(text) && !found.includes(p)) found.push(p);
+  });
+  return found;
+}
+
+function getLatestUpdateW(r, dateCols) {
+  for (let i = dateCols.length - 1; i >= 0; i--) {
+    const v = (r[dateCols[i]] || '').trim();
+    if (v) return v;
+  }
+  return '';
+}
+
+function getStaleDaysW(row, dateCols) {
+  const st = (row['Status'] || '').trim().toLowerCase();
+  if (st === 'uat done' || st === 'completed' || st === 'comleted') return 0;
+  if ((row['UAT DATE'] || '').trim()) return 0;
+  const today = new Date(); today.setHours(0,0,0,0);
+  for (let i = dateCols.length - 1; i >= 0; i--) {
+    const v = (row[dateCols[i]] || '').trim();
+    if (v && v.toLowerCase() !== 'completed' && v.toLowerCase() !== 'uat done') {
+      const d = pdW(dateCols[i]);
+      if (d) return Math.round((today - d) / 86400000);
+    }
+  }
+  return 0;
+}
+
+function committedDateW(r) {
+  return pdW(r['Revised Completion']) || pdW(r['Planned Completion']) || null;
+}
+
+// ── Daily Slack digest (cron-driven, no browser involved) ──────────────────
+// Reads the same R2 objects the frontend reads on page load, so the digest
+// is exactly as fresh as the last manual CSV upload — same freshness
+// contract the rest of this app already has.
+
+async function fetchCsvFromR2(env, tool) {
+  if (!env.BUCKET) return null;
+  const obj = await env.BUCKET.get(`${tool}.csv`);
+  if (!obj || !obj.body) return null;
+  try { return await gunzipText(obj.body); }
+  catch (e) { console.error(`gunzip failed for ${tool}.csv:`, e); return null; }
+}
+
+function pickCol(row, names) {
+  for (let i = 0; i < names.length; i++) { if (row[names[i]] !== undefined) return row[names[i]] || ''; }
+  return '';
+}
+
+async function postCrossFunctionalBlockers(env, sitesText) {
+  if (!env.SLACK_CHANNEL_ID) return;
+  const { rows, dateCols } = parseCSVRows(sitesText);
+  const buckets = {};
+  rows.forEach(r => {
+    const site = (r['Site Name'] || '').trim(); if (!site) return;
+    const st = (r['Status'] || '').toLowerCase();
+    if (st.includes('uat done') || st.includes('completed')) return;
+    const bl = extractBlockersW(getLatestUpdateW(r, dateCols));
+    bl.forEach(tag => { (buckets[tag] = buckets[tag] || []).push(site); });
+  });
+  const tags = Object.keys(buckets);
+  if (!tags.length) return;
+  const lines = ['*🚦 Cross-Functional Blockers — Daily Digest*', ''];
+  tags.forEach(tag => {
+    lines.push('*' + tag + '* — ' + buckets[tag].length + ' site' + (buckets[tag].length > 1 ? 's' : ''));
+    buckets[tag].forEach(s => lines.push('  • ' + s));
+  });
+  await postSlackMessage(env, env.SLACK_CHANNEL_ID, lines.join('\n'));
+}
+
+async function postPmDigests(env, sitesText) {
+  const { rows, dateCols } = parseCSVRows(sitesText);
+  const byPM = {};
+  rows.forEach(r => {
+    const site = (r['Site Name'] || '').trim(); if (!site) return;
+    const owner = (r['Owner'] || '').trim(); if (!owner) return;
+    (byPM[owner] = byPM[owner] || []).push(r);
+  });
+  const today = new Date();
+  const ds = today.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+  for (const owner of Object.keys(byPM)) {
+    const email = PM_EMAIL_MAP[owner];
+    if (!email) continue; // no mapped Slack account — skip rather than guess
+    const lines = ['*Your Site Updates — ' + ds + '*', ''];
+    byPM[owner].forEach(r => {
+      const status = r['Status'] || '', pct = r['Percentage Completion'] || '';
+      const stale = getStaleDaysW(r, dateCols);
+      lines.push('*' + r['Site Name'] + '* (' + status + (pct ? ' · ' + pct : '') + ')' + (stale >= STALE_WARN_DAYS_W ? ' ⏸ ' + stale + 'd stale' : ''));
+    });
+    try {
+      const userId = await resolveSlackUserId(env, email);
+      await postSlackMessage(env, userId, lines.join('\n'));
+    } catch (e) { console.error('PM digest DM failed for ' + owner + ':', e); }
+  }
+}
+
+// Approximates index.html's SAT Delay / UAT Warning rules (CLAUDE.md
+// "Business Logic — Critical"): SAT overdue = Planned Completion passed with
+// no SAT Date; UAT overdue = > UAT_WARN_DAYS_W since SAT with no UAT Date.
+async function postDelayReminders(env, sitesText) {
+  if (!env.SLACK_CHANNEL_ID) return;
+  const { rows } = parseCSVRows(sitesText);
+  const today = new Date(); today.setHours(0,0,0,0);
+  const satOverdue = [], uatOverdue = [];
+  rows.forEach(r => {
+    const site = (r['Site Name'] || '').trim(); if (!site) return;
+    const satDate = (r['SAT Date'] || '').trim();
+    const uatDate = (r['UAT DATE'] || '').trim();
+    if (!satDate) {
+      const planned = committedDateW(r);
+      if (planned) {
+        const days = Math.round((today - planned) / 86400000);
+        if (days >= 7) satOverdue.push({ site, days, owner: r['Owner'] || '' });
+      }
+    } else if (!uatDate) {
+      const satD = pdW(satDate);
+      if (satD) {
+        const days = Math.round((today - satD) / 86400000);
+        if (days > UAT_WARN_DAYS_W) uatOverdue.push({ site, days, owner: r['Owner'] || '' });
+      }
+    }
+  });
+  if (!satOverdue.length && !uatOverdue.length) return;
+  const lines = ['*⏳ Delay Reminders — Daily Digest*', ''];
+  if (satOverdue.length) {
+    lines.push('*SAT Overdue* (' + satOverdue.length + '):');
+    satOverdue.sort((a,b) => b.days - a.days).forEach(x => lines.push('  • ' + x.site + ' — ' + x.days + 'd overdue (' + (x.owner || 'Unassigned') + ')'));
+    lines.push('');
+  }
+  if (uatOverdue.length) {
+    lines.push('*UAT Overdue* (' + uatOverdue.length + '):');
+    uatOverdue.sort((a,b) => b.days - a.days).forEach(x => lines.push('  • ' + x.site + ' — ' + x.days + 'd since SAT (' + (x.owner || 'Unassigned') + ')'));
+  }
+  await postSlackMessage(env, env.SLACK_CHANNEL_ID, lines.join('\n'));
+}
+
+async function postTicketSummary(env, ticketsText) {
+  if (!env.SLACK_CHANNEL_ID) return;
+  const { rows } = parseCSVRows(ticketsText);
+  if (!rows.length) return;
+  const total = rows.length;
+  const urgent = rows.filter(r => pickCol(r, ['Priority']).toLowerCase() === 'urgent').length;
+  const over30 = rows.filter(r => parseInt(pickCol(r, ['Open Since Days','TAT']) || 0) > 30).length;
+  const unassigned = rows.filter(r => { const a = pickCol(r, ['Assigned To']); return !a || a.toLowerCase() === 'unassigned'; }).length;
+  const today = new Date();
+  const dateStr = today.getDate() + ' ' + ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+  const lines = ['*🎫 Ticket Summary — ' + dateStr + '*', '', '📊 *' + total + ' open* · 🚨 ' + urgent + ' urgent · ⏰ ' + over30 + ' over 30d · ❓ ' + unassigned + ' unassigned'];
+  await postSlackMessage(env, env.SLACK_CHANNEL_ID, lines.join('\n'));
+}
+
+async function runSlackDailyDigest(env) {
+  const [sitesText, ticketsText] = await Promise.all([
+    fetchCsvFromR2(env, 'projects-tracker'),
+    fetchCsvFromR2(env, 'tickets'),
+  ]);
+  if (sitesText) {
+    try { await postCrossFunctionalBlockers(env, sitesText); } catch (e) { console.error('Slack blockers digest failed:', e); }
+    try { await postPmDigests(env, sitesText); } catch (e) { console.error('Slack PM digest failed:', e); }
+    try { await postDelayReminders(env, sitesText); } catch (e) { console.error('Slack delay reminders failed:', e); }
+  }
+  if (ticketsText) {
+    try { await postTicketSummary(env, ticketsText); } catch (e) { console.error('Slack ticket summary failed:', e); }
+  }
+}
+
 // GET /pf-tickets                              — fetch all tickets (page-load style)
 // GET /pf-tickets?start_date=YYYY-MM-DD&end_date=YYYY-MM-DD  — date-filtered fetch
 // Server-side proxy to processflows.ai — bypasses browser CORS.
@@ -481,12 +842,22 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 export default {
   async scheduled(event, env, ctx) {
-    // Keep Supabase free-tier project alive — fires every 3 days via cron
-    try {
-      await fetch(`${SUPABASE_URL}/rest/v1/sites?select=id&limit=1`, {
-        headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
-      });
-    } catch(e) { console.error('Supabase ping failed:', e); }
+    if (event.cron === '0 9 */3 * *') {
+      // Keep Supabase free-tier project alive — fires every 3 days via cron
+      try {
+        await fetch(`${SUPABASE_URL}/rest/v1/sites?select=id&limit=1`, {
+          headers: { 'apikey': SUPABASE_ANON_KEY, 'Authorization': `Bearer ${SUPABASE_ANON_KEY}` }
+        });
+      } catch(e) { console.error('Supabase ping failed:', e); }
+    }
+
+    if (event.cron === '30 3 * * *') {
+      // Daily Slack digest — no-op until explicitly armed, so shipping this
+      // code can't start posting before SLACK_BOT_TOKEN/CHANNEL are verified.
+      if (env.SLACK_AUTOMATION_ENABLED === '1') {
+        await runSlackDailyDigest(env);
+      }
+    }
   },
 
   async fetch(request, env) {
@@ -507,6 +878,7 @@ export default {
       if (path === '/mappings')      return handleMappings(request, env);
       if (path === '/photo-upload')  return handlePhotoUpload(request, env);
       if (path === '/photo-delete')  return handlePhotoDelete(request, env);
+      if (path === '/slack/send')    return handleSlackSend(request, env);
       if (path === '/')              return handlePostLegacy(request, env);
 
       return json(404, { success: false, error: 'Unknown POST endpoint' });
