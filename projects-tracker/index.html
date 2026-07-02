@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.17</title>
+<title>Cars24 Projects Tracker v5.18</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1134,6 +1134,24 @@ function loadSlackChannels(force) {
     .catch(function() { return []; });
 }
 
+// Resolves a list of emails to Slack user IDs via the Worker (token never
+// reaches the browser) so channel-mode messages can @mention a PM with
+// `<@userId>` instead of just printing their name. Always resolves (never
+// rejects) — emails with no Slack account, or any failure, just come back
+// missing from the result object, and callers fall back to a plain name.
+function resolveSlackUserIds(emails) {
+  var ah = workerAuthHeader();
+  if (!ah || !emails.length) return Promise.resolve({});
+  return fetch(WORKER_URL + 'slack/resolve-users', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': ah },
+    body: JSON.stringify({ emails: emails })
+  })
+    .then(function(r) { return r.json(); })
+    .then(function(j) { return (j && j.success) ? (j.users || {}) : {}; })
+    .catch(function() { return {}; });
+}
+
 // Slack alert buttons are visible only to Vicky — checked again server-side
 // in worker.js's handleSlackSend, so hiding the button isn't the only gate.
 function isVicky() {
@@ -1203,25 +1221,34 @@ function sendTicketSummaryToSlack(btn){
     return a.localeCompare(b);
   });
 
-  var today=new Date();
-  var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
-  var lines=['Ticket status for '+ds+' — '+open.length+' open right now:',''];
-  names.forEach(function(assign){
-    var tix=byAssignee[assign].slice().sort(function(a,b){
-      return tickSiteName(col(a,['Store','store'])).localeCompare(tickSiteName(col(b,['Store','store'])));
+  // Resolve each PM's Slack user ID so their header becomes a real @mention
+  // (<@userId>) instead of just bold text — falls back to a plain bold name
+  // for anyone unmapped in PM_EMAIL_MAP or without a Slack account.
+  var assigneeEmails={};
+  names.forEach(function(assign){ var e=PM_EMAIL_MAP[assign.split(' ')[0]]; if(e) assigneeEmails[assign]=e; });
+  var origLabel=btn?btn.textContent:''; if(btn){btn.disabled=true;btn.textContent='⟳';}
+  resolveSlackUserIds(Object.values(assigneeEmails)).then(function(userIds){
+    var today=new Date();
+    var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
+    var lines=['Ticket status for '+ds+' — '+open.length+' open right now:',''];
+    names.forEach(function(assign){
+      var tix=byAssignee[assign].slice().sort(function(a,b){
+        return tickSiteName(col(a,['Store','store'])).localeCompare(tickSiteName(col(b,['Store','store'])));
+      });
+      var uid=assigneeEmails[assign]&&userIds[assigneeEmails[assign]];
+      lines.push(uid?'<@'+uid+'>':'*'+assign+'*');
+      tix.forEach(function(r){
+        var id=col(r,['ID','id'])||'—';
+        var title=col(r,['Title','title'])||'Untitled';
+        var desc=col(r,['Description'])||'';
+        var site=tickSiteName(col(r,['Store','store']));
+        var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
+        lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+' - '+link);
+      });
+      lines.push('');
     });
-    lines.push('*'+assign+'*');
-    tix.forEach(function(r){
-      var id=col(r,['ID','id'])||'—';
-      var title=col(r,['Title','title'])||'Untitled';
-      var desc=col(r,['Description'])||'';
-      var site=tickSiteName(col(r,['Store','store']));
-      var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
-      lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+' - '+link);
-    });
-    lines.push('');
-  });
-  sendToSlack('channel', null, lines.join('\n').trim(), btn);
+    sendToSlack('channel', null, lines.join('\n').trim(), null);
+  }).then(function(){ if(btn){btn.disabled=false;btn.textContent=origLabel;} });
 }
 
 // Tickets tab "📨 Ticket Updates" button — DMs every assignee their own

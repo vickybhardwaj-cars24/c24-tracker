@@ -48,6 +48,11 @@
 //                                 channels SLACK_USER_TOKEN has joined, so the
 //                                 frontend's channel picker can't offer a
 //                                 channel a send would fail against.
+// POST /slack/resolve-users     → { emails:[...] } → { users:{email:userId|null} }.
+//                                 Same auth gate as /slack/send. Lets the
+//                                 frontend build <@userId> @mentions for
+//                                 channel posts (e.g. the ticket summary)
+//                                 without the token ever reaching the browser.
 //
 // Required env (Worker → Settings → Variables and Secrets):
 //   AUTH_USERNAME  - plaintext username
@@ -601,6 +606,35 @@ async function handleSlackChannels(request, env) {
   }
 }
 
+// POST /slack/resolve-users — { emails:[...] }. Same Vicky-only auth gate as
+// /slack/send. Resolves each email to a Slack user ID via
+// users.lookupByEmail so the frontend can build a `<@userId>` @mention for a
+// PM in a channel post — the token that makes that lookup possible never
+// reaches the browser. An email with no Slack account resolves to null
+// rather than failing the whole batch (the frontend falls back to a plain
+// bold name for that one PM).
+async function handleSlackResolveUsers(request, env) {
+  if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Invalid credentials' });
+  if (getBearerEmail(request) !== SLACK_ALLOWED_EMAIL) {
+    return json(403, { success: false, error: 'Slack alerts are restricted to ' + SLACK_ALLOWED_EMAIL });
+  }
+  if (!env.SLACK_USER_TOKEN) return json(500, { success: false, error: friendlySlackError({ code: 'NOT_CONFIGURED' }) });
+
+  let body;
+  try { body = await request.json(); } catch (_e) { return json(400, { success: false, error: 'Invalid request — please try again.' }); }
+  const emails = Array.isArray(body && body.emails) ? body.emails.filter(function(e) { return typeof e === 'string' && e; }) : [];
+  if (!emails.length) return json(200, { success: true, users: {} });
+
+  const token = env.SLACK_USER_TOKEN;
+  const entries = await Promise.all(emails.map(async function(email) {
+    try { return [email, await resolveSlackUserId(token, email)]; }
+    catch (_e) { return [email, null]; }
+  }));
+  const users = {};
+  entries.forEach(function(pair) { users[pair[0]] = pair[1]; });
+  return json(200, { success: true, users: users });
+}
+
 // Decompress a gzip R2 object body into UTF-8 text — used by the cron job
 // below to read projects-tracker.csv / tickets.csv directly from R2 the same
 // way the browser's C24Uploader.fetchText does client-side.
@@ -1025,6 +1059,7 @@ export default {
       if (path === '/photo-upload')  return handlePhotoUpload(request, env);
       if (path === '/photo-delete')  return handlePhotoDelete(request, env);
       if (path === '/slack/send')    return handleSlackSend(request, env);
+      if (path === '/slack/resolve-users') return handleSlackResolveUsers(request, env);
       if (path === '/')              return handlePostLegacy(request, env);
 
       return json(404, { success: false, error: 'Unknown POST endpoint' });
