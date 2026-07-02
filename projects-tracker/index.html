@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.28</title>
+<title>Cars24 Projects Tracker v5.29</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -6151,10 +6151,9 @@ function pendingDocReminderMail(r, missingDocs){
 }
 
 function renderPendingDocsTracker(){
-  var WIP_STATUSES=['wip','hold','tbs','sat done'];
   var rows=allData.filter(function(r){
     var st=(r['Status']||'').trim().toLowerCase();
-    return WIP_STATUSES.some(function(s){return st.includes(s)||st===s;});
+    return st.includes('wip');
   });
   if(!rows.length) return '<div style="color:var(--muted);font-size:12px;padding:10px">No active sites.</div>';
 
@@ -7099,7 +7098,6 @@ function renderTicketTab(){
   }
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
-  if(isVicky()) html+='<div id="ticket-slack-channel-warn" style="font-size:10px;color:#d97706;display:none"></div>';
 
   // Row 2 & 3: chip filters
   html+='<div style="padding-top:4px;border-top:1px solid var(--border)">';
@@ -7167,24 +7165,6 @@ function renderTicketTab(){
 
   html+='</tbody></table></div>';
   el.innerHTML=html;
-  if(isVicky()){
-    var warnEl=document.getElementById('ticket-slack-channel-warn');
-    loadSlackChannels().then(function(channels){
-      if(!warnEl) return;
-      var missing=TICKET_SLACK_CHANNELS.filter(function(n){ return !channels.some(function(c){ return c.name===n; }); });
-      if(missing.length){
-        var names=missing.map(function(n){return '#'+n;}).join(', ');
-        if(channels.length>0){
-          warnEl.textContent='⚠ Not postable: '+names+' ('+channels.length+' other channel'+(channels.length!==1?'s':'')+' loaded fine). If you\'re definitely a member of '+(missing.length>1?'these':'this')+' in Slack, the connected Slack app most likely isn\'t installed on the workspace they live in (common on multi-workspace/Enterprise Grid Slack) — ask your Slack admin to install/authorize it there.';
-        } else {
-          warnEl.textContent='⚠ Not postable: '+names+' — no channels loaded at all, check Slack app access.';
-        }
-        warnEl.style.display='block';
-      } else {
-        warnEl.style.display='none';
-      }
-    });
-  }
 }
 
 function showTicketDetail(id){
