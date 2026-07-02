@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.20</title>
+<title>Cars24 Projects Tracker v5.21</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1308,8 +1308,9 @@ function sendTicketDigestsToSlack(btn){
       var id=col(r,['ID','id'])||'—';
       var title=col(r,['Title','title'])||'Untitled';
       var pri=col(r,['Priority','priority']);
+      var site=tickSiteName(col(r,['Store','store']));
       var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
-      lines.push('• '+link+' — '+title+(pri?' ('+pri+')':''));
+      lines.push('• ['+site+'] '+link+' — '+title+(pri?' ('+pri+')':''));
     });
     sendToSlack('dm', email, lines.join('\n'), null);
     sent++;
@@ -7141,7 +7142,7 @@ function renderTicketTab(){
       var warnEl=document.getElementById('ticket-slack-channel-warn');
       if(!warnEl) return;
       if(missing.length){
-        warnEl.textContent='⚠ Slack app hasn\'t joined: '+missing.map(function(n){return '#'+n;}).join(', ')+' — invite it there or these won\'t be selectable.';
+        warnEl.textContent='⚠ Not showing: '+missing.map(function(n){return '#'+n;}).join(', ')+' — sends go out as you (Vicky), so you need to be a member of these channels in Slack for them to appear here.';
         warnEl.style.display='block';
       } else {
         warnEl.style.display='none';
