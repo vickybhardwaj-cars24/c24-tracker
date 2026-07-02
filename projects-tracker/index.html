@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.14</title>
+<title>Cars24 Projects Tracker v5.15</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1191,6 +1191,45 @@ function sendTicketSummaryToSlack(btn){
   var ds=today.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][today.getMonth()];
   var text='Ticket status for '+ds+' — '+total+' open right now, '+urgent+' urgent, '+over30+' sitting over 30 days, and '+unassigned+' still unassigned.'+(urgent||over30?' Can we get eyes on the urgent/overdue ones?':'');
   sendToSlack('channel', null, text, btn);
+}
+
+// Tickets tab "📨 Ticket Updates" button — unlike sendTicketSummaryToSlack
+// above (one aggregate count posted to the channel, left untouched), this
+// DMs every assignee their own list of open tickets so each PM only sees
+// what's actually on their plate.
+function sendTicketDigestsToSlack(btn){
+  if(!TICKET_DATA.length){ toast('No ticket data loaded','err'); return; }
+  function col(row,names){for(var i=0;i<names.length;i++){if(row[names[i]]!==undefined)return String(row[names[i]]||'');}return '';}
+  var CLOSED=['closed','resolved','cancelled','rejected'];
+  function isClosed(r){var s=(col(r,['Status','status'])||'').toLowerCase();return CLOSED.some(function(x){return s===x||s.startsWith(x);});}
+  var byAssignee={};
+  TICKET_DATA.forEach(function(r){
+    if(isClosed(r)) return;
+    var assign=col(r,['Assigned To','assigned_to']).trim();
+    if(!assign||assign.toLowerCase()==='unassigned') return;
+    (byAssignee[assign]=byAssignee[assign]||[]).push(r);
+  });
+  var names=Object.keys(byAssignee);
+  if(!names.length){ toast('No assigned open tickets to send','err'); return; }
+  var origLabel=btn?btn.textContent:''; if(btn){btn.disabled=true;btn.textContent='⟳ Sending…';}
+  var sent=0, skipped=[];
+  names.forEach(function(assign){
+    var first=assign.split(' ')[0];
+    var email=PM_EMAIL_MAP[first];
+    if(!email){ skipped.push(assign); return; }
+    var tix=byAssignee[assign];
+    var lines=['Hey '+first+' — you\'ve got '+tix.length+' open ticket'+(tix.length!==1?'s':'')+' right now:',''];
+    tix.forEach(function(r){
+      var id=col(r,['ID','id'])||'—';
+      var title=col(r,['Title','title'])||'Untitled';
+      var pri=col(r,['Priority','priority']);
+      lines.push('• #'+id+' — '+title+(pri?' ('+pri+')':''));
+    });
+    sendToSlack('dm', email, lines.join('\n'), null);
+    sent++;
+  });
+  toast(sent?('📨 Sent ticket updates to '+sent+' PM'+(sent!==1?'s':'')+(skipped.length?', skipped '+skipped.length+' (no Slack email — '+skipped.join(', ')+')':'')) : 'No matching Slack emails found for any assignee', sent?'ok':'err');
+  if(btn){btn.disabled=false;btn.textContent=origLabel;}
 }
 
 // Toolbar "📣 Slack Message" button — free-text compose to the team channel
@@ -6892,6 +6931,7 @@ function renderTicketTab(){
   html+=dd('Assigned:',assignOpts,fAssign,'Assign');
   html+='<span style="font-size:11px;color:var(--muted);white-space:nowrap">'+filtered.length+' tickets</span>';
   if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketSummaryToSlack(this)" style="font-size:11px">📣 Slack</button>';
+  if(isVicky()) html+='<button class="btn btn-o btn-sm" onclick="sendTicketDigestsToSlack(this)" style="font-size:11px">📨 Ticket Updates</button>';
   html+='<a href="https://docs.google.com/spreadsheets/d/1cBA-fEulJUJO1bO2SCSEQQmljHv8qAZ5LHtXh66iG8M/edit?gid=759446691#gid=759446691" target="_blank" style="font-size:11px;color:var(--primary);text-decoration:none;display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border:1px solid var(--border);border-radius:6px;font-weight:600">📊 Sheet</a>';
   html+='</div>';
 
