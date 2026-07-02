@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.33</title>
+<title>Cars24 Projects Tracker v5.34</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1276,9 +1276,10 @@ function sendTicketSummaryToSlack(btn, channelId){
         var id=col(r,['ID','id'])||'—';
         var title=col(r,['Title','title'])||'Untitled';
         var desc=col(r,['Description'])||'';
+        var pri=col(r,['Priority','priority']);
         var site=tickSiteName(col(r,['Store','store']));
         var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
-        lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+' - '+link);
+        lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+(pri?' ('+pri+')':'')+' - '+link);
       });
       lines.push('');
     });
@@ -1331,10 +1332,11 @@ function sendTicketDigestsToSlack(btn){
     tix.forEach(function(r){
       var id=col(r,['ID','id'])||'—';
       var title=col(r,['Title','title'])||'Untitled';
+      var desc=col(r,['Description'])||'';
       var pri=col(r,['Priority','priority']);
       var site=tickSiteName(col(r,['Store','store']));
       var link='<https://processflows.ai/tickets/'+id+'|#'+id+'>';
-      lines.push('• ['+site+'] '+link+' — '+title+(pri?' ('+pri+')':''));
+      lines.push('• ['+site+'] '+title+(desc?': '+desc:'')+(pri?' ('+pri+')':'')+' - '+link);
     });
     sendToSlack('dm', email, lines.join('\n'), null);
     sent++;
@@ -3268,7 +3270,7 @@ function markNotifiedByIdx(btn) {
   const site=r['Site Name']||'Site';
   const subject='UAT Delay Warning — '+site+' ('+gap+' days post SAT)';
   const body='Dear '+owner+',\n\nThis is a formal reminder that '+site+' completed SAT on '+satD+' and UAT has not been recorded after '+gap+' days, which exceeds the 15-day SLA.\n\nPlease initiate UAT immediately and share the UAT completion date at the earliest.\n\nAny further delay may result in a Show Cause Notice (SCN) as per CARS24 project compliance policy.\n\nRegards,\nVicky Bhardwaj\nHead of Projects, CARS24';
-  const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
+  const gmailUrl='https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body);
   // Show options modal
   const html='<div style="font-size:14px;font-weight:700;margin-bottom:12px">🔔 Warning — '+esc(site)+'</div>'
     +'<div style="font-size:12px;color:var(--muted);margin-bottom:12px">'+gap+' days since SAT · Owner: '+esc(owner)+'</div>'
@@ -6079,7 +6081,8 @@ function processSnagXlsx(arrayBuffer,fileName,statusEl){
       return;
     }
 
-    SNAG_DATA=newData;
+    Object.keys(SNAG_DATA).forEach(function(k){delete SNAG_DATA[k];});
+    Object.assign(SNAG_DATA,newData);
     if(statusEl){
       statusEl.style.color='#16a34a';
       statusEl.textContent='✅ Loaded '+Object.keys(newData).length+' sites, '+totalRows+' snag items from '+fileName+'. Tab will refresh.';
@@ -6667,7 +6670,7 @@ function handleLLBulkUpload(event){
   if(!canUpload()){toast('Please log in first','err');event.target.value='';return;}
   var siteNames=allData.map(function(r){return (r['Site Name']||'').trim();}).filter(Boolean);
   var rows3=files.map(function(f,fi){
-    var poMatch=f.name.match(/Schedule_PO([A-Z0-9]+)\.csv/i);
+    var poMatch=f.name.match(/Schedule_PO([A-Z0-9_]+)\.csv/i);
     var po=poMatch?poMatch[1]:'';
     var opts='<option value="">-- Select Site --</option>'+siteNames.map(function(s){return '<option value="'+esc(s)+'">'+esc(s)+'</option>';}).join('');
     return '<tr style="border-bottom:1px solid var(--border)">'
