@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.35</title>
+<title>Cars24 Projects Tracker v5.36</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -995,7 +995,6 @@ function onSbLoginSuccess() {
   document.getElementById('snag-local-lbl').style.display   = 'none';
   document.getElementById('snag-live-lbl').style.display    = __sbRole === 'admin' ? '' : 'none';
   document.getElementById('ticket-local-lbl').style.display = 'none';
-  document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
   applyRoleBasedView();
   toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
   // Token is already set in onAuthStateChange — reload data immediately
@@ -1762,7 +1761,6 @@ function doLegacyLogin() {
     document.getElementById('snag-local-lbl').style.display   = 'none';
     document.getElementById('snag-live-lbl').style.display    = '';
     document.getElementById('ticket-local-lbl').style.display = 'none';
-    document.getElementById('ticket-live-lbl').style.display  = '';
     toast('✓ Logged in (legacy) as ' + u, 'ok');
   })
   .catch(function(err){ showLoginError(err.message || 'Invalid credentials.'); });
@@ -9366,7 +9364,6 @@ function doLogout(){
   document.getElementById('snag-local-lbl').style.display   = '';
   document.getElementById('snag-live-lbl').style.display    = 'none';
   document.getElementById('ticket-local-lbl').style.display = '';
-  document.getElementById('ticket-live-lbl').style.display  = 'none';
   applyRoleBasedView();
   toast('Signed out', 'ok');
 }
@@ -9456,55 +9453,6 @@ function handleLiveSnagCSV(event){
     .catch(function(err){
       if (err.status === 401) { toast('Session expired — please log in again', 'err'); doLogout(); }
       else { toast('Snag upload failed: ' + err.message, 'err'); }
-    })
-    .finally(resetBtn);
-  };
-  reader.onerror = function(){ toast('File read error', 'err'); resetBtn(); };
-  reader.readAsText(file);
-  event.target.value = '';
-  function resetBtn(){
-    lbl.textContent = originalText;
-    lbl.style.pointerEvents = '';
-  }
-}
-
-// Authenticated tickets CSV upload — POSTs to the Worker which writes tickets.csv to R2.
-function handleLiveTicketCSV(event){
-  var file = event.target.files[0];
-  if (!file) return;
-  if (!canUpload()) { toast('Please log in first', 'err'); event.target.value=''; return; }
-  var lbl = document.getElementById('ticket-live-lbl');
-  var originalText = lbl.textContent;
-  lbl.textContent = '⟳ Uploading tickets...';
-  lbl.style.pointerEvents = 'none';
-  var reader = new FileReader();
-  reader.onload = function(e){
-    var csvText = e.target.result;
-    var parsed;
-    try {
-      parsed = parseTicketCSV(csvText);
-      if (!parsed.length) { toast('No ticket rows found in CSV', 'err'); resetBtn(); return; }
-    } catch (err) { toast('Ticket parse error: ' + err.message, 'err'); resetBtn(); return; }
-    C24Uploader.upload({
-      csvText: csvText,
-      workerUrl: WORKER_URL,
-      toolPath: TICKET_TOOL_PATH,
-      auth: __auth
-    })
-    .then(function(){
-      toast('✓ Tickets updated — ' + parsed.length + ' rows live now', 'ok');
-      try {
-        __ticketsOriginLoaded = true;
-        TICKET_DATA = parsed;
-        var local = document.getElementById('ticket-local-lbl');
-        if (local) local.textContent = '🎫 Tickets ('+parsed.length+')';
-        var el = document.getElementById('tickv');
-        if (el && el.style.display !== 'none') renderTicketTab();
-      } catch(_) {}
-    })
-    .catch(function(err){
-      if (err.status === 401) { toast('Session expired — please log in again', 'err'); doLogout(); }
-      else { toast('Tickets upload failed: ' + err.message, 'err'); }
     })
     .finally(resetBtn);
   };
