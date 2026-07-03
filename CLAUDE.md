@@ -53,6 +53,7 @@ index.html (single file)
 | Tasks | `taskv` | `renderTaskTab()` |
 | PM Scorecard | `pmsv` | `renderPMScorecard()` |
 | Tickets | `tickv` | `renderTicketTab()` |
+| PM Messages (Vicky-only) | `msgv` | `renderMsgTab()` |
 | Attendance (admin-only) | `attv` | `renderAttendanceTab()` |
 | Admin (admin-only) | `adminv` | `renderAdminTab()` |
 
@@ -307,7 +308,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.34 | Deep-debug pass, cleanup: (1) `markNotifiedByIdx()`'s Gmail draft had no `cc=` param at all (not even a hardcoded one) — now calls `buildMailCC(r)` like every other mailer, in case this dead-code path (superseded by `wCard()`'s inline notify button) is ever reconnected; (2) `handleLLBulkUpload`'s file-preview PO-number regex (`/Schedule_PO([A-Z0-9]+)\.csv/i`, no underscore) didn't match `parseLLScheduleCSV`'s actual parsing regex (`[A-Z0-9_]+`, underscore allowed) — a filename like `Schedule_POAB_12.csv` showed PO "AB" in the preview but saved as PO "AB_12"; aligned; (3) `processSnagXlsx`'s loader reassigned `SNAG_DATA=newData` instead of clearing keys + `Object.assign`, the pattern every other snag loader (CSV/JSON/ZIP) uses — aligned for consistency; (4) the three ticket-Slack senders (`sendTicketSummaryToSlack`, `sendTicketDigestsToSlack`, `sendSingleTicketToSlack`) had drifted to three different per-ticket line formats despite CLAUDE.md's v5.21 entry claiming they're identical — unified all three to `• [Site] Title: Description (Priority) - <link|#id>`; (5) corrected the "Tab / View Structure" table, which still listed a BD tab (`bdv`/`renderBDTab()`) that was fully removed from the codebase at some undocumented point — replaced with the actual current tab list (added Attendance/Admin) and flagged the BD-specific business-logic notes below it as historical-only |
 
+| v5.35 | New "💬 PM Messages" tab (`msgv`/`renderMsgTab()`) — a Vicky-only page for maintaining a reusable library of Slack message templates, separate from the per-site `buildSlackDelayText()` "kinds" and the free-text Slack Compose modal. Gated exactly like the existing Slack buttons (`data-vicky-only="true"` tab button + `isVicky()` guard inside `renderMsgTab()`), not the `data-admin-only` admin-role gate — visible only to `vicky.bhardwaj@cars24.com`, per her explicit request. Templates persist in a new dedicated Supabase table, `message_templates` (`id, name, body, created_by, created_at, updated_at` — create-table SQL documented inline above `loadMessageTemplates()`, same style as the `uat_warning_exceptions` table; **must be created once in the Supabase SQL Editor before this tab will load/save anything**), following the "one dedicated table per feature" precedent rather than overloading the per-site `site_field_overrides` table. Each template renders as a card with Send/Edit/Delete: "+ New Template" and "Edit" open `#template-modal` (`openTemplateModal(id)`/`closeTemplateModal()`/`saveTemplateModal(btn)`, upserts to `message_templates`); "Delete" (`deleteTemplateRow(id)`) confirms then deletes the row; "Send" opens `#send-template-modal` (`openSendTemplateModal(id)`/`closeSendTemplateModal()`/`sendTemplateModal(btn)`) with a PM picker `<datalist>` sourced from `PM_EMAIL_MAP` (same idiom as the Slack Compose modal's person picker) and an editable preview of the template body, calling the existing generic `sendToSlack('dm', email, text, btn)` on send — no `worker.js` changes needed, `/slack/send` was already Vicky-gated server-side. Templates are fully static text per explicit request (no `{name}`/placeholder substitution) |
+
 ---
 
-## Current Version: v5.34
+## Current Version: v5.35
 
