@@ -316,7 +316,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.38 | PM Messages "Send Template" checkbox list narrowed from all ~60 `PM_EMAIL_MAP` entries down to Vicky's actual core team of 7 (Ajeet Sharma, Kiran W, Kamal Saini, Md Akhtar, Nitesh Kumar, Gaurav Jangir, Shivam Shukla), per her explicit request — the full roster includes many stale/inactive names still needed elsewhere (ticket-assignee resolution, PM digests), so a new `PM_MESSAGES_TEAM` constant (`[displayName, PM_EMAIL_MAP key]` pairs, placed right after `PM_EMAIL_MAP`) scopes just this one picker instead of touching the shared map — same "restrict one picker, leave the map alone" pattern as the Tickets tab's `TICKET_SLACK_CHANNELS`. Each pair's second element is resolved through `resolvePmEmail()` rather than indexing `PM_EMAIL_MAP` directly, and is *not* always the display name's first word — Akhtar's map key is his last name, so passing "Md Akhtar" through `resolvePmEmail()` verbatim would've silently failed to resolve (its first-word fallback would look up "Md", not "Akhtar") |
 
+| v5.39 | Added a "Select All" checkbox above the PM Messages "Send Template" checkbox list (`toggleSendTemplateSelectAll(cb)`) — one click checks/unchecks every `PM_MESSAGES_TEAM` entry instead of ticking all 7 by hand. Resets to unchecked each time `openSendTemplateModal()` opens; one-way only (toggling it sets every box, but manually unchecking an individual PM doesn't un-tick "Select All" — kept simple per the ask) |
+
 ---
 
-## Current Version: v5.38
+## Current Version: v5.39
 

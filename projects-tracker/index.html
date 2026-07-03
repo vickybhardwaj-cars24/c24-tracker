@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.38</title>
+<title>Cars24 Projects Tracker v5.39</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -661,6 +661,7 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     <div style="padding:18px 20px">
       <input type="hidden" id="send-template-id" value="">
       <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Send To (select one or more PMs)</label>
+      <label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="send-template-select-all" onchange="toggleSendTemplateSelectAll(this)"> Select All</label>
       <div id="send-template-person-list" style="max-height:180px;overflow-y:auto;border:1.5px solid var(--border2);border-radius:8px;padding:8px 11px;margin-bottom:12px;box-sizing:border-box"></div>
       <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Message (editable before sending)</label>
       <textarea id="send-template-text" rows="6" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;resize:vertical;margin-bottom:12px;box-sizing:border-box"></textarea>
@@ -1636,6 +1637,7 @@ function openSendTemplateModal(id) {
   document.getElementById('send-template-name').textContent = t.name;
   document.getElementById('send-template-text').value = t.body;
   document.getElementById('send-template-error').style.display = 'none';
+  document.getElementById('send-template-select-all').checked = false;
   var listEl = document.getElementById('send-template-person-list');
   listEl.innerHTML = PM_MESSAGES_TEAM.map(function(pair){
     var displayName = pair[0], email = resolvePmEmail(pair[1]);
@@ -1645,6 +1647,11 @@ function openSendTemplateModal(id) {
 }
 function closeSendTemplateModal() {
   document.getElementById('send-template-modal').style.display = 'none';
+}
+function toggleSendTemplateSelectAll(cb) {
+  document.querySelectorAll('#send-template-person-list input[type="checkbox"]').forEach(function(box){
+    box.checked = cb.checked;
+  });
 }
 
 function sendTemplateModal(btn) {
