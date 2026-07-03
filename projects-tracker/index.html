@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.35</title>
+<title>Cars24 Projects Tracker v5.39</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -660,9 +660,9 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     </div>
     <div style="padding:18px 20px">
       <input type="hidden" id="send-template-id" value="">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Send To (pick a PM or type any @cars24.com email)</label>
-      <input id="send-template-person" list="send-template-person-list" placeholder="name@cars24.com" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:12px;box-sizing:border-box">
-      <datalist id="send-template-person-list"></datalist>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Send To (select one or more PMs)</label>
+      <label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;font-weight:600;cursor:pointer"><input type="checkbox" id="send-template-select-all" onchange="toggleSendTemplateSelectAll(this)"> Select All</label>
+      <div id="send-template-person-list" style="max-height:180px;overflow-y:auto;border:1.5px solid var(--border2);border-radius:8px;padding:8px 11px;margin-bottom:12px;box-sizing:border-box"></div>
       <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Message (editable before sending)</label>
       <textarea id="send-template-text" rows="6" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;resize:vertical;margin-bottom:12px;box-sizing:border-box"></textarea>
       <div id="send-template-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
@@ -995,7 +995,6 @@ function onSbLoginSuccess() {
   document.getElementById('snag-local-lbl').style.display   = 'none';
   document.getElementById('snag-live-lbl').style.display    = __sbRole === 'admin' ? '' : 'none';
   document.getElementById('ticket-local-lbl').style.display = 'none';
-  document.getElementById('ticket-live-lbl').style.display  = __sbRole === 'admin' ? '' : 'none';
   applyRoleBasedView();
   toast('✓ Signed in as ' + name + ' (' + __sbRole + ')', 'ok');
   // Token is already set in onAuthStateChange — reload data immediately
@@ -1105,6 +1104,22 @@ const PM_EMAIL_MAP = {
   'Vicky':'vicky.bhardwaj@cars24.com','Vimal':'vimal.kumar3@cars24.com','Vinay':'vinay.chauhan1@cars24.com',
   'Vinod':'vinod.yadav@cars24.com','Vyramudi':'vyramudi.1@cars24.com','Yashraj':'yashraj.vatsh@cars24.com',
 };
+
+// PM Messages "Send Template" checkbox list — Vicky's actual core team, a
+// small subset of the full PM_EMAIL_MAP roster above (which also carries
+// many stale/inactive names used elsewhere, e.g. ticket-assignee
+// resolution). Each pair is [display name, PM_EMAIL_MAP key that resolves
+// it] — kept separate because the key isn't always the display name's first
+// word (e.g. Akhtar is keyed by last name, not "Md").
+const PM_MESSAGES_TEAM = [
+  ['Ajeet Sharma', 'Ajeet'],
+  ['Kiran W', 'Kiran'],
+  ['Kamal Saini', 'Kamal'],
+  ['Md Akhtar', 'Akhtar'],
+  ['Nitesh Kumar', 'Nitesh'],
+  ['Gaurav Jangir', 'Gaurav'],
+  ['Shivam Shukla', 'Shivam']
+];
 
 // Resolves a PM/assignee display name to a Slack email — tries an exact
 // full-name match first (needed now that PM_EMAIL_MAP holds full-name keys
@@ -1620,28 +1635,46 @@ function openSendTemplateModal(id) {
   if (!t) return;
   document.getElementById('send-template-id').value = t.id;
   document.getElementById('send-template-name').textContent = t.name;
-  document.getElementById('send-template-person').value = '';
   document.getElementById('send-template-text').value = t.body;
   document.getElementById('send-template-error').style.display = 'none';
-  var dl = document.getElementById('send-template-person-list');
-  dl.innerHTML = Object.keys(PM_EMAIL_MAP).sort().map(function(n){
-    return '<option value="'+esc(PM_EMAIL_MAP[n])+'">'+esc(n)+'</option>';
+  document.getElementById('send-template-select-all').checked = false;
+  var listEl = document.getElementById('send-template-person-list');
+  listEl.innerHTML = PM_MESSAGES_TEAM.map(function(pair){
+    var displayName = pair[0], email = resolvePmEmail(pair[1]);
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;cursor:pointer"><input type="checkbox" value="'+esc(email)+'"> '+esc(displayName)+'</label>';
   }).join('');
   document.getElementById('send-template-modal').style.display = 'flex';
 }
 function closeSendTemplateModal() {
   document.getElementById('send-template-modal').style.display = 'none';
 }
+function toggleSendTemplateSelectAll(cb) {
+  document.querySelectorAll('#send-template-person-list input[type="checkbox"]').forEach(function(box){
+    box.checked = cb.checked;
+  });
+}
 
 function sendTemplateModal(btn) {
-  var email = document.getElementById('send-template-person').value.trim();
+  var checked = document.querySelectorAll('#send-template-person-list input[type="checkbox"]:checked');
   var text = document.getElementById('send-template-text').value.trim();
   var errEl = document.getElementById('send-template-error');
   errEl.style.display = 'none';
-  if (!email || email.indexOf('@') === -1) { errEl.textContent = 'Enter or pick a valid email to DM'; errEl.style.display = 'block'; return; }
+  if (!checked.length) { errEl.textContent = 'Select at least one PM to send to'; errEl.style.display = 'block'; return; }
   if (!text) { errEl.textContent = 'Message cannot be empty'; errEl.style.display = 'block'; return; }
-  sendToSlack('dm', email, text, btn);
-  closeSendTemplateModal();
+  var origLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = '⟳ Sending…';
+  var sends = [];
+  checked.forEach(function(cb){
+    sends.push(new Promise(function(resolve){
+      sendToSlack('dm', cb.value, text, null);
+      resolve();
+    }));
+  });
+  Promise.all(sends).then(function(){
+    toast('📣 Sent to ' + sends.length + ' PM' + (sends.length !== 1 ? 's' : ''), 'ok');
+    btn.disabled = false; btn.textContent = origLabel;
+    closeSendTemplateModal();
+  });
 }
 
 function applyRoleBasedView() {
@@ -1762,7 +1795,6 @@ function doLegacyLogin() {
     document.getElementById('snag-local-lbl').style.display   = 'none';
     document.getElementById('snag-live-lbl').style.display    = '';
     document.getElementById('ticket-local-lbl').style.display = 'none';
-    document.getElementById('ticket-live-lbl').style.display  = '';
     toast('✓ Logged in (legacy) as ' + u, 'ok');
   })
   .catch(function(err){ showLoginError(err.message || 'Invalid credentials.'); });
@@ -9366,7 +9398,6 @@ function doLogout(){
   document.getElementById('snag-local-lbl').style.display   = '';
   document.getElementById('snag-live-lbl').style.display    = 'none';
   document.getElementById('ticket-local-lbl').style.display = '';
-  document.getElementById('ticket-live-lbl').style.display  = 'none';
   applyRoleBasedView();
   toast('Signed out', 'ok');
 }
@@ -9456,55 +9487,6 @@ function handleLiveSnagCSV(event){
     .catch(function(err){
       if (err.status === 401) { toast('Session expired — please log in again', 'err'); doLogout(); }
       else { toast('Snag upload failed: ' + err.message, 'err'); }
-    })
-    .finally(resetBtn);
-  };
-  reader.onerror = function(){ toast('File read error', 'err'); resetBtn(); };
-  reader.readAsText(file);
-  event.target.value = '';
-  function resetBtn(){
-    lbl.textContent = originalText;
-    lbl.style.pointerEvents = '';
-  }
-}
-
-// Authenticated tickets CSV upload — POSTs to the Worker which writes tickets.csv to R2.
-function handleLiveTicketCSV(event){
-  var file = event.target.files[0];
-  if (!file) return;
-  if (!canUpload()) { toast('Please log in first', 'err'); event.target.value=''; return; }
-  var lbl = document.getElementById('ticket-live-lbl');
-  var originalText = lbl.textContent;
-  lbl.textContent = '⟳ Uploading tickets...';
-  lbl.style.pointerEvents = 'none';
-  var reader = new FileReader();
-  reader.onload = function(e){
-    var csvText = e.target.result;
-    var parsed;
-    try {
-      parsed = parseTicketCSV(csvText);
-      if (!parsed.length) { toast('No ticket rows found in CSV', 'err'); resetBtn(); return; }
-    } catch (err) { toast('Ticket parse error: ' + err.message, 'err'); resetBtn(); return; }
-    C24Uploader.upload({
-      csvText: csvText,
-      workerUrl: WORKER_URL,
-      toolPath: TICKET_TOOL_PATH,
-      auth: __auth
-    })
-    .then(function(){
-      toast('✓ Tickets updated — ' + parsed.length + ' rows live now', 'ok');
-      try {
-        __ticketsOriginLoaded = true;
-        TICKET_DATA = parsed;
-        var local = document.getElementById('ticket-local-lbl');
-        if (local) local.textContent = '🎫 Tickets ('+parsed.length+')';
-        var el = document.getElementById('tickv');
-        if (el && el.style.display !== 'none') renderTicketTab();
-      } catch(_) {}
-    })
-    .catch(function(err){
-      if (err.status === 401) { toast('Session expired — please log in again', 'err'); doLogout(); }
-      else { toast('Tickets upload failed: ' + err.message, 'err'); }
     })
     .finally(resetBtn);
   };
