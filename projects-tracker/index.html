@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.36</title>
+<title>Cars24 Projects Tracker v5.37</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -660,9 +660,8 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
     </div>
     <div style="padding:18px 20px">
       <input type="hidden" id="send-template-id" value="">
-      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Send To (pick a PM or type any @cars24.com email)</label>
-      <input id="send-template-person" list="send-template-person-list" placeholder="name@cars24.com" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;margin-bottom:12px;box-sizing:border-box">
-      <datalist id="send-template-person-list"></datalist>
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Send To (select one or more PMs)</label>
+      <div id="send-template-person-list" style="max-height:180px;overflow-y:auto;border:1.5px solid var(--border2);border-radius:8px;padding:8px 11px;margin-bottom:12px;box-sizing:border-box"></div>
       <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">Message (editable before sending)</label>
       <textarea id="send-template-text" rows="6" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;resize:vertical;margin-bottom:12px;box-sizing:border-box"></textarea>
       <div id="send-template-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
@@ -1619,12 +1618,11 @@ function openSendTemplateModal(id) {
   if (!t) return;
   document.getElementById('send-template-id').value = t.id;
   document.getElementById('send-template-name').textContent = t.name;
-  document.getElementById('send-template-person').value = '';
   document.getElementById('send-template-text').value = t.body;
   document.getElementById('send-template-error').style.display = 'none';
-  var dl = document.getElementById('send-template-person-list');
-  dl.innerHTML = Object.keys(PM_EMAIL_MAP).sort().map(function(n){
-    return '<option value="'+esc(PM_EMAIL_MAP[n])+'">'+esc(n)+'</option>';
+  var listEl = document.getElementById('send-template-person-list');
+  listEl.innerHTML = Object.keys(PM_EMAIL_MAP).sort().map(function(n){
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;cursor:pointer"><input type="checkbox" value="'+esc(PM_EMAIL_MAP[n])+'"> '+esc(n)+'</label>';
   }).join('');
   document.getElementById('send-template-modal').style.display = 'flex';
 }
@@ -1633,14 +1631,26 @@ function closeSendTemplateModal() {
 }
 
 function sendTemplateModal(btn) {
-  var email = document.getElementById('send-template-person').value.trim();
+  var checked = document.querySelectorAll('#send-template-person-list input[type="checkbox"]:checked');
   var text = document.getElementById('send-template-text').value.trim();
   var errEl = document.getElementById('send-template-error');
   errEl.style.display = 'none';
-  if (!email || email.indexOf('@') === -1) { errEl.textContent = 'Enter or pick a valid email to DM'; errEl.style.display = 'block'; return; }
+  if (!checked.length) { errEl.textContent = 'Select at least one PM to send to'; errEl.style.display = 'block'; return; }
   if (!text) { errEl.textContent = 'Message cannot be empty'; errEl.style.display = 'block'; return; }
-  sendToSlack('dm', email, text, btn);
-  closeSendTemplateModal();
+  var origLabel = btn.textContent;
+  btn.disabled = true; btn.textContent = '⟳ Sending…';
+  var sends = [];
+  checked.forEach(function(cb){
+    sends.push(new Promise(function(resolve){
+      sendToSlack('dm', cb.value, text, null);
+      resolve();
+    }));
+  });
+  Promise.all(sends).then(function(){
+    toast('📣 Sent to ' + sends.length + ' PM' + (sends.length !== 1 ? 's' : ''), 'ok');
+    btn.disabled = false; btn.textContent = origLabel;
+    closeSendTemplateModal();
+  });
 }
 
 function applyRoleBasedView() {
