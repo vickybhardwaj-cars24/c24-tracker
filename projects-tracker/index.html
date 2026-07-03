@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.37</title>
+<title>Cars24 Projects Tracker v5.38</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1104,6 +1104,22 @@ const PM_EMAIL_MAP = {
   'Vinod':'vinod.yadav@cars24.com','Vyramudi':'vyramudi.1@cars24.com','Yashraj':'yashraj.vatsh@cars24.com',
 };
 
+// PM Messages "Send Template" checkbox list — Vicky's actual core team, a
+// small subset of the full PM_EMAIL_MAP roster above (which also carries
+// many stale/inactive names used elsewhere, e.g. ticket-assignee
+// resolution). Each pair is [display name, PM_EMAIL_MAP key that resolves
+// it] — kept separate because the key isn't always the display name's first
+// word (e.g. Akhtar is keyed by last name, not "Md").
+const PM_MESSAGES_TEAM = [
+  ['Ajeet Sharma', 'Ajeet'],
+  ['Kiran W', 'Kiran'],
+  ['Kamal Saini', 'Kamal'],
+  ['Md Akhtar', 'Akhtar'],
+  ['Nitesh Kumar', 'Nitesh'],
+  ['Gaurav Jangir', 'Gaurav'],
+  ['Shivam Shukla', 'Shivam']
+];
+
 // Resolves a PM/assignee display name to a Slack email — tries an exact
 // full-name match first (needed now that PM_EMAIL_MAP holds full-name keys
 // for people who share a first name, e.g. 'Adarsh Roy' vs 'Adarsh Jha'),
@@ -1621,8 +1637,9 @@ function openSendTemplateModal(id) {
   document.getElementById('send-template-text').value = t.body;
   document.getElementById('send-template-error').style.display = 'none';
   var listEl = document.getElementById('send-template-person-list');
-  listEl.innerHTML = Object.keys(PM_EMAIL_MAP).sort().map(function(n){
-    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;cursor:pointer"><input type="checkbox" value="'+esc(PM_EMAIL_MAP[n])+'"> '+esc(n)+'</label>';
+  listEl.innerHTML = PM_MESSAGES_TEAM.map(function(pair){
+    var displayName = pair[0], email = resolvePmEmail(pair[1]);
+    return '<label style="display:flex;align-items:center;gap:6px;padding:4px 0;font-size:12px;cursor:pointer"><input type="checkbox" value="'+esc(email)+'"> '+esc(displayName)+'</label>';
   }).join('');
   document.getElementById('send-template-modal').style.display = 'flex';
 }

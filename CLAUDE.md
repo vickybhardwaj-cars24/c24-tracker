@@ -314,7 +314,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.37 | PM Messages "Send Template" modal (`#send-template-modal`) switched from a single-pick `<input list>`/`<datalist>` PM picker to a scrollable checkbox list, per Vicky's request to send one template to multiple PMs in one click instead of reopening the modal per person. `openSendTemplateModal(id)` now fills `#send-template-person-list` (repurposed from a `<datalist>` to a plain scrollable `<div>`) with one checkbox per `PM_EMAIL_MAP` entry; `sendTemplateModal(btn)` reads all `:checked` boxes and fires one `sendToSlack('dm', email, text, null)` per selection, reusing the exact button-disable + `Promise.all(...).then(...)` + single aggregate toast sequencing `sendPmDigestsToSlack()` already established for multi-recipient sends. The old free-typed-email fallback is dropped — this field is PM-checkbox-only now, matching the request |
 
+| v5.38 | PM Messages "Send Template" checkbox list narrowed from all ~60 `PM_EMAIL_MAP` entries down to Vicky's actual core team of 7 (Ajeet Sharma, Kiran W, Kamal Saini, Md Akhtar, Nitesh Kumar, Gaurav Jangir, Shivam Shukla), per her explicit request — the full roster includes many stale/inactive names still needed elsewhere (ticket-assignee resolution, PM digests), so a new `PM_MESSAGES_TEAM` constant (`[displayName, PM_EMAIL_MAP key]` pairs, placed right after `PM_EMAIL_MAP`) scopes just this one picker instead of touching the shared map — same "restrict one picker, leave the map alone" pattern as the Tickets tab's `TICKET_SLACK_CHANNELS`. Each pair's second element is resolved through `resolvePmEmail()` rather than indexing `PM_EMAIL_MAP` directly, and is *not* always the display name's first word — Akhtar's map key is his last name, so passing "Md Akhtar" through `resolvePmEmail()` verbatim would've silently failed to resolve (its first-word fallback would look up "Md", not "Akhtar") |
+
 ---
 
-## Current Version: v5.37
+## Current Version: v5.38
 
