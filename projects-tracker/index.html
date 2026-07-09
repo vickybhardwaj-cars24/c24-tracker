@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.39</title>
+<title>Cars24 Projects Tracker v5.40</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2848,6 +2848,15 @@ function committedDate(r){
   return pd(r['Planned Completion'])||null;
 }
 
+// Same "handover" date already used by handoverUrgencyMail/buildSlackDelayText('handover') —
+// UAT target (SAT+10d) once SAT is done, else the committed SAT date. Reused by the
+// Branding and Furniture-dispatch risk triggers so all three agree on what "handover" means.
+function getHandoverDate(r){
+  var satD=pd(r['SAT Date']);
+  if(satD) return new Date(satD.getTime()+10*86400000);
+  return committedDate(r);
+}
+
 function gmailDraft(r, type){
     const site=r['Site Name']||'Site';
     const owner=r['Owner']||'PM';
@@ -3296,7 +3305,7 @@ function renderSatUat(){
       +'</tbody></table></div></div>';
   }
 
-  el.innerHTML=_prH+_snav+_ndH+_sdH+_dH+_wH+_oH+(
+  el.innerHTML='<div id="branding-risk-sec"></div>'+_prH+_snav+_ndH+_sdH+_dH+_wH+_oH+(
     (satCommHtml||uatCommHtml
       ? '<div style="margin-bottom:20px;padding:14px 16px;background:#fff;border:1px solid var(--border);border-radius:12px">'
         +'<div style="font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px">📧 Communication Required <span style="font-size:10px;font-weight:400;color:var(--muted)">Email HEM + Design team — fills To: field manually</span></div>'
@@ -3355,6 +3364,7 @@ function renderSatUat(){
       +'</div>':'')
     +nwHtml+rcHtml+pendHtml+doneHtml);
   attachEmailTracking();
+  renderBrandingRiskSection();
 }
 
 function renderWarnings(container){
@@ -4282,6 +4292,50 @@ function toggleProcureStatus(siteName,itemIdx,field,idx){
   refreshProcureSection(idx);
 }
 
+function setProcureDispatchDate(siteName,itemIdx,val,idx){
+  var items=PROCURE_DATA[siteName]; if(!items||!items[itemIdx]) return;
+  items[itemIdx].dispatchDate=val;
+  saveProcureData();
+  refreshProcureSection(idx);
+}
+
+// Furniture procurement items ('Furniture' anywhere in the item name) not yet
+// dispatched, flagged when either the site handover (getHandoverDate) is <=10
+// days out, or the item's own planned dispatchDate is <=7 days out.
+function getFurnitureRiskItems(siteName){
+  var items=(PROCURE_DATA[siteName]||[]).filter(function(it){ return /furniture/i.test(it.item||'') && !it.dispatched; });
+  if(!items.length) return [];
+  var r=allData.find(function(rr){ return (rr['Site Name']||'').trim()===siteName; })||{};
+  var today=new Date(); today.setHours(0,0,0,0);
+  var hd=getHandoverDate(r);
+  var handoverDaysLeft=hd?Math.round((hd-today)/86400000):null;
+  var handoverTrigger=handoverDaysLeft!=null&&handoverDaysLeft<=10;
+  return items.filter(function(it){
+    if(handoverTrigger) return true;
+    if(!it.dispatchDate) return false;
+    var dd=pd(it.dispatchDate); if(!dd) return false;
+    var dispatchDaysLeft=Math.round((dd-today)/86400000);
+    return dispatchDaysLeft<=7;
+  });
+}
+function furnitureDispatchMail(r,items){
+  var site=(r['Site Name']||'Site').trim(),owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
+  var hd=getHandoverDate(r);
+  var hdStr=hd?hd.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var subj='⚠ Furniture Not Dispatched — '+site+' ('+items.length+' item'+(items.length>1?'s':'')+')';
+  var lines=['Dear '+vendor+' Team,','',
+    'The following furniture item'+(items.length>1?'s are':' is')+' still not dispatched for '+site+', with site handover due on '+hdStr+':',''];
+  items.forEach(function(it,i){
+    lines.push((i+1)+'. '+it.item);
+    lines.push('   Order Date       : '+(it.orderDate||'—'));
+    lines.push('   Planned Dispatch : '+(it.dispatchDate?fmtRaw(it.dispatchDate):'—'));
+    lines.push('');
+  });
+  lines.push('Request immediate dispatch to avoid delaying the site handover.','','Please confirm the dispatch schedule at the earliest.','','Regards,',owner,'CARS24 Projects Team');
+  var body=lines.join('\n');
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+
 function procureDelayMail(r,problemItems){
   var site=(r['Site Name']||'Site').trim();
   var owner=r['Owner']||'PM';
@@ -4405,6 +4459,12 @@ function renderProcureSection(r,idx){
       +emailLogBadge(siteName,'vendor_penalty')
       +(isVicky()?'<button data-slack-kind="vendor_penalty" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">'+SLACK_ICON_SVG+'</button>':''))
     :'';
+  var furnitureRisk=getFurnitureRiskItems(siteName);
+  var furnitureAlertBtn=furnitureRisk.length
+    ?('<a href="'+furnitureDispatchMail(r,furnitureRisk)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="furniture_dispatch" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#f5f3ff;color:#7c3aed;border:1px solid #ddd6fe;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap;margin-left:6px">🪑 Furniture Alert ('+furnitureRisk.length+')</a>'
+      +emailLogBadge(siteName,'furniture_dispatch')
+      +(isVicky()?'<button data-slack-kind="furniture_dispatch" data-slack-site="'+esc(siteName)+'" style="font-size:11px;background:#f0fdf4;color:#15803d;padding:4px 8px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:4px">'+SLACK_ICON_SVG+'</button>':''))
+    :'';
   var statsHtml='';
   if(total){
     var pctDel=Math.round(delivered/total*100);
@@ -4439,12 +4499,15 @@ function renderProcureSection(r,idx){
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Ordered</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Part. Del</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Delivered</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Dispatched</th>'
+      +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase">Dispatch Date</th>'
       +'<th style="padding:5px 8px;text-align:center;font-size:9px;color:var(--muted);font-weight:600;text-transform:uppercase"></th>'
       +'</tr></thead><tbody>'
       +items.map(function(it,i){
         var dd=pd(it.deliveryDate);
         var isOverdue=!it.delivered&&dd&&dd<today;
         var isPartial=!!(it.partiallyDelivered&&!it.delivered);
+        var isFurn=/furniture/i.test(it.item||'');
         var rowBg=isOverdue?'background:#fef2f2':it.delivered?'background:#f0fdf4':isPartial?'background:#fffbeb':'';
         var delStyle=isOverdue?'font-weight:700;color:#dc2626':it.delivered?'color:#15803d':'';
         var itemIcon=isOverdue?'🔴 ':it.delivered?'✅ ':isPartial?'🟡 ':'';
@@ -4460,6 +4523,12 @@ function renderProcureSection(r,idx){
           +'<input type="checkbox" '+(isPartial?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'partiallyDelivered\','+idx+')" style="cursor:pointer;accent-color:#d97706"></td>'
           +'<td style="padding:5px 8px;text-align:center">'
           +'<input type="checkbox" '+(it.delivered?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'delivered\','+idx+')" style="cursor:pointer"></td>'
+          +'<td style="padding:5px 8px;text-align:center">'+(isFurn
+            ?('<input type="checkbox" '+(it.dispatched?'checked':'')+' onchange="toggleProcureStatus(\''+siteNameEsc+'\','+i+',\'dispatched\','+idx+')" style="cursor:pointer;accent-color:#7c3aed">')
+            :'—')+'</td>'
+          +'<td style="padding:5px 8px;text-align:center">'+(isFurn
+            ?('<input type="date" value="'+esc(it.dispatchDate||'')+'" onchange="setProcureDispatchDate(\''+siteNameEsc+'\','+i+',this.value,'+idx+')" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:inherit">')
+            :'—')+'</td>'
           +'<td style="padding:5px 8px;text-align:center">'
           +'<button onclick="deleteProcureItem(\''+siteNameEsc+'\','+i+','+idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px" title="Remove">✕</button>'
           +'</td></tr>';
@@ -4475,6 +4544,7 @@ function renderProcureSection(r,idx){
     +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
     +delayMailBtn
     +penaltyMailBtn
+    +furnitureAlertBtn
     +uploadBtn
     +'</div>'
     +'</div>'
@@ -4517,6 +4587,82 @@ function handoverUrgencyMail(r){
     +'We are observing a potential delay in the final handover of this site. Request all concerned teams — HEM, Design, and Vendor — to prioritize and complete the '+type+' inspection by the stipulated deadline.\n\n'
     +'Please confirm your schedule at the earliest.\n\nRegards,\n'+owner+'\nCARS24 Projects Team';
   return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+
+// ── Branding / Signage risk trigger ───────────────────────────────
+// Flags sites where the 'Branding / Signage Complete' milestone gate
+// (DEFAULT_GATES, milestone_gates table) is not yet done and handover
+// (getHandoverDate) is <=10 days out. A site with no milestone_gates row at
+// all (never opened/seeded) is treated as not-done — the safe default.
+var BRANDING_GATE_NAME='Branding / Signage Complete';
+async function getBrandingRiskSites(){
+  if(!__sbClient) return [];
+  var res;
+  try{ res=await __sbClient.from('milestone_gates').select('site_name,is_done').eq('gate_name',BRANDING_GATE_NAME); }
+  catch(e){ return []; }
+  var rows=(res&&res.data)||[];
+  var doneSet={};
+  rows.forEach(function(g){ if(g.is_done) doneSet[g.site_name]=true; });
+  var today=new Date(); today.setHours(0,0,0,0);
+  var risks=[];
+  allData.forEach(function(r){
+    var site=(r['Site Name']||'').trim(); if(!site) return;
+    var st=(r['Status']||'').toLowerCase();
+    if(st.includes('hold')||st.includes('cancel')) return;
+    if(pd(r['UAT DATE'])) return; // fully done — never flag
+    if(doneSet[site]) return; // branding already marked complete
+    var hd=getHandoverDate(r); if(!hd) return;
+    var daysLeft=Math.round((hd-today)/86400000);
+    if(daysLeft<=10) risks.push({r:r,site:site,handoverDate:hd,daysLeft:daysLeft});
+  });
+  risks.sort(function(a,b){ return a.daysLeft-b.daysLeft; });
+  return risks;
+}
+function brandingDelayMail(r){
+  var site=r['Site Name']||'Site',owner=r['Owner']||'PM',vendor=r['Vendor']||'--';
+  var hd=getHandoverDate(r);
+  var hdStr=hd?hd.toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'TBD';
+  var subj='⚠ Branding/Signage Pending — '+site+' — Handover '+hdStr;
+  var body='Dear Team,\n\nBranding/Signage installation at '+site+' is still not marked complete, with site handover due on '+hdStr+'.\n\n'
+    +'Site: '+site+'\nPM: '+owner+'\nVendor: '+vendor+'\nHandover Date: '+hdStr+'\n\n'
+    +'Request the branding/signage vendor to complete installation on priority so it does not block SAT/UAT sign-off.\n\n'
+    +'Please confirm your schedule at the earliest.\n\nRegards,\n'+owner+'\nCARS24 Projects Team';
+  return 'https://mail.google.com/mail/?view=cm&fs=1&to=&cc='+buildMailCC(r)+'&su='+encodeURIComponent(subj)+'&body='+encodeURIComponent(body);
+}
+async function renderBrandingRiskSection(){
+  var el=document.getElementById('branding-risk-sec'); if(!el) return;
+  var risks=await getBrandingRiskSites();
+  if(!risks.length){ el.innerHTML=''; return; }
+  el.innerHTML='<div style="margin-bottom:16px;background:#faf5ff;border:2px solid #7c3aed;border-radius:10px;overflow:hidden">'
+    +'<div style="background:#7c3aed;padding:10px 14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px">'
+    +'<div style="color:#fff;font-size:12px;font-weight:800;text-transform:uppercase;letter-spacing:.06em">🎨 Branding/Signage Risk ('+risks.length+')</div>'
+    +'<div style="color:rgba(255,255,255,.8);font-size:10px">Signage not complete, handover ≤ 10 days out</div>'
+    +'</div>'
+    +'<div style="padding:0 0 4px">'
+    +'<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr style="background:#f3e8ff">'
+    +'<th style="padding:7px 10px;text-align:left;font-size:10px;color:#5b21b6;font-weight:700">Site</th>'
+    +'<th style="padding:7px 10px;text-align:left;font-size:10px;color:#5b21b6;font-weight:700">PM</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#5b21b6;font-weight:700">Handover</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#5b21b6;font-weight:700">Days Left</th>'
+    +'<th style="padding:7px 10px;text-align:center;font-size:10px;color:#5b21b6;font-weight:700">Action</th>'
+    +'</tr></thead><tbody>'
+    +risks.map(function(rk){
+      var hdStr=rk.handoverDate.toLocaleDateString('en-IN',{day:'numeric',month:'short'});
+      var dColor=rk.daysLeft<=0?'#dc2626':rk.daysLeft<=4?'#d97706':'#7c3aed';
+      return '<tr style="border-bottom:1px solid #e9d5ff">'
+        +'<td style="padding:7px 10px;font-weight:700">'+esc(rk.site)+'</td>'
+        +'<td style="padding:7px 10px">'+esc(rk.r['Owner']||'—')+'</td>'
+        +'<td style="padding:7px 10px;text-align:center;color:var(--muted)">'+hdStr+'</td>'
+        +'<td style="padding:7px 10px;text-align:center;font-weight:800;color:'+dColor+'">'+(rk.daysLeft<=0?'Overdue':rk.daysLeft+'d')+'</td>'
+        +'<td style="padding:7px 10px;text-align:center">'
+        +'<a href="'+brandingDelayMail(rk.r)+'" target="_blank" data-elog-site="'+esc(rk.site)+'" data-elog-type="branding_delay" onclick="event.stopPropagation()" '
+        +'style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:5px;text-decoration:none;background:#7c3aed;color:#fff;white-space:nowrap">📧 Branding Notice</a>'
+        +emailLogBadge(rk.site,'branding_delay')
+        +(isVicky()?'<button data-slack-kind="branding_delay" data-slack-site="'+esc(rk.site)+'" style="font-size:10px;background:#f0fdf4;color:#15803d;padding:3px 6px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer;margin-left:3px">'+SLACK_ICON_SVG+'</button>':'')
+        +'</td></tr>';
+    }).join('')
+    +'</tbody></table></div></div>';
+  attachEmailTracking();
 }
 
 // ── HEM Delay helpers ────────────────────────────────────────────
@@ -7650,6 +7796,19 @@ function buildSlackDelayText(kind, siteName){
     var uatTarget = uatD ? new Date(uatD.getTime()+10*86400000).toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'TBD';
     var deadline = satDone ? uatTarget : cdStr;
     return siteName+' ki timeline thodi tight ho rahi hai, '+(satDone?'UAT':'SAT')+' '+deadline+' tak due hai. Confirm kar do ki on track hain, ya abhi flag kar do agar slip ho raha hai.';
+  }
+  if (kind === 'branding_delay') {
+    var bhd = getHandoverDate(r);
+    var bhdStr = bhd ? bhd.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'TBD';
+    var bnow = new Date(); bnow.setHours(0,0,0,0);
+    var bDaysLeft = bhd ? Math.round((bhd-bnow)/86400000) : null;
+    return siteName+' ka branding/signage abhi bhi complete nahi hua hai, handover '+bhdStr+' ko due hai'
+      +(bDaysLeft!=null?(bDaysLeft<=0?' (already overdue)':' ('+bDaysLeft+'d left)'):'')
+      +'. Vendor ko push kar do jaldi wrap up karne ke liye.';
+  }
+  if (kind === 'furniture_dispatch') {
+    var fItems = (PROCURE_DATA[siteName]||[]).filter(function(it){ return /furniture/i.test(it.item||'') && !it.dispatched; });
+    return siteName+' mein '+fItems.length+' furniture item'+(fItems.length!==1?'s':'')+' abhi tak dispatch nahi hue hain. Vendor ko turant push kar do, handover pe asar padh sakta hai.';
   }
   if (kind === 'procure_delay') {
     var items = PROCURE_DATA[siteName]||[];
