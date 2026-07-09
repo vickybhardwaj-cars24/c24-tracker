@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.41</title>
+<title>Cars24 Projects Tracker v5.42</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -1538,6 +1538,91 @@ async function loadMessageTemplates() {
   if (r && r.data) MSG_TEMPLATES = r.data;
 }
 
+// ── Upcoming PM Communications (Handover / SAT / UAT windows) ───────────
+// Feeds the "📅 Upcoming Communications" section at the top of the PM
+// Messages tab so Vicky can DM the right PM about an approaching date
+// without hunting for it in SAT→UAT. Reuses committedDate()/getHandoverDate()
+// (same date math as the rest of the app, see "Date Rules" in CLAUDE.md) and
+// the existing data-slack-kind="handover" button + its delegated click
+// handler (near the end of this file) — that kind's message text already
+// adapts to SAT-not-done vs UAT-not-done, so no new Slack kind is needed.
+function getPmMessagesSchedule() {
+  var today = new Date(); today.setHours(0, 0, 0, 0);
+  var handover13 = [], handover47 = [], satComing = [], uatComing = [];
+  allData.forEach(function(r) {
+    var site = (r['Site Name'] || '').trim(); if (!site) return;
+    var st = (r['Status'] || '').toLowerCase();
+    if (st.includes('hold') || st.includes('cancel')) return;
+    if (pd(r['UAT DATE'])) return; // fully done — nothing left to communicate
+    var satD = pd(r['SAT Date']);
+    var hd = getHandoverDate(r);
+    if (hd) {
+      var hDays = Math.round((hd - today) / 86400000);
+      if (hDays >= 1 && hDays <= 3) handover13.push({ r: r, site: site, date: hd, days: hDays });
+      else if (hDays >= 4 && hDays <= 7) handover47.push({ r: r, site: site, date: hd, days: hDays });
+    }
+    if (!satD) {
+      var cd = committedDate(r);
+      if (cd) {
+        var sDays = Math.round((cd - today) / 86400000);
+        if (sDays >= 0 && sDays <= 14) satComing.push({ r: r, site: site, date: cd, days: sDays });
+      }
+    } else {
+      var uatTarget = new Date(satD.getTime() + 10 * 86400000);
+      var uDays = Math.round((uatTarget - today) / 86400000);
+      if (uDays >= 0 && uDays <= 14) uatComing.push({ r: r, site: site, date: uatTarget, days: uDays });
+    }
+  });
+  var byDays = function(a, b) { return a.days - b.days; };
+  handover13.sort(byDays); handover47.sort(byDays); satComing.sort(byDays); uatComing.sort(byDays);
+  return { handover13: handover13, handover47: handover47, satComing: satComing, uatComing: uatComing };
+}
+
+function pmScheduleRow(e) {
+  var dStr = e.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
+  var idx4 = allData.indexOf(e.r);
+  var dColor = e.days <= 1 ? '#dc2626' : e.days <= 3 ? '#d97706' : '#16a34a';
+  return '<tr style="border-bottom:1px solid var(--border2)">'
+    + '<td style="padding:7px 10px;font-weight:700;cursor:pointer" onclick="openModal(' + idx4 + ')">' + esc(e.site) + '</td>'
+    + '<td style="padding:7px 10px">' + esc(e.r['Owner'] || '—') + '</td>'
+    + '<td style="padding:7px 10px;text-align:center;color:var(--muted)">' + dStr + '</td>'
+    + '<td style="padding:7px 10px;text-align:center;font-weight:800;color:' + dColor + '">' + (e.days === 0 ? 'Today' : e.days + 'd') + '</td>'
+    + '<td style="padding:7px 10px;text-align:center">'
+    + '<button data-slack-kind="handover" data-slack-site="' + esc(e.site) + '" style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#f0fdf4;color:#15803d;padding:4px 9px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">' + SLACK_ICON_SVG + ' Message</button>'
+    + '</td></tr>';
+}
+
+function pmScheduleTable(title, badgeColor, rows) {
+  if (!rows.length) return '';
+  return '<div style="margin-bottom:14px;border:1px solid var(--border2);border-radius:10px;overflow:hidden;background:var(--white)">'
+    + '<div style="padding:9px 14px;background:var(--surface);display:flex;align-items:center;gap:6px">'
+    + '<span style="font-size:12px;font-weight:800">' + title + '</span>'
+    + '<span style="font-size:10px;background:' + badgeColor + '22;color:' + badgeColor + ';padding:1px 7px;border-radius:10px;font-weight:700">' + rows.length + '</span>'
+    + '</div>'
+    + '<table style="width:100%;border-collapse:collapse;font-size:12px"><thead><tr>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted);font-weight:700">Site</th>'
+    + '<th style="padding:7px 10px;text-align:left;font-size:10px;color:var(--muted);font-weight:700">PM</th>'
+    + '<th style="padding:7px 10px;text-align:center;font-size:10px;color:var(--muted);font-weight:700">Date</th>'
+    + '<th style="padding:7px 10px;text-align:center;font-size:10px;color:var(--muted);font-weight:700">In</th>'
+    + '<th style="padding:7px 10px;text-align:center;font-size:10px;color:var(--muted);font-weight:700">Message</th>'
+    + '</tr></thead><tbody>'
+    + rows.map(pmScheduleRow).join('')
+    + '</tbody></table></div>';
+}
+
+function buildPmScheduleHtml() {
+  var sch = getPmMessagesSchedule();
+  var totalCount = sch.handover13.length + sch.handover47.length + sch.satComing.length + sch.uatComing.length;
+  if (!totalCount) return '';
+  return '<div style="margin-bottom:20px">'
+    + '<div style="font-size:11px;font-weight:700;text-transform:uppercase;color:var(--muted);letter-spacing:.05em;margin-bottom:8px">📅 Upcoming Communications</div>'
+    + pmScheduleTable('🚚 Handover in 1–3 Days', '#dc2626', sch.handover13)
+    + pmScheduleTable('🚚 Handover in 4–7 Days', '#d97706', sch.handover47)
+    + pmScheduleTable('📅 SAT Coming Up (next 14 days)', '#1a73e8', sch.satComing)
+    + pmScheduleTable('✅ UAT Coming Up (next 14 days)', '#16a34a', sch.uatComing)
+    + '</div>';
+}
+
 function renderMsgTab() {
   var el = document.getElementById('msgv'); if (!el) return;
   if (!isVicky()) { el.innerHTML = '<div style="padding:40px;text-align:center;color:var(--muted)">This page is restricted.</div>'; return; }
@@ -1553,6 +1638,7 @@ function buildMsgTabHtml() {
     + '<h2 style="font-size:18px;margin:0">💬 PM Messages</h2>'
     + '<button class="btn btn-p btn-sm" onclick="openTemplateModal()">+ New Template</button>'
     + '</div>';
+  html += buildPmScheduleHtml();
   if (!MSG_TEMPLATES.length) {
     html += '<div style="padding:40px;text-align:center;color:var(--muted);border:1px dashed var(--border2);border-radius:10px">No templates yet — click "+ New Template" to create your first one.</div>';
     return html;
