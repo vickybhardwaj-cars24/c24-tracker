@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.40</title>
+<title>Cars24 Projects Tracker v5.41</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -7829,7 +7829,7 @@ function buildSlackDelayText(kind, siteName){
       var dd=pd(it.deliveryDate);
       return dd&&dd<pToday;
     });
-    return siteName+' ke liye vendor ko penalty notice bhej rahe hain, '+pOverdue.length+' item'+(pOverdue.length!==1?'s':'')+' delivery mein overdue hai. Bas pehle flag kar raha hoon, agar koi context miss ho raha ho toh batana.';
+    return 'Bhai '+siteName+' mai '+pOverdue.length+' item'+(pOverdue.length!==1?'s':'')+' mai procurement delay dikh raha h mujhe, iska followup lelo vendor se aur jaldi mangwao jo pending hai.';
   }
   if (kind === 'pending_docs') {
     var missing=[];
