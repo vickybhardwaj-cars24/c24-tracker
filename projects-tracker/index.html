@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.42</title>
+<title>Cars24 Projects Tracker v5.43</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -667,6 +667,27 @@ td:nth-child(2){position:sticky;left:48px;z-index:5;background:inherit;box-shado
       <textarea id="send-template-text" rows="6" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;resize:vertical;margin-bottom:12px;box-sizing:border-box"></textarea>
       <div id="send-template-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
       <button class="btn btn-p" id="send-template-btn" onclick="sendTemplateModal(this)" style="width:100%;justify-content:center;padding:10px;font-size:13px;font-weight:600;border-radius:8px">Send</button>
+    </div>
+  </div>
+</div>
+
+<!-- PM Custom Message Modal — free-typed message to one PM, launched from the
+     "✏️ Custom" button next to every PM Messages "Message" button (Upcoming
+     Communications rows). -->
+<div id="pm-custom-message-modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9200;align-items:center;justify-content:center;padding:16px" onclick="if(event.target===this)closePmCustomMessageModal()">
+  <div style="background:var(--white);border-radius:14px;box-shadow:0 20px 60px rgba(0,0,0,.3);width:420px;max-width:100%;font-family:'Inter',sans-serif;overflow:hidden">
+    <div style="background:linear-gradient(135deg,#1e3a5f 0%,#2563eb 100%);padding:16px 20px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div style="font-size:14px;font-weight:700;color:#fff">Custom Message: <span id="pm-custom-msg-site"></span></div>
+        <button onclick="closePmCustomMessageModal()" style="background:rgba(255,255,255,.15);border:none;color:#fff;width:26px;height:26px;border-radius:6px;font-size:15px;cursor:pointer;display:flex;align-items:center;justify-content:center;line-height:1">×</button>
+      </div>
+    </div>
+    <div style="padding:18px 20px">
+      <input type="hidden" id="pm-custom-msg-email" value="">
+      <label style="display:block;font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">To: <span id="pm-custom-msg-pm"></span></label>
+      <textarea id="pm-custom-msg-text" rows="6" placeholder="Type your message…" style="width:100%;padding:9px 11px;border:1.5px solid var(--border2);border-radius:8px;font-size:13px;font-family:'Inter',sans-serif;outline:none;resize:vertical;margin:8px 0 12px;box-sizing:border-box"></textarea>
+      <div id="pm-custom-msg-error" style="display:none;font-size:11px;color:#dc2626;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;padding:8px 10px;margin-bottom:12px"></div>
+      <button class="btn btn-p" id="pm-custom-msg-btn" onclick="sendPmCustomMessage(this)" style="width:100%;justify-content:center;padding:10px;font-size:13px;font-weight:600;border-radius:8px">Send</button>
     </div>
   </div>
 </div>
@@ -1582,13 +1603,16 @@ function pmScheduleRow(e) {
   var dStr = e.date.toLocaleDateString('en-IN', { day: 'numeric', month: 'short' });
   var idx4 = allData.indexOf(e.r);
   var dColor = e.days <= 1 ? '#dc2626' : e.days <= 3 ? '#d97706' : '#16a34a';
+  var owner = e.r['Owner'] || '';
+  var pmEmail = resolvePmEmail(owner) || '';
   return '<tr style="border-bottom:1px solid var(--border2)">'
     + '<td style="padding:7px 10px;font-weight:700;cursor:pointer" onclick="openModal(' + idx4 + ')">' + esc(e.site) + '</td>'
-    + '<td style="padding:7px 10px">' + esc(e.r['Owner'] || '—') + '</td>'
+    + '<td style="padding:7px 10px">' + esc(owner || '—') + '</td>'
     + '<td style="padding:7px 10px;text-align:center;color:var(--muted)">' + dStr + '</td>'
     + '<td style="padding:7px 10px;text-align:center;font-weight:800;color:' + dColor + '">' + (e.days === 0 ? 'Today' : e.days + 'd') + '</td>'
     + '<td style="padding:7px 10px;text-align:center">'
     + '<button data-slack-kind="handover" data-slack-site="' + esc(e.site) + '" style="display:inline-flex;align-items:center;gap:5px;font-size:10px;background:#f0fdf4;color:#15803d;padding:4px 9px;border-radius:5px;font-weight:600;border:1px solid #bbf7d0;cursor:pointer">' + SLACK_ICON_SVG + ' Message</button>'
+    + '<button onclick="openPmCustomMessageModal(\'' + escJsAttr(e.site) + '\',\'' + escJsAttr(owner) + '\',\'' + escJsAttr(pmEmail) + '\')" style="display:inline-flex;align-items:center;gap:4px;font-size:10px;background:#eff6ff;color:#1d4ed8;padding:4px 9px;border-radius:5px;font-weight:600;border:1px solid #bfdbfe;cursor:pointer;margin-left:4px">✏️ Custom</button>'
     + '</td></tr>';
 }
 
@@ -1621,6 +1645,34 @@ function buildPmScheduleHtml() {
     + pmScheduleTable('📅 SAT Coming Up (next 14 days)', '#1a73e8', sch.satComing)
     + pmScheduleTable('✅ UAT Coming Up (next 14 days)', '#16a34a', sch.uatComing)
     + '</div>';
+}
+
+// ── PM Custom Message modal ─────────────────────────────────────────
+// The "✏️ Custom" button next to every PM Messages "Message" button
+// (pmScheduleRow) — lets Vicky type her own message to that site's PM
+// instead of the fixed data-slack-kind="handover" text. Reuses the same
+// sendToSlack() relay as every other Slack send; falls back to the
+// default channel (same as the delegated data-slack-kind handler) if the
+// PM has no resolvable email.
+function openPmCustomMessageModal(site, ownerName, email) {
+  document.getElementById('pm-custom-msg-site').textContent = site;
+  document.getElementById('pm-custom-msg-pm').textContent = ownerName || 'Unassigned';
+  document.getElementById('pm-custom-msg-email').value = email || '';
+  document.getElementById('pm-custom-msg-text').value = '';
+  document.getElementById('pm-custom-msg-error').style.display = 'none';
+  document.getElementById('pm-custom-message-modal').style.display = 'flex';
+}
+function closePmCustomMessageModal() {
+  document.getElementById('pm-custom-message-modal').style.display = 'none';
+}
+function sendPmCustomMessage(btn) {
+  var text = document.getElementById('pm-custom-msg-text').value.trim();
+  var errEl = document.getElementById('pm-custom-msg-error');
+  if (!text) { errEl.textContent = 'Type a message first.'; errEl.style.display = 'block'; return; }
+  errEl.style.display = 'none';
+  var email = document.getElementById('pm-custom-msg-email').value;
+  sendToSlack(email ? 'dm' : 'channel', email, text, btn);
+  closePmCustomMessageModal();
 }
 
 function renderMsgTab() {
