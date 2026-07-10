@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.43</title>
+<title>Cars24 Projects Tracker v5.44</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2010,12 +2010,22 @@ async function syncAllSitesToSupabase() {
 }
 
 // ── Load field overrides from Supabase → merge into allData ─────
+// Status overrides carry a `base_value` — the raw HOTP CSV Status at the
+// moment the override was saved (see saveStatusEdit()). On every load, if
+// the live CSV's Status has since moved on from that captured baseline, the
+// override is stale — the CSV wins and the stale override is deleted so it
+// stops masking future syncs (fixes: a one-time manual Status correction,
+// e.g. "BOQ", silently overriding every later CSV upload forever even after
+// the site had genuinely progressed to "WIP" in the real HOTP tracker).
+// Requires a `base_value text` column on site_field_overrides:
+//   alter table site_field_overrides add column if not exists base_value text;
 async function loadSupabaseSiteFields() {
   if (!__sbClient) return;
   var r;
-  try { r = await __sbClient.from('site_field_overrides').select('site_name,field_name,field_value'); }
+  try { r = await __sbClient.from('site_field_overrides').select('site_name,field_name,field_value,base_value'); }
   catch(e) { console.warn('loadSupabaseSiteFields select error:', e); return; }
   if (!r || r.error || !r.data || !r.data.length) return;
+  var staleStatusSites = [];
   try {
     r.data.forEach(function(sfo) {
       var sn = (sfo.site_name||'').trim().toLowerCase();
@@ -2029,6 +2039,11 @@ async function loadSupabaseSiteFields() {
       }
       if (!row) return;
       if (fn && v && v !== 'null') {
+        if (fn === 'Status' && sfo.base_value && sfo.base_value.trim() !== (row[fn]||'').trim()) {
+          // Live CSV Status has changed since this override was made — CSV wins.
+          staleStatusSites.push(sfo.site_name);
+          return;
+        }
         var META_DATE_FIELDS=['SAT Date','UAT DATE','PO Date','Kickoff Date','Work Start Date','Planned Completion','Revised Completion'];
         if(META_DATE_FIELDS.indexOf(fn)!==-1){var _pd=pd(v);if(_pd) v=_pd.getDate()+' '+['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][_pd.getMonth()]+' '+_pd.getFullYear();}
         row[fn] = v;
@@ -2036,6 +2051,11 @@ async function loadSupabaseSiteFields() {
       }
     });
   } catch(e) { console.warn('loadSupabaseSiteFields apply error:', e); }
+  if (staleStatusSites.length && __sbUser) {
+    staleStatusSites.forEach(function(sn) {
+      __sbClient.from('site_field_overrides').delete().match({ site_name: sn, field_name: 'Status' }).then(function(){}).catch(function(){});
+    });
+  }
 }
 
 // ── UAT Warning Exceptions — dedicated Supabase table ──────────────
@@ -2065,18 +2085,20 @@ async function loadUatExemptionsFromSupabase() {
   try { localStorage.setItem('uat_exemptions', JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
 }
 
-async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue) {
+async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue, baseValue) {
   if (!__sbClient || !__sbUser) return;
   var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
   console.log('saveSiteField:', siteName, fieldName, '=', newValue);
+  var upsertRow = {
+    site_name:       siteName,
+    field_name:      fieldName,
+    field_value:     String(newValue !== null && newValue !== undefined ? newValue : ''),
+    updated_by_name: byName,
+    updated_at:      new Date().toISOString()
+  };
+  if (baseValue !== undefined) upsertRow.base_value = String(baseValue || '');
   var sr = await __sbClient.from('site_field_overrides').upsert(
-    {
-      site_name:       siteName,
-      field_name:      fieldName,
-      field_value:     String(newValue !== null && newValue !== undefined ? newValue : ''),
-      updated_by_name: byName,
-      updated_at:      new Date().toISOString()
-    },
+    upsertRow,
     { onConflict: 'site_name,field_name' }
   );
   if (sr.error) {
@@ -4356,7 +4378,9 @@ function saveStatusEdit(idx) {
   var oldStatus = r['Status'] || '';
   if (newStatus === oldStatus) { cancelStatusEdit(idx); return; }
   allData[idx]['Status'] = newStatus;
-  saveSiteFieldToSupabase(r['Site Name']||'', 'Status', oldStatus, newStatus);
+  var rawRow = __rawCSVData ? __rawCSVData.find(function(rr){ return (rr['Site Name']||'').trim() === (r['Site Name']||'').trim(); }) : null;
+  var csvBaseline = rawRow ? (rawRow['Status']||'') : oldStatus;
+  saveSiteFieldToSupabase(r['Site Name']||'', 'Status', oldStatus, newStatus, csvBaseline);
   const today=new Date();today.setHours(0,0,0,0);
   const satD=pd(r['SAT Date']),uatD=pd(r['UAT DATE']);
   const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
