@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.45</title>
+<title>Cars24 Projects Tracker v5.46</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -7962,11 +7962,7 @@ function buildSlackDelayText(kind, siteName){
   if (kind === 'branding_delay') {
     var bhd = getHandoverDate(r);
     var bhdStr = bhd ? bhd.toLocaleDateString('en-IN',{day:'numeric',month:'short'}) : 'TBD';
-    var bnow = new Date(); bnow.setHours(0,0,0,0);
-    var bDaysLeft = bhd ? Math.round((bhd-bnow)/86400000) : null;
-    return 'Bhai '+siteName+' mein branding team kab aa rahi hai yahan? Handover '+bhdStr+' ko hai'
-      +(bDaysLeft!=null?(bDaysLeft<=0?' (already nikal chuka)':' ('+bDaysLeft+'d bache hain)'):'')
-      +', ab tak signage complete nahi hua. Date confirm karke bata do.';
+    return 'Bhai '+siteName+' mein branding team kab aa rahi hai yahan? Handover '+bhdStr+' ko hai, ab tak signage complete nahi hua. Date confirm karke bata do.';
   }
   if (kind === 'furniture_dispatch') {
     var fItems = (PROCURE_DATA[siteName]||[]).filter(function(it){ return /furniture/i.test(it.item||'') && !it.dispatched; });

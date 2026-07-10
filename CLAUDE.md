@@ -328,7 +328,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.45 | `buildSlackDelayText()`'s `branding_delay` template (SAT→UAT's "🎨 Branding/Signage Risk" 📣 button) reworded per explicit request, same Hinglish/direct-ask convention as v5.30/v5.41 — was `'{site} ka branding/signage abhi bhi complete nahi hua hai, handover {date} ko due hai ({n}d left). Vendor ko push kar do jaldi wrap up karne ke liye.'` (an instruction to push the vendor), now `'Bhai {site} mein branding team kab aa rahi hai yahan? Handover {date} ko hai ({n}d bache hain), ab tak signage complete nahi hua. Date confirm karke bata do.'` — a direct question to the PM asking when the branding team is actually showing up, not a generic vendor-push nudge |
 
+| v5.46 | `buildSlackDelayText()`'s `branding_delay` template dropped the `(Nd bache hain / already nikal chuka)` days-left parenthetical per explicit follow-up request — now just `'Bhai {site} mein branding team kab aa rahi hai yahan? Handover {date} ko hai, ab tak signage complete nahi hua. Date confirm karke bata do.'`, the handover date alone without a days-remaining callout |
+
 ---
 
-## Current Version: v5.45
+## Current Version: v5.46
 
