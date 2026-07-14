@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.46</title>
+<title>Cars24 Projects Tracker v5.47</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -2024,6 +2024,10 @@ async function loadSupabaseSiteFields() {
   var r;
   try { r = await __sbClient.from('site_field_overrides').select('site_name,field_name,field_value,base_value'); }
   catch(e) { console.warn('loadSupabaseSiteFields select error:', e); return; }
+  if (r && r.error && isMissingBaseValueError(r.error)) {
+    console.warn('site_field_overrides.base_value is missing; status stale-override cleanup disabled until migration runs.');
+    r = await __sbClient.from('site_field_overrides').select('site_name,field_name,field_value');
+  }
   if (!r || r.error || !r.data || !r.data.length) return;
   var staleStatusSites = [];
   try {
@@ -2085,6 +2089,11 @@ async function loadUatExemptionsFromSupabase() {
   try { localStorage.setItem('uat_exemptions', JSON.stringify(UAT_EXEMPTIONS)); } catch(e) {}
 }
 
+function isMissingBaseValueError(err) {
+  var msg = ((err && (err.message || err.details || err.hint || err.code)) || '').toString().toLowerCase();
+  return msg.indexOf('base_value') !== -1 && (msg.indexOf('column') !== -1 || msg.indexOf('schema cache') !== -1 || msg.indexOf('could not find') !== -1);
+}
+
 async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue, baseValue) {
   if (!__sbClient || !__sbUser) return;
   var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
@@ -2101,6 +2110,14 @@ async function saveSiteFieldToSupabase(siteName, fieldName, oldValue, newValue, 
     upsertRow,
     { onConflict: 'site_name,field_name' }
   );
+  if (sr.error && baseValue !== undefined && isMissingBaseValueError(sr.error)) {
+    console.warn('site_field_overrides.base_value is missing; saving field without status baseline until migration runs.');
+    delete upsertRow.base_value;
+    sr = await __sbClient.from('site_field_overrides').upsert(
+      upsertRow,
+      { onConflict: 'site_name,field_name' }
+    );
+  }
   if (sr.error) {
     console.error('saveSiteField error:', sr.error);
     toast('Save failed: ' + (sr.error.message || sr.error.code || JSON.stringify(sr.error)), 'err');
