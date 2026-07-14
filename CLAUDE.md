@@ -330,7 +330,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.46 | `buildSlackDelayText()`'s `branding_delay` template dropped the `(Nd bache hain / already nikal chuka)` days-left parenthetical per explicit follow-up request — now just `'Bhai {site} mein branding team kab aa rahi hai yahan? Handover {date} ko hai, ab tak signage complete nahi hua. Date confirm karke bata do.'`, the handover date alone without a days-remaining callout |
 
+| v5.47 | Deep-debug safety fix for v5.44's `site_field_overrides.base_value` migration dependency: `loadSupabaseSiteFields()` now falls back to the pre-migration select (`site_name,field_name,field_value`) if Supabase reports that `base_value` is missing, so Cost Center/HEM/Revised-date/manual-field overrides keep loading instead of the whole override merge silently disabling itself until the migration is run. `saveSiteFieldToSupabase()` also retries without `base_value` when saving a Status edit against an unmigrated table, preserving the user's save while logging that stale-Status cleanup will only become active after `alter table site_field_overrides add column if not exists base_value text;` is applied |
+
 ---
 
-## Current Version: v5.46
+## Current Version: v5.47
 
