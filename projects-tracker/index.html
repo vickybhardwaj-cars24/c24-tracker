@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.47</title>
+<title>Cars24 Projects Tracker v5.48</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -5127,8 +5127,11 @@ function openModal(idx){
   const _llArr=SCHED_DATA[_llSiteName]||[];
   const _llFileId='ll-inp-'+idx;
   const _llSN=escJsAttr(_llSiteName);
-  const _llUploadBtn='<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">+ Add Schedule CSV</label>'
-    +'<input type="file" id="'+_llFileId+'" accept=".csv" style="display:none" onchange="handleLLUpload(event,\''+_llSN+'\')">';
+  const _llUploadBtn='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
+    +'<button class="btn btn-o btn-sm" onclick="addManualLLTask(\''+_llSN+'\')" style="cursor:pointer;font-size:11px">+ Add Task</button>'
+    +'<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">+ Add Schedule CSV</label>'
+    +'<input type="file" id="'+_llFileId+'" accept=".csv" style="display:none" onchange="handleLLUpload(event,\''+_llSN+'\')">'
+    +'</div>';
   let llHtml='';
   (function(){
     // Overall totals across all POs
@@ -5150,7 +5153,7 @@ function openModal(idx){
       llHtml='<div data-ll-section style="border:1px dashed var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr
         +'<div style="font-size:12px;color:var(--muted)">No schedule uploaded yet.</div>'
         +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Vendor Name, Start Date, End Date</code></div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Filename: <code>Schedule_PO&lt;PO_NUMBER&gt;.csv</code> — PO number is auto-extracted.</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Filename: <code>Schedule_PO&lt;PO_NUMBER&gt;.csv</code> — PO number is auto-extracted. Or use <b>+ Add Task</b> for a manual entry.</div>'
         +'</div>';
       return;
     }
@@ -7167,6 +7170,43 @@ function saveLLDate(siteName,poIdx,taskIdx,field,value){
   arr[poIdx].tasks[taskIdx][field]=value;
   saveSchedData();
   toast('Date saved','ok');
+}
+
+
+function addManualLLTask(siteName){
+  if(!canUpload()){toast('Please log in first to add a schedule task','err');return;}
+  var task=prompt('Task name');
+  if(task===null) return;
+  task=(task||'').trim();
+  if(!task){toast('Task name is required','err');return;}
+  if(!SCHED_DATA[siteName]) SCHED_DATA[siteName]=[];
+  var arr=SCHED_DATA[siteName];
+  var po='Manual';
+  if(arr.length===1){
+    po=arr[0].po||'Manual';
+  } else if(arr.length>1){
+    var existing=arr.map(function(b){return b.po||'Manual';}).join(', ');
+    po=prompt('Add under which PO? Existing: '+existing, arr[0].po||'Manual');
+    if(po===null) return;
+    po=(po||'Manual').trim()||'Manual';
+  } else {
+    po=prompt('PO number / group for this task', 'Manual');
+    if(po===null) return;
+    po=(po||'Manual').trim()||'Manual';
+  }
+  var vendor=prompt('Vendor name (optional)', '')||'';
+  var startDate=prompt('Start date (optional)', '')||'';
+  var endDate=prompt('End date (optional)', '')||'';
+  var block=arr.find(function(b){return (b.po||'Manual')===po;});
+  if(!block){block={po:po,tasks:[]};arr.push(block);}
+  var nextSno=String((block.tasks||[]).length+1);
+  block.tasks=block.tasks||[];
+  block.tasks.push({sno:nextSno,task:task,vendor:vendor.trim(),startDate:startDate.trim(),endDate:endDate.trim(),done:false,wip:false,manual:true});
+  saveSchedData();
+  updateLLCompletion(siteName);
+  var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+  if(idx>=0) openModal(idx);
+  toast('✓ Manual schedule task added','ok');
 }
 
 function deleteLLPO(siteName,poIdx){
