@@ -4160,9 +4160,9 @@ function renderMetaField(l, v, idx, r) {
   }
 
   // Owner, Vendor, % Completion: editable for signed-in users
-  if (l === 'Owner' || l === 'Vendor' || l === '% Completion (HOTP)') {
+  if (l === 'Owner' || l === 'Vendor' || l === '% Completion (HOTP)' || l === '% Completion (Modal progress)') {
     if (!isLoggedIn) return _meLock(l, v, '');
-    return _meEdit(l, v, idx, l);
+    return _meEdit(l, v, idx, l === '% Completion (Modal progress)' ? '% Completion (HOTP)' : l);
   }
 
   // Default: admin editable, others locked
@@ -4240,6 +4240,8 @@ function openDP(key, idx) {
   if (!panel) return;
   if (disp)  disp.style.display  = 'none';
   panel.style.display = '';
+  var reason = document.getElementById('dp-reason-'+key+'-'+idx);
+  if (reason) reason.value = '';
   if (inp) setTimeout(function(){ inp.showPicker && inp.showPicker(); }, 50);
 }
 function cancelDP(key, idx) {
@@ -4250,6 +4252,7 @@ function cancelDP(key, idx) {
 }
 function confirmDP(key, idx, dataKey) {
   var inp = document.getElementById('dp-inp-'+key+'-'+idx);
+  var reasonInp = document.getElementById('dp-reason-'+key+'-'+idx);
   if (!inp || !inp.value) { toast('Pick a date first', 'err'); return; }
   var d = new Date(inp.value + 'T00:00:00');
   var MONS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -4257,10 +4260,13 @@ function confirmDP(key, idx, dataKey) {
   var r = allData[idx]; if (!r) return;
   var oldV = r[dataKey] || '';
   if (ds === oldV) { cancelDP(key, idx); return; }
+  var reason = reasonInp ? reasonInp.value.trim() : '';
+  if (!reason) { toast('Add a reason for changing the date', 'err'); if(reasonInp) reasonInp.focus(); return; }
   allData[idx][dataKey] = ds;
   var valEl = document.getElementById('dp-val-'+key+'-'+idx);
   if (valEl) valEl.textContent = ds;
   saveSiteFieldToSupabase(r['Site Name']||'', dataKey, oldV, ds);
+  saveDateChangeToSupabase(r['Site Name']||'', dataKey, oldV, ds, reason);
   renderKPIs(); applyFilters(); buildKpiPanel();
   toast('✓ '+key.toUpperCase().replace(/_/g,' ')+' updated'+syncTag(), syncType());
   cancelDP(key, idx);
@@ -4279,11 +4285,43 @@ function _meDatePick(label, val, idx, dataKey, key, canEdit) {
     + '</div>'
     + '<div id="dp-panel-'+key+'-'+idx+'" style="display:none;margin-top:8px;background:#f8faff;border:1px solid #bae6fd;border-radius:8px;padding:10px">'
     + '<input type="date" id="dp-inp-'+key+'-'+idx+'" value="'+isoVal+'" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;font-family:Inter,sans-serif;width:100%;box-sizing:border-box;outline:none;color:#111827;background:#fff">'
+    + '<div style="font-size:10px;font-weight:700;color:var(--muted);margin:8px 0 4px;text-transform:uppercase;letter-spacing:.04em">Reason for date change</div>'
+    + '<input type="text" id="dp-reason-'+key+'-'+idx+'" placeholder="Required — e.g. vendor rescheduled" style="border:1px solid #d1d5db;border-radius:6px;padding:6px 8px;font-size:12px;font-family:Inter,sans-serif;width:100%;box-sizing:border-box;outline:none;color:#111827;background:#fff">'
     + '<div style="display:flex;gap:6px;margin-top:8px">'
     + '<button onclick="confirmDP(\''+key+'\','+idx+',\''+dataKey+'\')" style="flex:1;background:#0369a1;color:#fff;border:none;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:700;cursor:pointer">Save</button>'
     + '<button onclick="cancelDP(\''+key+'\','+idx+')" style="flex:1;background:#f3f4f6;color:#374151;border:1px solid #d1d5db;border-radius:6px;padding:6px 10px;font-size:12px;font-weight:600;cursor:pointer">Cancel</button>'
     + '</div></div>'
+    + '<div id="dp-history-'+key+'-'+idx+'" style="margin-top:6px"></div>'
     + '</div></div>';
+}
+
+async function saveDateChangeToSupabase(siteName, fieldName, fromDate, toDate, reason) {
+  if (!__sbClient || !__sbUser) return;
+  var byName = (__sbProfile && __sbProfile.full_name) || __sbUser.email;
+  var res = await __sbClient.from('date_change_history').insert({
+    site_name: siteName, field_name: fieldName, changed_from: fromDate || null,
+    changed_to: toDate, reason: reason, changed_by_name: byName
+  });
+  if (res.error) console.warn('Date change history save failed:', res.error);
+}
+
+async function loadDateChangeHistory(siteName) {
+  if (!__sbClient) return [];
+  var res = await __sbClient.from('date_change_history')
+    .select('field_name,changed_from,changed_to,reason,changed_by_name,changed_at')
+    .eq('site_name', siteName).order('changed_at', { ascending: true });
+  return (!res.error && res.data) ? res.data : [];
+}
+
+function renderDateChangeHistories(idx, rows) {
+  var keyMap={'Planned Completion':'planned','SAT Date':'sat','UAT DATE':'uat','PO Date':'po','Work Start Date':'workstart','Kickoff Date':'kickoff'};
+  Object.keys(keyMap).forEach(function(field){
+    var changes=(rows||[]).filter(function(row){return row.field_name===field;});
+    var el=document.getElementById('dp-history-'+keyMap[field]+'-'+idx);
+    if(!el || !changes.length) return;
+    el.innerHTML='<div style="padding:7px 8px;background:#f0f9ff;border:1px solid #bae6fd;border-radius:6px"><div style="font-size:9px;font-weight:700;color:#0369a1;text-transform:uppercase;margin-bottom:4px">Date edit history</div>'
+      +changes.map(function(row,i){var when=row.changed_at?new Date(row.changed_at).toLocaleDateString('en-IN',{day:'numeric',month:'short',year:'numeric'}):'';return '<div style="font-size:10px;line-height:1.5;border-bottom:1px solid #dbeafe;padding:2px 0"><b>#'+(i+1)+'</b> '+esc(row.changed_from||'Not set')+' → <b>'+esc(row.changed_to||'—')+'</b> · '+esc(row.reason||'No reason')+(when?' <span style="color:var(--muted)">('+esc(when)+(row.changed_by_name?' by '+esc(row.changed_by_name):'')+')</span>':'')+'</div>';}).join('')+'</div>';
+  });
 }
 
 function confirmRevEdit(idx) {
@@ -5108,9 +5146,15 @@ function openModal(idx){
   const uatGap=satD&&!uatD?Math.round((today-satD)/86400000):0;
   const warnHtml=satD&&!uatD&&uatGap>=UAT_WARN_DAYS?`<span class="uat-warn-tag" style="margin-left:6px">🔔 ${uatGap}d since SAT — UAT overdue</span>`:'';
   document.getElementById('mstat').innerHTML=buildMstatHtml(r, idx, warnHtml);
-  const pctV=pct(r);
+  const hotpPct=pct(r);
+  const modalSchedule=SCHED_DATA[(r['Site Name']||'').trim()]||[];
+  var modalTaskTotal=0,modalTaskDone=0;
+  modalSchedule.forEach(function(block){modalTaskTotal+=(block.tasks||[]).length;modalTaskDone+=(block.tasks||[]).filter(function(task){return task.done;}).length;});
+  const modalPct=modalTaskTotal?Math.round(modalTaskDone/modalTaskTotal*100):null;
+  const pctV=modalPct!==null&&(hotpPct===null||modalPct>hotpPct)?modalPct:hotpPct;
+  const pctLabel=modalPct!==null&&(hotpPct===null||modalPct>hotpPct)?'% Completion (Modal progress)':'% Completion (HOTP)';
   const metaF=[
-    ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['HEM Name',r['HEM Name']||''],['% Completion (HOTP)',pctV!==null?pctV+'%':''],
+    ['Owner',r.Owner||'—'],['Vendor',r.Vendor||'—'],['Vendor Rating',r['Vendor Rating']||''],['HEM Name',r['HEM Name']||''],[pctLabel,pctV!==null?pctV+'%':''],
     ['PO Date',fmtRaw(r['PO Date'])],['Kickoff Date',fmtRaw(r['Kickoff Date'])],['Work Start',fmtRaw(r['Work Start Date'])],
     ['Cost Center',r['Cost Center']||''],['SAT Date',fmtRaw(r['SAT Date'])],['UAT Date',(()=>{var uv=r['UAT DATE']||'';var ud=pd(uv)||(uv&&uv.length>10?new Date(uv):null);if(ud&&!isNaN(ud)){var M=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];return ud.getDate()+' '+M[ud.getMonth()]+' '+ud.getFullYear();}return uv||'—';})()],['Planned',fmtRaw(r['Planned Completion'])],['Revised',r['Revised Completion']?fmtRaw(r['Revised Completion']):''],
     ['Reason for Delay',r['Reason for Delay']||'']
@@ -5236,12 +5280,12 @@ function openModal(idx){
         +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">🏗️ LL Scope of Work</div>'
         +_lsUploadBtn+'</div>'
         +'<div style="font-size:12px;color:var(--muted)">No landlord scope uploaded yet.</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Expected Completion, Remarks</code></div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Start Date, Expected Completion, Remarks</code></div>'
         +'</div>';
       return;
     }
 
-    var _lsDateStyle='box-sizing:border-box;border:1px solid #fde68a;border-radius:4px;padding:3px 6px;font-size:10px;width:88px;font-family:Inter,sans-serif;background:#fffdf5';
+    var _lsDateStyle='box-sizing:border-box;border:1px solid #fde68a;border-radius:4px;padding:3px 6px;font-size:10px;width:118px;font-family:Inter,sans-serif;background:#fff';
     var _lsRows=_lsArr.map(function(t,ti){
       var isDone=t.done;
       return '<div id="lls-row-'+ti+'" style="display:flex;align-items:flex-start;gap:8px;padding:7px 10px;border-bottom:1px solid #fef3c7;opacity:'+(isDone?'0.45':'1')+'">'
@@ -5250,8 +5294,10 @@ function openModal(idx){
         +'<div style="flex:1;min-width:0">'
         +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
-        +'<span style="font-size:10px;color:var(--muted)">By:</span>'
-        +'<input type="text" value="'+esc(t.expectedDate)+'" placeholder="DD/MM/YYYY" style="'+_lsDateStyle+'" onblur="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'expectedDate\',this.value)">'
+        +'<span style="font-size:10px;color:var(--muted)">Start:</span>'
+        +'<input type="date" value="'+esc(llScopeDateInputValue(t.startDate))+'" title="Edit LL scope start date" style="'+_lsDateStyle+'" onchange="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'startDate\',this.value)">'
+        +'<span style="font-size:10px;color:var(--muted)">Complete by:</span>'
+        +'<input type="date" value="'+esc(llScopeDateInputValue(t.expectedDate))+'" title="Edit LL scope completion date" style="'+_lsDateStyle+'" onchange="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'expectedDate\',this.value)">'
         +(t.remarks?'<span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(t.remarks)+'</span>':'')
         +'</div>'
         +'</div>'
@@ -5308,6 +5354,7 @@ function openModal(idx){
       <div id="const-materials-${idx}" style="display:none"></div>
     </div>`;
   document.getElementById('overlay').classList.add('open');
+  loadDateChangeHistory(r['Site Name'] || '').then(function(rows){ renderDateChangeHistories(idx, rows); });
   // Load Supabase revision history async → inject into inline rev-sb-hist placeholder
   (async function(capturedIdx, capturedR) {
     var sbRevs = await loadRevisionHistoryFromSupabase(capturedR['Site Name'] || '');
@@ -7099,7 +7146,12 @@ function updateLLCompletion(siteName){
   if(!totalTasks) return;
   var pctVal=Math.round(doneTasks/totalTasks*100);
   var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
-  if(idx>=0){ allData[idx]['Percentage Completion']=String(pctVal); renderKPIs(); applyFilters(); }
+  if(idx>=0){
+    var hotpPct=parseInt((allData[idx]['Percentage Completion']||'').replace('%',''),10);
+    // Modal task progress supplements HOTP; it must never make the visible completion go backwards.
+    allData[idx]['Percentage Completion']=String(isNaN(hotpPct)?pctVal:Math.max(hotpPct,pctVal));
+    renderKPIs(); applyFilters();
+  }
 }
 
 // Toggle a single task done/undone — poIdx = index in site's PO array, taskIdx = task within that PO
@@ -7370,12 +7422,27 @@ function parseLLScopeCSV(txt){
     tasks.push({
       sno: obj['S.No.']||obj['Sno']||String(i),
       task: task,
+      startDate: obj['Start Date']||obj['Expected Start']||obj['Start']||'',
       expectedDate: obj['Expected Completion']||obj['Expected Date']||obj['End Date']||'',
       remarks: obj['Remarks']||obj['remarks']||'',
       done: false
     });
   }
   return tasks;
+}
+
+// Convert the common CSV date formats into the ISO value required by date inputs.
+// Keeping this conversion at render time also upgrades LL scope rows saved before
+// start-date editing was introduced without requiring a data migration.
+function llScopeDateInputValue(value){
+  value=(value||'').trim();
+  if(!value) return '';
+  if(/^\d{4}-\d{2}-\d{2}$/.test(value)) return value;
+  var slash=value.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{4})$/);
+  if(slash) return slash[3]+'-'+String(slash[2]).padStart(2,'0')+'-'+String(slash[1]).padStart(2,'0');
+  var d=pd(value);
+  if(!d||isNaN(d)) return '';
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 }
 
 function toggleLLScopeTask(siteName,taskIdx){
@@ -7399,10 +7466,13 @@ function toggleLLScopeTask(siteName,taskIdx){
 }
 
 function saveLLScopeDate(siteName,taskIdx,field,value){
-  if(!LL_SCOPE_DATA[siteName]) return;
-  LL_SCOPE_DATA[siteName][taskIdx][field]=value;
+  if(!LL_SCOPE_DATA[siteName]||!LL_SCOPE_DATA[siteName][taskIdx]) return;
+  var task=LL_SCOPE_DATA[siteName][taskIdx];
+  var oldValue=task[field]||'';
+  if(oldValue===value) return;
+  task[field]=value;
   saveLLScopeData();
-  toast('Saved','ok');
+  toast('✓ LL scope '+(field==='startDate'?'start':'completion')+' date updated','ok');
 }
 
 function deleteLLScopeTask(siteName,taskIdx){
