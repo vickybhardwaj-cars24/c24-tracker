@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.49</title>
+<title>Cars24 Projects Tracker v5.50</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -4313,6 +4313,42 @@ async function loadDateChangeHistory(siteName) {
   return (!res.error && res.data) ? res.data : [];
 }
 
+// One reusable, visible editor for dates stored inside the three modal work-plan
+// sections.  Using date_change_history's field_name as the row identity keeps
+// each LL item, schedule task and procurement item in its own audit trail.
+function trackedSectionField(section,item,field){return section+' / '+item+' / '+field;}
+async function openTrackedDateEditor(section,siteName,itemLabel,values,onSaveCode){
+  if(!__sbUser){toast('Please sign in to edit dates','err');return;}
+  var host=document.getElementById('tracked-date-editor');if(!host)return;
+  var rows=await loadDateChangeHistory(siteName);
+  var fields=Object.keys(values);
+  var history=rows.filter(function(row){return fields.some(function(field){return row.field_name===trackedSectionField(section,itemLabel,field);});});
+  host.style.display='block';
+  host.innerHTML='<div style="display:flex;justify-content:space-between;align-items:center;gap:8px"><div><div style="font-size:10px;font-weight:800;color:#7c2d12;text-transform:uppercase">'+esc(section)+' date revision</div><div style="font-size:12px;font-weight:700;margin-top:2px">'+esc(itemLabel)+'</div></div><button class="btn btn-o btn-sm" onclick="closeTrackedDateEditor()">✕ Close</button></div>'
+    +'<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:10px">'
+    +fields.map(function(field){return '<label style="font-size:10px;font-weight:700;color:var(--muted)">'+esc(field)+'<input type="date" data-tracked-field="'+esc(field)+'" value="'+esc(llScopeDateInputValue(values[field]))+'" style="display:block;width:100%;box-sizing:border-box;margin-top:4px;padding:7px;border:1px solid #fdba74;border-radius:6px;background:#fff"></label>';}).join('')+'</div>'
+    +'<label style="display:block;font-size:10px;font-weight:800;color:#9a3412;text-transform:uppercase;margin-top:10px">Delay reason (required)<textarea id="tracked-date-reason" placeholder="Explain why this date changed" style="display:block;width:100%;box-sizing:border-box;min-height:58px;margin-top:4px;padding:7px;border:1px solid #fb923c;border-radius:6px;background:#fff;font-family:Inter,sans-serif"></textarea></label>'
+    +'<button class="btn btn-p btn-sm" style="margin-top:8px" data-tracked-save="'+esc(onSaveCode)+'" onclick="saveTrackedDateEditor(this,\''+escJsAttr(section)+'\',\''+escJsAttr(siteName)+'\',\''+escJsAttr(itemLabel)+'\')">Save date revision</button>'
+    +'<div style="margin-top:10px"><div style="font-size:10px;font-weight:800;color:#7c2d12;text-transform:uppercase">'+esc(section)+' delay reason history</div>'
+    +(history.length?history.map(function(row){var when=row.changed_at?new Date(row.changed_at).toLocaleString('en-IN',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'Unknown date';var leaf=row.field_name.split(' / ').pop();return '<div style="font-size:10px;line-height:1.5;padding:5px 0;border-bottom:1px solid #fed7aa"><b>'+esc(leaf)+':</b> '+esc(row.changed_from||'Not set')+' → <b>'+esc(row.changed_to)+'</b><br>'+esc(row.reason)+' <span style="color:var(--muted)">— '+esc(when)+(row.changed_by_name?' by '+esc(row.changed_by_name):'')+'</span></div>';}).join(''):'<div style="font-size:10px;color:var(--muted);padding-top:5px">No date revisions recorded for this item.</div>')+'</div>';
+  host.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function closeTrackedDateEditor(){var host=document.getElementById('tracked-date-editor');if(host){host.style.display='none';host.innerHTML='';}}
+function saveTrackedDateEditor(btn,section,siteName,itemLabel){
+  var reason=(document.getElementById('tracked-date-reason').value||'').trim();
+  if(!reason){toast('Delay reason is required before dates can be saved','err');document.getElementById('tracked-date-reason').focus();return;}
+  var values={};document.querySelectorAll('#tracked-date-editor [data-tracked-field]').forEach(function(inp){values[inp.getAttribute('data-tracked-field')]=inp.value;});
+  var code=btn.getAttribute('data-tracked-save');
+  if(code.indexOf('schedule:')===0){var p=code.split(':');saveTrackedScheduleDates(siteName,+p[1],+p[2],values,reason,itemLabel,section);}
+  else if(code.indexOf('scope:')===0){saveTrackedScopeDates(siteName,+code.split(':')[1],values,reason,itemLabel,section);}
+  else if(code.indexOf('procure:')===0){saveTrackedProcureDates(siteName,+code.split(':')[1],values,reason,itemLabel,section);}
+}
+function recordTrackedChanges(siteName,section,itemLabel,oldValues,newValues,reason){var changed=false;Object.keys(newValues).forEach(function(field){if((oldValues[field]||'')!==newValues[field]){changed=true;saveDateChangeToSupabase(siteName,trackedSectionField(section,itemLabel,field),oldValues[field]||'',newValues[field],reason);}});return changed;}
+function saveTrackedScheduleDates(siteName,pi,ti,v,reason,item,section){var t=SCHED_DATA[siteName]&&SCHED_DATA[siteName][pi]&&SCHED_DATA[siteName][pi].tasks[ti];if(!t)return;var old={'Start Date':t.startDate||'','Completion Date':t.endDate||''};if(!recordTrackedChanges(siteName,section,item,old,v,reason)){toast('Change at least one date','warn');return;}t.startDate=v['Start Date'];t.endDate=v['Completion Date'];saveSchedData();finishTrackedDateSave(siteName);}
+function saveTrackedScopeDates(siteName,ti,v,reason,item,section){var t=LL_SCOPE_DATA[siteName]&&LL_SCOPE_DATA[siteName][ti];if(!t)return;var old={'Start Date':t.startDate||'','Completion Date':t.expectedDate||''};if(!recordTrackedChanges(siteName,section,item,old,v,reason)){toast('Change at least one date','warn');return;}t.startDate=v['Start Date'];t.expectedDate=v['Completion Date'];saveLLScopeData();finishTrackedDateSave(siteName);}
+function saveTrackedProcureDates(siteName,i,v,reason,item,section){var t=PROCURE_DATA[siteName]&&PROCURE_DATA[siteName][i];if(!t)return;var old={'Order Date':t.orderDate||'','Delivery Date':t.deliveryDate||''};if(!recordTrackedChanges(siteName,section,item,old,v,reason)){toast('Change at least one date','warn');return;}t.orderDate=v['Order Date'];t.deliveryDate=v['Delivery Date'];saveProcureData();finishTrackedDateSave(siteName);}
+function finishTrackedDateSave(siteName){toast('✓ Date revision and delay reason saved','ok');var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});if(idx>=0)openModal(idx);}
+
 function renderDateChangeHistories(idx, rows) {
   var keyMap={'Planned Completion':'planned','SAT Date':'sat','UAT DATE':'uat','PO Date':'po','Work Start Date':'workstart','Kickoff Date':'kickoff'};
   Object.keys(keyMap).forEach(function(field){
@@ -4747,6 +4783,7 @@ function renderProcureSection(r,idx){
             ?('<input type="date" value="'+esc(it.dispatchDate||'')+'" onchange="setProcureDispatchDate(\''+siteNameEsc+'\','+i+',this.value,'+idx+')" style="font-size:10px;padding:2px 4px;border:1px solid var(--border);border-radius:4px;background:var(--surface);color:inherit">')
             :'—')+'</td>'
           +'<td style="padding:5px 8px;text-align:center">'
+          +'<button class="btn btn-o btn-sm" onclick="openTrackedDateEditor(\'Procurement Plan\',\''+siteNameEsc+'\',\''+escJsAttr(it.item)+'\',{\'Order Date\':\''+escJsAttr(it.orderDate||'')+'\',\'Delivery Date\':\''+escJsAttr(it.deliveryDate||'')+'\'},\'procure:'+i+'\')" title="Edit dates and record delay reason">✎ Dates</button>'
           +'<button onclick="deleteProcureItem(\''+siteNameEsc+'\','+i+','+idx+')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;padding:0 2px" title="Remove">✕</button>'
           +'</td></tr>';
       }).join('')
@@ -5233,9 +5270,10 @@ function openModal(idx){
           +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
           +'<span style="font-size:10px;color:var(--muted);background:var(--surface);padding:1px 6px;border-radius:4px">'+esc(t.vendor)+'</span>'
           +'<span style="font-size:10px;color:var(--muted)">Start:</span>'
-          +'<input type="text" value="'+esc(t.startDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'startDate\',this.value)">'
+          +'<span style="font-size:10px">'+esc(t.startDate||'—')+'</span>'
           +'<span style="font-size:10px;color:var(--muted)">End:</span>'
-          +'<input type="text" value="'+esc(t.endDate)+'" style="'+_dinStyle+'" onblur="saveLLDate(\''+_llSN+'\','+pi+','+ti+',\'endDate\',this.value)">'
+          +'<span style="font-size:10px">'+esc(t.endDate||'—')+'</span>'
+          +'<button class="btn btn-o btn-sm" onclick="openTrackedDateEditor(\'Project Schedule & Progress\',\''+_llSN+'\',\''+escJsAttr((block.po||'No PO')+' — '+t.task)+'\',{\'Start Date\':\''+escJsAttr(t.startDate||'')+'\',\'Completion Date\':\''+escJsAttr(t.endDate||'')+'\'},\'schedule:'+pi+':'+ti+'\')">✎ Edit dates / reason</button>'
           +(!isDone?'<button id="ll-wip-'+pi+'-'+ti+'" onclick="toggleLLTaskWip(\''+_llSN+'\','+pi+','+ti+')" style="font-size:9px;font-weight:700;padding:2px 7px;border-radius:4px;border:1px solid '+(isWip?'#2563eb':'#e2e8f0')+';background:'+(isWip?'#2563eb':'#f1f5f9')+';color:'+(isWip?'#fff':'#64748b')+';cursor:pointer;margin-left:2px" title="'+(isWip?'Unmark WIP':'Mark as WIP')+'">'+(isWip?'● WIP':'○ WIP')+'</button>':'')
           +'</div>'
           +'</div>'
@@ -5295,9 +5333,10 @@ function openModal(idx){
         +'<div style="font-size:12px;font-weight:'+(isDone?'400':'600')+';text-decoration:'+(isDone?'line-through':'none')+';word-break:break-word;line-height:1.4">'+esc(t.task)+'</div>'
         +'<div style="display:flex;align-items:center;gap:6px;margin-top:4px;flex-wrap:wrap">'
         +'<span style="font-size:10px;color:var(--muted)">Start:</span>'
-        +'<input type="date" value="'+esc(llScopeDateInputValue(t.startDate))+'" title="Edit LL scope start date" style="'+_lsDateStyle+'" onchange="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'startDate\',this.value)">'
+        +'<span style="font-size:10px">'+esc(t.startDate||'—')+'</span>'
         +'<span style="font-size:10px;color:var(--muted)">Complete by:</span>'
-        +'<input type="date" value="'+esc(llScopeDateInputValue(t.expectedDate))+'" title="Edit LL scope completion date" style="'+_lsDateStyle+'" onchange="saveLLScopeDate(\''+_lsSN+'\','+ti+',\'expectedDate\',this.value)">'
+        +'<span style="font-size:10px">'+esc(t.expectedDate||'—')+'</span>'
+        +'<button class="btn btn-o btn-sm" onclick="openTrackedDateEditor(\'LL Scope of Work\',\''+_lsSN+'\',\''+escJsAttr(t.task)+'\',{\'Start Date\':\''+escJsAttr(t.startDate||'')+'\',\'Completion Date\':\''+escJsAttr(t.expectedDate||'')+'\'},\'scope:'+ti+'\')">✎ Edit dates / reason</button>'
         +(t.remarks?'<span style="font-size:10px;color:var(--muted);font-style:italic">'+esc(t.remarks)+'</span>':'')
         +'</div>'
         +'</div>'
@@ -5325,6 +5364,7 @@ function openModal(idx){
   })();
 
   document.getElementById('mbody').innerHTML=`
+    <div id="tracked-date-editor" style="display:none;background:#fff7ed;border:2px solid #fb923c;border-radius:8px;padding:12px 14px;margin-bottom:12px"></div>
     <div class="msec"><div class="mst">Site Details</div>
       <div class="mgrid">${metaF.map(([l,v])=>renderMetaField(l,v,idx,r)).join('')}</div>
     </div>
