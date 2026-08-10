@@ -332,8 +332,8 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 
 | v5.47 | Deep-debug safety fix for v5.44's `site_field_overrides.base_value` migration dependency: `loadSupabaseSiteFields()` now falls back to the pre-migration select (`site_name,field_name,field_value`) if Supabase reports that `base_value` is missing, so Cost Center/HEM/Revised-date/manual-field overrides keep loading instead of the whole override merge silently disabling itself until the migration is run. `saveSiteFieldToSupabase()` also retries without `base_value` when saving a Status edit against an unmigrated table, preserving the user's save while logging that stale-Status cleanup will only become active after `alter table site_field_overrides add column if not exists base_value text;` is applied |
 | v5.48 | Project Schedule modal now supports manual task entry alongside schedule CSV upload: the section header includes a `+ Add Task` action, the empty-state copy calls out manual entry, and `addManualLLTask()` adds a task to an existing or new PO/group while persisting through `SCHED_DATA` and refreshing completion progress |
+| v5.49 | Added reasoned project-date edit history backed by `date_change_history`; modal task progress now supersedes HOTP when higher without allowing completion to regress; LL Scope CSVs accept start dates and expose editable start/completion date controls; repository guidance now requires directly copyable Supabase SQL in delivery notes |
 
 ---
 
-## Current Version: v5.48
-
+## Current Version: v5.49
