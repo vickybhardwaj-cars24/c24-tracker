@@ -344,7 +344,8 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.58 | Removed the speculative array/data-URL Weave retries after real uploaded R2 links confirmed that PO uploads already produce ordinary public PDF URLs. The Worker now submits the exact public R2 URL using the chain's original scalar `PDFinput` contract, but first fetches that URL itself and verifies the `%PDF-` signature. Failures now distinguish public-link problems from a Weave chain that rejected a verified, retrievable PDF. No Supabase migration. |
 | v5.59 | Fixed Weave diagnostic objects being reduced to the useless text `[object Object]`: nested `message`, `detail`, `error`, `reason`, and `description` values are now extracted recursively, with JSON serialization as a fallback, for both HTTP failures and successful HTTP responses whose chain output reports failure. No Supabase migration. |
 | v5.60 | Updated PO PDF extraction authentication for Weave's execution-token requirement: the Worker now prefers the chain-specific `WEAVE_EXECUTION_TOKEN` secret, retains `WEAVE_API_KEY` only as a legacy fallback, accepts secrets saved with or without the `Bearer` prefix, and turns Weave credential rejections into an actionable configuration message. No Supabase migration. |
+| v5.61 | Corrected Weave execution-token authentication after the secret was configured: chain execution tokens are now sent verbatim in the `Authorization` header rather than being incorrectly formatted as a Bearer JWT. An accidentally stored `Bearer ` prefix is stripped, the legacy API-key fallback retains its Bearer scheme, and rejection guidance now checks that the token belongs to the exact configured chain. No Supabase migration. |
 
 ---
 
-## Current Version: v5.60
+## Current Version: v5.61

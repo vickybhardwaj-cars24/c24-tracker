@@ -83,8 +83,8 @@
 //   BUCKET         - R2 bucket binding (variable name BUCKET → bucket c24-tracker-data)
 // Required secret for PO PDF extraction:
 //   WEAVE_EXECUTION_TOKEN - execution token generated for the deployed Weave
-//                           chain (preferred). WEAVE_API_KEY remains a legacy
-//                           fallback so existing deployments fail gracefully.
+//                           chain. It is sent verbatim in Authorization (unlike
+//                           a JWT, an execution token must not gain "Bearer ").
 
 const WEAVE_EXECUTION_URL = 'https://weave-chains.cars24.team/api/v1/execution/6a7c45f986a78680cf0147c8/run';
 const WEAVE_TEAM_ID = '68f87fa98ecef3bd736f59b6';
@@ -1194,11 +1194,6 @@ function weaveErrorText(value, fallback = 'Weave could not process this PDF') {
   return String(value);
 }
 
-function weaveAuthorization(token) {
-  token = String(token || '').trim();
-  return /^Bearer\s+/i.test(token) ? token : 'Bearer ' + token;
-}
-
 function normalizeWeaveSchedule(payload) {
   payload = parseWeaveObject(payload);
   let output = parseWeaveObject(payload && payload.output);
@@ -1246,8 +1241,15 @@ function normalizeWeaveSchedule(payload) {
 async function handlePoPdfProcess(request, env) {
   if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Unauthorized' });
   if (!env.BUCKET) return json(500, { success: false, error: 'Worker is missing BUCKET binding' });
-  const weaveToken = env.WEAVE_EXECUTION_TOKEN || env.WEAVE_API_KEY;
+  const executionToken = String(env.WEAVE_EXECUTION_TOKEN || '').trim();
+  const legacyApiKey = String(env.WEAVE_API_KEY || '').trim();
+  const weaveToken = executionToken || legacyApiKey;
   if (!weaveToken) return json(500, { success: false, error: 'Worker is missing WEAVE_EXECUTION_TOKEN secret' });
+  // Weave accepts an execution token directly in Authorization. Only the
+  // legacy JWT/API-key path uses the Bearer scheme.
+  const weaveAuthorization = executionToken
+    ? executionToken.replace(/^Bearer\s+/i, '')
+    : (/^Bearer\s+/i.test(legacyApiKey) ? legacyApiKey : 'Bearer ' + legacyApiKey);
 
   const rawSite = String(request.headers.get('X-Site-Name') || '').trim();
   let rawName = String(request.headers.get('X-File-Name') || 'PO.pdf').trim();
@@ -1288,7 +1290,7 @@ async function handlePoPdfProcess(request, env) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': weaveAuthorization(weaveToken),
+        'Authorization': weaveAuthorization,
         'team-id': env.WEAVE_TEAM_ID || WEAVE_TEAM_ID
       },
       body: JSON.stringify({ input_data: { PDFinput: pdfInput } })
@@ -1299,7 +1301,7 @@ async function handlePoPdfProcess(request, env) {
     if (!response.ok) {
       const detail = weaveErrorText(payload.error || payload.message || payload.detail, `Weave request failed (HTTP ${response.status})`);
       if (response.status === 401 || /valid JWT token or execution token/i.test(detail)) {
-        throw new Error('Weave rejected the configured credential. Generate an execution token for this chain and save it as the WEAVE_EXECUTION_TOKEN Worker secret.');
+        throw new Error('Weave rejected WEAVE_EXECUTION_TOKEN. Confirm the secret contains the execution token for this exact chain (without a Bearer prefix), then redeploy the Worker.');
       }
       throw new Error(detail);
     }
