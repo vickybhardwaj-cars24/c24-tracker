@@ -1163,16 +1163,6 @@ function poPdfPublicUrl(key, env) {
   return base + '/' + key.split('/').map(encodeURIComponent).join('/');
 }
 
-function pdfDataUrl(body) {
-  const bytes = new Uint8Array(body);
-  const chunkSize = 3 * 8192;
-  let encoded = '';
-  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
-    encoded += btoa(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)));
-  }
-  return 'data:application/pdf;base64,' + encoded;
-}
-
 function weaveFieldValue(list, index) {
   const item = Array.isArray(list) ? list[index] : null;
   if (item == null || (typeof item === 'object' && item.is_present === false)) return '';
@@ -1186,6 +1176,20 @@ function parseWeaveObject(value) {
   catch (_) { return value; }
 }
 
+function weaveErrorText(value, fallback = 'Weave could not process this PDF') {
+  if (value == null || value === '') return fallback;
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) return value.message || fallback;
+  if (typeof value === 'object') {
+    for (const key of ['message', 'detail', 'error', 'reason', 'description']) {
+      if (value[key] != null && value[key] !== value) return weaveErrorText(value[key], fallback);
+    }
+    try { return JSON.stringify(value); }
+    catch (_) { return fallback; }
+  }
+  return String(value);
+}
+
 function normalizeWeaveSchedule(payload) {
   payload = parseWeaveObject(payload);
   let output = parseWeaveObject(payload && payload.output);
@@ -1196,7 +1200,8 @@ function normalizeWeaveSchedule(payload) {
   const statusText = String(status).toLowerCase();
   const succeeded = status === true || status === 200 || statusText === 'true' || statusText === 'success' || (status == null && output && output.results != null);
   if (!output || !succeeded || (payload && payload.error) || output.error) {
-    throw new Error(String((payload && (payload.error || payload.message || payload.detail)) || (output && (output.error || output.message || output.detail)) || 'Weave could not process this PDF'));
+    const failure = (payload && (payload.error || payload.message || payload.detail)) || (output && (output.error || output.message || output.detail));
+    throw new Error(weaveErrorText(failure));
   }
   const results = parseWeaveObject(output.results);
   if (!results || !Array.isArray(results.Task)) throw new Error('Weave response did not contain schedule tasks');
@@ -1281,7 +1286,7 @@ async function handlePoPdfProcess(request, env) {
     let payload;
     try { payload = await response.json(); }
     catch (_) { throw new Error('Weave returned an unreadable response'); }
-    if (!response.ok) throw new Error(String(payload.error || payload.message || payload.detail || 'Weave request failed'));
+    if (!response.ok) throw new Error(weaveErrorText(payload.error || payload.message || payload.detail, `Weave request failed (HTTP ${response.status})`));
     return normalizeWeaveSchedule(payload);
   }
 

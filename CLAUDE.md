@@ -342,7 +342,8 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.56 | Added a URL-independent fallback for PO PDF extraction after both public R2 and Worker-hosted URLs proved unreliable from Weave: the Worker first submits its normal PDF URL, then automatically retries a failed extraction with the PDF embedded as a base64 data URL. If both attempts fail, the UI now receives both specific errors for diagnosis. No Supabase migration. |
 | v5.57 | Fixed the remaining Weave chain input mismatch: PO PDF processing now supports both the multi-file array contract and legacy single-file contract, for Worker URLs and embedded data URLs. The multi-file form is tried first because the active chain uses a file-list input; if every supported form is rejected, the UI receives a labelled error for each attempt instead of the same ambiguous generic message. No Supabase migration. |
 | v5.58 | Removed the speculative array/data-URL Weave retries after real uploaded R2 links confirmed that PO uploads already produce ordinary public PDF URLs. The Worker now submits the exact public R2 URL using the chain's original scalar `PDFinput` contract, but first fetches that URL itself and verifies the `%PDF-` signature. Failures now distinguish public-link problems from a Weave chain that rejected a verified, retrievable PDF. No Supabase migration. |
+| v5.59 | Fixed Weave diagnostic objects being reduced to the useless text `[object Object]`: nested `message`, `detail`, `error`, `reason`, and `description` values are now extracted recursively, with JSON serialization as a fallback, for both HTTP failures and successful HTTP responses whose chain output reports failure. No Supabase migration. |
 
 ---
 
-## Current Version: v5.58
+## Current Version: v5.59
