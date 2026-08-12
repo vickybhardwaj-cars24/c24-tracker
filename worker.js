@@ -1162,6 +1162,16 @@ function poPdfPublicUrl(key, request) {
   return origin + '/' + key.split('/').map(encodeURIComponent).join('/');
 }
 
+function pdfDataUrl(body) {
+  const bytes = new Uint8Array(body);
+  const chunkSize = 3 * 8192;
+  let encoded = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    encoded += btoa(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)));
+  }
+  return 'data:application/pdf;base64,' + encoded;
+}
+
 function weaveFieldValue(list, index) {
   const item = Array.isArray(list) ? list[index] : null;
   if (item == null || (typeof item === 'object' && item.is_present === false)) return '';
@@ -1244,28 +1254,43 @@ async function handlePoPdfProcess(request, env) {
   await env.BUCKET.put(key, body, { httpMetadata: { contentType: 'application/pdf' } });
   const publicUrl = poPdfPublicUrl(key, request);
 
-  let weaveResponse;
-  try {
-    weaveResponse = await fetch(env.WEAVE_EXECUTION_URL || WEAVE_EXECUTION_URL, {
+  async function runWeave(pdfInput) {
+    const response = await fetch(env.WEAVE_EXECUTION_URL || WEAVE_EXECUTION_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': 'Bearer ' + env.WEAVE_API_KEY,
         'team-id': env.WEAVE_TEAM_ID || WEAVE_TEAM_ID
       },
-      body: JSON.stringify({ input_data: { PDFinput: publicUrl } })
+      body: JSON.stringify({ input_data: { PDFinput: pdfInput } })
     });
-  } catch (_) {
-    return json(502, { success: false, error: 'Could not connect to Weave. The PDF was uploaded and can be retried.', pdf: { key, url: publicUrl, fileName: rawName } });
+    let payload;
+    try { payload = await response.json(); }
+    catch (_) { throw new Error('Weave returned an unreadable response'); }
+    if (!response.ok) throw new Error(String(payload.error || payload.message || payload.detail || 'Weave request failed'));
+    return normalizeWeaveSchedule(payload);
   }
-  let payload;
-  try { payload = await weaveResponse.json(); }
-  catch (_) { return json(502, { success: false, error: 'Weave returned an unreadable response', pdf: { key, url: publicUrl, fileName: rawName } }); }
-  if (!weaveResponse.ok) return json(502, { success: false, error: String(payload.error || 'Weave request failed'), pdf: { key, url: publicUrl, fileName: rawName } });
 
   let schedule;
-  try { schedule = normalizeWeaveSchedule(payload); }
-  catch (err) { return json(422, { success: false, error: err.message, pdf: { key, url: publicUrl, fileName: rawName } }); }
+  let urlError;
+  try {
+    schedule = await runWeave(publicUrl);
+  } catch (err) {
+    urlError = err;
+    // Some Weave deployments cannot make outbound requests to either r2.dev
+    // or workers.dev. Retry with the PDF embedded in the chain input so the
+    // extraction no longer depends on Weave being able to fetch our URL.
+    try { schedule = await runWeave(pdfDataUrl(body)); }
+    catch (embeddedErr) {
+      const first = String(urlError && urlError.message || urlError);
+      const second = String(embeddedErr && embeddedErr.message || embeddedErr);
+      return json(422, {
+        success: false,
+        error: second === first ? second : `Weave URL attempt failed: ${first}. Embedded PDF attempt failed: ${second}`,
+        pdf: { key, url: publicUrl, fileName: rawName }
+      });
+    }
+  }
   return json(200, {
     success: true,
     tasks: schedule.tasks,
