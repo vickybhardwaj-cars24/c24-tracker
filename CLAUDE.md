@@ -334,7 +334,9 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.48 | Project Schedule modal now supports manual task entry alongside schedule CSV upload: the section header includes a `+ Add Task` action, the empty-state copy calls out manual entry, and `addManualLLTask()` adds a task to an existing or new PO/group while persisting through `SCHED_DATA` and refreshing completion progress |
 | v5.49 | Added reasoned project-date edit history backed by `date_change_history`; modal task progress now supersedes HOTP when higher without allowing completion to regress; LL Scope CSVs accept start dates and expose editable start/completion date controls; repository guidance now requires directly copyable Supabase SQL in delivery notes |
 | v5.50 | Added visible, reason-required date revision editors and separate timestamped delay-reason histories for every LL Scope item, Project Schedule & Progress task, and Procurement Plan item in the site modal |
+| v5.51 | Fixed the project detail modal on mobile browsers by sizing its overlay and sheet against the dynamic visible viewport (`dvh`) and reserving the top safe-area inset, keeping the site name, Drive link, status, and close button below browser chrome |
+| v5.52 | Added manual post-upload entry controls to all three site-modal work plans: LL Scope of Work now has `+ Add Task`, Project Schedule retains its existing `+ Add Task`, and Procurement Plan now has `+ Add Item`; manual rows are appended to the already-uploaded data, survive later CSV re-uploads, and persist through the same shared Worker stores |
 
 ---
 
-## Current Version: v5.50
+## Current Version: v5.52

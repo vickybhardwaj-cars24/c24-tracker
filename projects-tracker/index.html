@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.50</title>
+<title>Cars24 Projects Tracker v5.52</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -314,8 +314,20 @@ td{padding:7px 12px;vertical-align:middle}
   .chk-btn{min-width:110px;font-size:11px}
   .su-grid{grid-template-columns:1fr!important}
   .mgrid{grid-template-columns:1fr!important}
-  .overlay{padding:0;align-items:flex-end}
-  .modal{border-radius:18px 18px 0 0;max-height:92vh;max-width:100%}
+  /* Use the visible mobile viewport, not the larger layout viewport hidden
+     behind browser chrome, so the modal header always remains reachable. */
+  .overlay{
+    height:100vh;
+    height:100dvh;
+    padding:max(8px,env(safe-area-inset-top,0px)) 0 0;
+    align-items:flex-end;
+  }
+  .modal{
+    border-radius:18px 18px 0 0;
+    max-height:calc(100vh - max(8px,env(safe-area-inset-top,0px)));
+    max-height:calc(100dvh - max(8px,env(safe-area-inset-top,0px)));
+    max-width:100%;
+  }
   .inv-tabs{padding:0 10px;overflow-x:auto;flex-wrap:nowrap}
   .inv-tab{white-space:nowrap;padding:8px 12px;font-size:11px}
   .inv-content{padding:10px 12px}
@@ -4681,6 +4693,24 @@ function deleteProcureItem(siteName,itemIdx,idx){
   refreshProcureSection(idx);
 }
 
+function addManualProcureItem(siteName,idx){
+  if(!canUpload()){toast('Please log in first to add a procurement item','err');return;}
+  var item=prompt('Procurement item name');
+  if(item===null) return;
+  item=(item||'').trim();
+  if(!item){toast('Item name is required','err');return;}
+  var orderDate=prompt('Order date (optional)', '')||'';
+  var deliveryDate=prompt('Delivery date (optional)', '')||'';
+  var dependency=prompt('Dependency / remarks (optional)', '')||'';
+  if(!PROCURE_DATA[siteName]) PROCURE_DATA[siteName]=[];
+  var items=PROCURE_DATA[siteName];
+  var nextSno=items.reduce(function(max,it){var n=parseInt(it.sno,10);return isNaN(n)?max:Math.max(max,n);},0)+1;
+  items.push({sno:String(nextSno),item:item,orderDate:orderDate.trim(),deliveryDate:deliveryDate.trim(),dependency:dependency.trim(),ordered:false,partiallyDelivered:false,delivered:false,manual:true});
+  saveProcureData();
+  refreshProcureSection(idx);
+  toast('✓ Procurement item added','ok');
+}
+
 function renderProcureSection(r,idx){
   var siteName=(r['Site Name']||'').trim();
   var siteNameEsc=escJsAttr(siteName);
@@ -4700,7 +4730,8 @@ function renderProcureSection(r,idx){
     return false;
   });
   var uploadId='procure-inp-'+idx;
-  var uploadBtn='<label class="btn btn-o btn-sm" for="'+uploadId+'" style="cursor:pointer;font-size:11px">+ Upload CSV</label>'
+  var uploadBtn='<button class="btn btn-o btn-sm" onclick="addManualProcureItem(\''+siteNameEsc+'\','+idx+')" style="cursor:pointer;font-size:11px">+ Add Item</button>'
+    +'<label class="btn btn-o btn-sm" for="'+uploadId+'" style="cursor:pointer;font-size:11px">+ Upload CSV</label>'
     +'<input type="file" id="'+uploadId+'" accept=".csv" style="display:none" onchange="handleProcureUpload(event,\''+siteNameEsc+'\','+idx+')">';
   var delayMailBtn=problemItems.length
     ?('<a href="'+procureDelayMail(r,problemItems)+'" target="_blank" data-elog-site="'+esc(siteName)+'" data-elog-type="procure_delay" onclick="event.stopPropagation()" style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;background:#fef2f2;color:#dc2626;border:1px solid #fecaca;border-radius:5px;font-size:11px;font-weight:600;text-decoration:none;white-space:nowrap">📧 Delay Notice ('+problemItems.length+')</a>'
@@ -4793,7 +4824,7 @@ function renderProcureSection(r,idx){
     +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;flex-wrap:wrap;gap:6px">'
     +'<div>'
     +'<div style="font-size:10px;font-weight:700;color:#1e3a5f;text-transform:uppercase;letter-spacing:.05em">📦 Procurement Plan</div>'
-    +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(total?total+' items · track order & delivery status':'Upload CSV to track procurement for this site')+'</div>'
+    +'<div style="font-size:10px;color:var(--muted);margin-top:1px">'+(total?total+' items · track order & delivery status':'Upload a CSV or add an item manually')+'</div>'
     +'</div>'
     +'<div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">'
     +delayMailBtn
@@ -4803,7 +4834,7 @@ function renderProcureSection(r,idx){
     +'</div>'
     +'</div>'
     +statsHtml
-    +(total?tableHtml:'<div style="font-size:11px;color:var(--muted);padding:4px 0">No procurement plan uploaded yet. CSV format: <code>S.No., Item, Order Date, Delivery Date, Dependency</code></div>')
+    +(total?tableHtml:'<div style="font-size:11px;color:var(--muted);padding:4px 0">No procurement plan added yet. CSV format: <code>S.No., Item, Order Date, Delivery Date, Dependency</code>, or use <b>+ Add Item</b>.</div>')
     +'</div>';
 }
 
@@ -5306,8 +5337,10 @@ function openModal(idx){
     var _lsArr=LL_SCOPE_DATA[_llSiteName]||[];
     var _lsFileId='lls-inp-'+idx;
     var _lsSN=escJsAttr(_llSiteName);
-    var _lsUploadBtn='<label class="btn btn-o btn-sm" for="'+_lsFileId+'" style="cursor:pointer;font-size:11px">+ Upload LL Scope CSV</label>'
-      +'<input type="file" id="'+_lsFileId+'" accept=".csv" style="display:none" onchange="handleLLScopeUpload(event,\''+_lsSN+'\')">';
+    var _lsUploadBtn='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">'
+      +'<button class="btn btn-o btn-sm" onclick="addManualLLScopeTask(\''+_lsSN+'\')" style="cursor:pointer;font-size:11px">+ Add Task</button>'
+      +'<label class="btn btn-o btn-sm" for="'+_lsFileId+'" style="cursor:pointer;font-size:11px">+ Upload LL Scope CSV</label>'
+      +'<input type="file" id="'+_lsFileId+'" accept=".csv" style="display:none" onchange="handleLLScopeUpload(event,\''+_lsSN+'\')"></div>';
     var _lsDone=_lsArr.filter(function(t){return t.done;}).length;
     var _lsPct=_lsArr.length?Math.round(_lsDone/_lsArr.length*100):0;
     var _lsBarColor=_lsPct===100?'#16a34a':_lsPct>=60?'#d97706':'#dc2626';
@@ -5317,8 +5350,8 @@ function openModal(idx){
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
         +'<div style="font-size:10px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:.05em">🏗️ LL Scope of Work</div>'
         +_lsUploadBtn+'</div>'
-        +'<div style="font-size:12px;color:var(--muted)">No landlord scope uploaded yet.</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Start Date, Expected Completion, Remarks</code></div>'
+        +'<div style="font-size:12px;color:var(--muted)">No landlord scope added yet.</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Start Date, Expected Completion, Remarks</code>, or use <b>+ Add Task</b>.</div>'
         +'</div>';
       return;
     }
@@ -7330,8 +7363,9 @@ function handleLLUpload(event,siteName){
       var oldTasks=arr[existingIdx].tasks;
       parsed.tasks.forEach(function(t){
         var old=oldTasks.find(function(x){return x.task===t.task;});
-        if(old) t.done=old.done;
+        if(old){t.done=old.done;t.wip=old.wip;}
       });
+      oldTasks.filter(function(t){return t.manual&&!parsed.tasks.some(function(x){return x.task===t.task;});}).forEach(function(t){parsed.tasks.push(t);});
       arr[existingIdx]={po:parsed.po,tasks:parsed.tasks};
     } else {
       arr.push({po:parsed.po,tasks:parsed.tasks});
@@ -7404,7 +7438,8 @@ function confirmLLBulkUpload(){
         var existingIdx=arr.findIndex(function(b){return b.po&&b.po===parsed.po;});
         if(existingIdx>=0){
           var oldTasks=arr[existingIdx].tasks;
-          parsed.tasks.forEach(function(t){var old=oldTasks.find(function(x){return x.task===t.task;});if(old)t.done=old.done;});
+          parsed.tasks.forEach(function(t){var old=oldTasks.find(function(x){return x.task===t.task;});if(old){t.done=old.done;t.wip=old.wip;}});
+          oldTasks.filter(function(t){return t.manual&&!parsed.tasks.some(function(x){return x.task===t.task;});}).forEach(function(t){parsed.tasks.push(t);});
           arr[existingIdx]={po:parsed.po,tasks:parsed.tasks};
         } else {
           arr.push({po:parsed.po,tasks:parsed.tasks});
@@ -7525,6 +7560,25 @@ function deleteLLScopeTask(siteName,taskIdx){
   toast('Task removed','ok');
 }
 
+function addManualLLScopeTask(siteName){
+  if(!canUpload()){toast('Please log in first to add an LL scope task','err');return;}
+  var task=prompt('LL scope task name');
+  if(task===null) return;
+  task=(task||'').trim();
+  if(!task){toast('Task name is required','err');return;}
+  var startDate=prompt('Start date (optional)', '')||'';
+  var expectedDate=prompt('Expected completion date (optional)', '')||'';
+  var remarks=prompt('Remarks (optional)', '')||'';
+  if(!LL_SCOPE_DATA[siteName]) LL_SCOPE_DATA[siteName]=[];
+  var tasks=LL_SCOPE_DATA[siteName];
+  var nextSno=tasks.reduce(function(max,t){var n=parseInt(t.sno,10);return isNaN(n)?max:Math.max(max,n);},0)+1;
+  tasks.push({sno:String(nextSno),task:task,startDate:startDate.trim(),expectedDate:expectedDate.trim(),remarks:remarks.trim(),done:false,manual:true});
+  saveLLScopeData();
+  var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+  if(idx>=0) openModal(idx);
+  toast('✓ LL scope task added','ok');
+}
+
 function handleLLScopeUpload(event,siteName){
   var file=event.target.files[0]; if(!file) return;
   if(!canUpload()){toast('Please log in first','err');event.target.value='';return;}
@@ -7538,6 +7592,7 @@ function handleLLScopeUpload(event,siteName){
       var old=existing.find(function(x){return x.task===t.task;});
       if(old) t.done=old.done;
     });
+    existing.filter(function(t){return t.manual&&!parsed.some(function(x){return x.task===t.task;});}).forEach(function(t){parsed.push(t);});
     LL_SCOPE_DATA[siteName]=parsed;
     saveLLScopeData();
     var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
