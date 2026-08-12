@@ -346,7 +346,8 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.60 | Updated PO PDF extraction authentication for Weave's execution-token requirement: the Worker now prefers the chain-specific `WEAVE_EXECUTION_TOKEN` secret, retains `WEAVE_API_KEY` only as a legacy fallback, accepts secrets saved with or without the `Bearer` prefix, and turns Weave credential rejections into an actionable configuration message. No Supabase migration. |
 | v5.61 | Corrected Weave execution-token authentication after the secret was configured: chain execution tokens are now sent verbatim in the `Authorization` header rather than being incorrectly formatted as a Bearer JWT. An accidentally stored `Bearer ` prefix is stripped, the legacy API-key fallback retains its Bearer scheme, and rejection guidance now checks that the token belongs to the exact configured chain. No Supabase migration. |
 | v5.62 | Made Weave execution-token authentication tolerant of both formats instead of making the user guess: `WEAVE_EXECUTION_TOKEN` may be saved with or without a `Bearer ` prefix, the Worker normalizes it and tries Bearer authorization first (matching the generated chain curl), then automatically retries once with the raw token only when Weave reports a credential rejection. The final error now explains that both formats were attempted. No Supabase migration. |
+| v5.63 | Fixed the generic PO PDF rejection shown after a verified upload: the Worker now sends the public PDF URL using Weave's current file-list input contract and falls back to the legacy scalar contract, recognizes `result`/`data` response envelopes in addition to `output`, and preserves the actual chain response when Weave returns a 2xx failure without an error field. No Supabase migration. |
 
 ---
 
-## Current Version: v5.62
+## Current Version: v5.63

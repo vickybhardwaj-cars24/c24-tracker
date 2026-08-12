@@ -1196,7 +1196,7 @@ function weaveErrorText(value, fallback = 'Weave could not process this PDF') {
 
 function normalizeWeaveSchedule(payload) {
   payload = parseWeaveObject(payload);
-  let output = parseWeaveObject(payload && payload.output);
+  let output = parseWeaveObject(payload && (payload.output != null ? payload.output : (payload.result != null ? payload.result : payload.data)));
   // Depending on the chain/runtime version, Weave can wrap the chain result in
   // a second `output` property and can serialize either layer as JSON text.
   if (output && output.output != null && output.results == null) output = parseWeaveObject(output.output);
@@ -1205,7 +1205,10 @@ function normalizeWeaveSchedule(payload) {
   const succeeded = status === true || status === 200 || statusText === 'true' || statusText === 'success' || (status == null && output && output.results != null);
   if (!output || !succeeded || (payload && payload.error) || output.error) {
     const failure = (payload && (payload.error || payload.message || payload.detail)) || (output && (output.error || output.message || output.detail));
-    throw new Error(weaveErrorText(failure));
+    // A 2xx response can still represent a chain-level failure. Preserve the
+    // response body when Weave supplies no error field; otherwise every input
+    // contract problem is hidden behind the same generic message.
+    throw new Error(weaveErrorText(failure || output || payload));
   }
   const results = parseWeaveObject(output.results);
   if (!results || !Array.isArray(results.Task)) throw new Error('Weave response did not contain schedule tasks');
@@ -1312,7 +1315,18 @@ async function handlePoPdfProcess(request, env) {
   }
 
   let schedule;
-  try { schedule = await runWeave(publicUrl); }
+  try {
+    // Weave file inputs are represented as a list by the current chain UI.
+    // Retain the scalar form as a compatibility fallback for older deployed
+    // revisions of this chain.
+    try { schedule = await runWeave([publicUrl]); }
+    catch (listError) {
+      try { schedule = await runWeave(publicUrl); }
+      catch (scalarError) {
+        throw new Error('file-list input: ' + String(listError && listError.message || listError) + '; scalar input: ' + String(scalarError && scalarError.message || scalarError));
+      }
+    }
+  }
   catch (err) {
     return json(422, {
       success: false,
