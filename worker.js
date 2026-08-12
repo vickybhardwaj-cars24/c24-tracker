@@ -84,6 +84,7 @@
 
 const WEAVE_EXECUTION_URL = 'https://weave-chains.cars24.team/api/v1/execution/6a7c45f986a78680cf0147c8/run';
 const WEAVE_TEAM_ID = '68f87fa98ecef3bd736f59b6';
+const R2_PUBLIC_BASE_URL = 'https://pub-e8ea679da98c4d2992d947357d1e70c2.r2.dev';
 const PO_PDF_MAX_BYTES = 20 * 1024 * 1024;
 
 const CORS_HEADERS = {
@@ -1157,9 +1158,9 @@ async function handlePoPdfGet(request, env) {
   });
 }
 
-function poPdfPublicUrl(key, request) {
-  const origin = new URL(request.url).origin;
-  return origin + '/' + key.split('/').map(encodeURIComponent).join('/');
+function poPdfPublicUrl(key, env) {
+  const base = String(env.R2_PUBLIC_BASE_URL || R2_PUBLIC_BASE_URL).replace(/\/+$/, '');
+  return base + '/' + key.split('/').map(encodeURIComponent).join('/');
 }
 
 function pdfDataUrl(body) {
@@ -1252,7 +1253,20 @@ async function handlePoPdfProcess(request, env) {
   const unique = Date.now() + '-' + crypto.randomUUID().slice(0, 8);
   const key = `po-pdfs/${site}/${unique}-${fileName}`;
   await env.BUCKET.put(key, body, { httpMetadata: { contentType: 'application/pdf' } });
-  const publicUrl = poPdfPublicUrl(key, request);
+  const publicUrl = poPdfPublicUrl(key, env);
+
+  // Prove the exact URL handed to Weave is publicly retrievable and contains
+  // a PDF. A successful R2 upload alone does not prove public URL access.
+  let publicPdfResponse;
+  try {
+    publicPdfResponse = await fetch(publicUrl, { headers: { Range: 'bytes=0-4' } });
+    const publicSignature = new TextDecoder().decode((await publicPdfResponse.arrayBuffer()).slice(0, 5));
+    if (!publicPdfResponse.ok || publicSignature !== '%PDF-') {
+      return json(502, { success: false, error: `Uploaded PDF URL verification failed (HTTP ${publicPdfResponse.status})`, pdf: { key, url: publicUrl, fileName: rawName } });
+    }
+  } catch (err) {
+    return json(502, { success: false, error: 'Uploaded PDF URL is not publicly reachable: ' + String(err && err.message || err), pdf: { key, url: publicUrl, fileName: rawName } });
+  }
 
   async function runWeave(pdfInput) {
     const response = await fetch(env.WEAVE_EXECUTION_URL || WEAVE_EXECUTION_URL, {
@@ -1272,24 +1286,13 @@ async function handlePoPdfProcess(request, env) {
   }
 
   let schedule;
-  let urlError;
-  try {
-    schedule = await runWeave(publicUrl);
-  } catch (err) {
-    urlError = err;
-    // Some Weave deployments cannot make outbound requests to either r2.dev
-    // or workers.dev. Retry with the PDF embedded in the chain input so the
-    // extraction no longer depends on Weave being able to fetch our URL.
-    try { schedule = await runWeave(pdfDataUrl(body)); }
-    catch (embeddedErr) {
-      const first = String(urlError && urlError.message || urlError);
-      const second = String(embeddedErr && embeddedErr.message || embeddedErr);
-      return json(422, {
-        success: false,
-        error: second === first ? second : `Weave URL attempt failed: ${first}. Embedded PDF attempt failed: ${second}`,
-        pdf: { key, url: publicUrl, fileName: rawName }
-      });
-    }
+  try { schedule = await runWeave(publicUrl); }
+  catch (err) {
+    return json(422, {
+      success: false,
+      error: 'The public PDF URL was verified successfully, but the Weave chain rejected the document: ' + String(err && err.message || err),
+      pdf: { key, url: publicUrl, fileName: rawName }
+    });
   }
   return json(200, {
     success: true,
