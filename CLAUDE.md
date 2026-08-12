@@ -345,7 +345,8 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.59 | Fixed Weave diagnostic objects being reduced to the useless text `[object Object]`: nested `message`, `detail`, `error`, `reason`, and `description` values are now extracted recursively, with JSON serialization as a fallback, for both HTTP failures and successful HTTP responses whose chain output reports failure. No Supabase migration. |
 | v5.60 | Updated PO PDF extraction authentication for Weave's execution-token requirement: the Worker now prefers the chain-specific `WEAVE_EXECUTION_TOKEN` secret, retains `WEAVE_API_KEY` only as a legacy fallback, accepts secrets saved with or without the `Bearer` prefix, and turns Weave credential rejections into an actionable configuration message. No Supabase migration. |
 | v5.61 | Corrected Weave execution-token authentication after the secret was configured: chain execution tokens are now sent verbatim in the `Authorization` header rather than being incorrectly formatted as a Bearer JWT. An accidentally stored `Bearer ` prefix is stripped, the legacy API-key fallback retains its Bearer scheme, and rejection guidance now checks that the token belongs to the exact configured chain. No Supabase migration. |
+| v5.62 | Made Weave execution-token authentication tolerant of both formats instead of making the user guess: `WEAVE_EXECUTION_TOKEN` may be saved with or without a `Bearer ` prefix, the Worker normalizes it and tries Bearer authorization first (matching the generated chain curl), then automatically retries once with the raw token only when Weave reports a credential rejection. The final error now explains that both formats were attempted. No Supabase migration. |
 
 ---
 
-## Current Version: v5.61
+## Current Version: v5.62
