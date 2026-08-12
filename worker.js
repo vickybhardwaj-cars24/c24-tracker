@@ -1142,16 +1142,30 @@ function poPdfPublicUrl(key, env) {
 
 function weaveFieldValue(list, index) {
   const item = Array.isArray(list) ? list[index] : null;
-  if (!item || item.is_present === false || item.value == null) return '';
-  return String(item.value).trim();
+  if (item == null || (typeof item === 'object' && item.is_present === false)) return '';
+  const value = typeof item === 'object' && Object.prototype.hasOwnProperty.call(item, 'value') ? item.value : item;
+  return value == null ? '' : String(value).trim();
+}
+
+function parseWeaveObject(value) {
+  if (typeof value !== 'string') return value;
+  try { return JSON.parse(value); }
+  catch (_) { return value; }
 }
 
 function normalizeWeaveSchedule(payload) {
-  const output = payload && payload.output;
-  if (!output || output.status !== true || payload.error || output.error) {
-    throw new Error(String((payload && payload.error) || (output && output.error) || (output && output.message) || 'Weave could not process this PDF'));
+  payload = parseWeaveObject(payload);
+  let output = parseWeaveObject(payload && payload.output);
+  // Depending on the chain/runtime version, Weave can wrap the chain result in
+  // a second `output` property and can serialize either layer as JSON text.
+  if (output && output.output != null && output.results == null) output = parseWeaveObject(output.output);
+  const status = output && output.status;
+  const statusText = String(status).toLowerCase();
+  const succeeded = status === true || status === 200 || statusText === 'true' || statusText === 'success' || (status == null && output && output.results != null);
+  if (!output || !succeeded || (payload && payload.error) || output.error) {
+    throw new Error(String((payload && (payload.error || payload.message || payload.detail)) || (output && (output.error || output.message || output.detail)) || 'Weave could not process this PDF'));
   }
-  const results = output.results;
+  const results = parseWeaveObject(output.results);
   if (!results || !Array.isArray(results.Task)) throw new Error('Weave response did not contain schedule tasks');
   const tasks = [];
   for (let i = 0; i < results.Task.length; i++) {
