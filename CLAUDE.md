@@ -337,7 +337,8 @@ subprocess.run(['node','--check','/tmp/check.js'])  # write js to tmp first
 | v5.51 | Fixed the project detail modal on mobile browsers by sizing its overlay and sheet against the dynamic visible viewport (`dvh`) and reserving the top safe-area inset, keeping the site name, Drive link, status, and close button below browser chrome |
 | v5.52 | Added manual post-upload entry controls to all three site-modal work plans: LL Scope of Work now has `+ Add Task`, Project Schedule retains its existing `+ Add Task`, and Procurement Plan now has `+ Add Item`; manual rows are appended to the already-uploaded data, survive later CSV re-uploads, and persist through the same shared Worker stores |
 | v5.53 | Replaced the site-modal Project Schedule CSV control with PO PDF upload: authenticated PDFs are stored site-wise in Cloudflare R2, their newly constructed public R2 URL is processed server-side through Weave, and extracted schedule columns populate the existing task tracker. Each schedule links back to its saved PDF; PO-style filenames such as `PO-CSPL-25-26-31675` are recognized when available, while PDFs without a PO number remain supported. Existing done/WIP state and manual tasks are preserved when the same recognized PO is replaced. Requires the `WEAVE_API_KEY` Cloudflare Worker secret; no Supabase migration. |
+| v5.54 | Fixed PO PDF processing failures caused by variations in Weave's response encoding: the Worker now accepts boolean, string, or `success` status values, unwraps nested or JSON-serialized output/results, supports both structured and primitive field values, and surfaces the API's real message/detail instead of the generic “Weave could not process this PDF” error. No Supabase migration. |
 
 ---
 
-## Current Version: v5.53
+## Current Version: v5.54
