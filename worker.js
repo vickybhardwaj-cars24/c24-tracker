@@ -83,8 +83,8 @@
 //   BUCKET         - R2 bucket binding (variable name BUCKET → bucket c24-tracker-data)
 // Required secret for PO PDF extraction:
 //   WEAVE_EXECUTION_TOKEN - execution token generated for the deployed Weave
-//                           chain. It is sent verbatim in Authorization (unlike
-//                           a JWT, an execution token must not gain "Bearer ").
+//                           chain. Values saved with or without "Bearer " are
+//                           accepted; the Worker tries both supported formats.
 
 const WEAVE_EXECUTION_URL = 'https://weave-chains.cars24.team/api/v1/execution/6a7c45f986a78680cf0147c8/run';
 const WEAVE_TEAM_ID = '68f87fa98ecef3bd736f59b6';
@@ -1245,11 +1245,11 @@ async function handlePoPdfProcess(request, env) {
   const legacyApiKey = String(env.WEAVE_API_KEY || '').trim();
   const weaveToken = executionToken || legacyApiKey;
   if (!weaveToken) return json(500, { success: false, error: 'Worker is missing WEAVE_EXECUTION_TOKEN secret' });
-  // Weave accepts an execution token directly in Authorization. Only the
-  // legacy JWT/API-key path uses the Bearer scheme.
-  const weaveAuthorization = executionToken
-    ? executionToken.replace(/^Bearer\s+/i, '')
-    : (/^Bearer\s+/i.test(legacyApiKey) ? legacyApiKey : 'Bearer ' + legacyApiKey);
+  // Normalize the configured value, but retain a raw-token fallback because
+  // different Weave deployments have accepted different execution-token
+  // schemes. Bearer is attempted first, matching the chain's generated curl.
+  const rawWeaveToken = weaveToken.replace(/^Bearer\s+/i, '').trim();
+  const weaveAuthorizations = ['Bearer ' + rawWeaveToken, rawWeaveToken];
 
   const rawSite = String(request.headers.get('X-Site-Name') || '').trim();
   let rawName = String(request.headers.get('X-File-Name') || 'PO.pdf').trim();
@@ -1286,26 +1286,29 @@ async function handlePoPdfProcess(request, env) {
   }
 
   async function runWeave(pdfInput) {
-    const response = await fetch(env.WEAVE_EXECUTION_URL || WEAVE_EXECUTION_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': weaveAuthorization,
-        'team-id': env.WEAVE_TEAM_ID || WEAVE_TEAM_ID
-      },
-      body: JSON.stringify({ input_data: { PDFinput: pdfInput } })
-    });
-    let payload;
-    try { payload = await response.json(); }
-    catch (_) { throw new Error('Weave returned an unreadable response'); }
-    if (!response.ok) {
+    for (let i = 0; i < weaveAuthorizations.length; i++) {
+      const response = await fetch(env.WEAVE_EXECUTION_URL || WEAVE_EXECUTION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': weaveAuthorizations[i],
+          'team-id': env.WEAVE_TEAM_ID || WEAVE_TEAM_ID
+        },
+        body: JSON.stringify({ input_data: { PDFinput: pdfInput } })
+      });
+      let payload;
+      try { payload = await response.json(); }
+      catch (_) { throw new Error('Weave returned an unreadable response'); }
+      if (response.ok) return normalizeWeaveSchedule(payload);
+
       const detail = weaveErrorText(payload.error || payload.message || payload.detail, `Weave request failed (HTTP ${response.status})`);
-      if (response.status === 401 || /valid JWT token or execution token/i.test(detail)) {
-        throw new Error('Weave rejected WEAVE_EXECUTION_TOKEN. Confirm the secret contains the execution token for this exact chain (without a Bearer prefix), then redeploy the Worker.');
+      const credentialRejected = response.status === 401 || /valid JWT token or execution token/i.test(detail);
+      if (credentialRejected && i + 1 < weaveAuthorizations.length) continue;
+      if (credentialRejected) {
+        throw new Error('Weave rejected the configured execution token after the Worker tried both Bearer and raw-token authorization. Confirm WEAVE_EXECUTION_TOKEN is the current token generated for this exact chain, then redeploy the Worker.');
       }
       throw new Error(detail);
     }
-    return normalizeWeaveSchedule(payload);
   }
 
   let schedule;
