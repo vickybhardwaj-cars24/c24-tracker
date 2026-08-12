@@ -10,7 +10,7 @@
 <meta name="theme-color" content="#2563eb">
 <link rel="manifest" href="/projects-tracker/manifest.json">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<title>Cars24 Projects Tracker v5.52</title>
+<title>Cars24 Projects Tracker v5.53</title>
 <script src="/shared/c24-favicon.js"></script>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -5241,8 +5241,8 @@ function openModal(idx){
   const _llSN=escJsAttr(_llSiteName);
   const _llUploadBtn='<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;justify-content:flex-end">'
     +'<button class="btn btn-o btn-sm" onclick="addManualLLTask(\''+_llSN+'\')" style="cursor:pointer;font-size:11px">+ Add Task</button>'
-    +'<label class="btn btn-o btn-sm" for="'+_llFileId+'" style="cursor:pointer;font-size:11px">+ Add Schedule CSV</label>'
-    +'<input type="file" id="'+_llFileId+'" accept=".csv" style="display:none" onchange="handleLLUpload(event,\''+_llSN+'\')">'
+    +'<label class="btn btn-o btn-sm" for="'+_llFileId+'" id="'+_llFileId+'-label" style="cursor:pointer;font-size:11px">📄 Upload PO PDF</label>'
+    +'<input type="file" id="'+_llFileId+'" accept=".pdf,application/pdf" style="display:none" onchange="handleLLPdfUpload(event,\''+_llSN+'\')">'
     +'</div>';
   let llHtml='';
   (function(){
@@ -5264,8 +5264,8 @@ function openModal(idx){
     if(!_llArr.length){
       llHtml='<div data-ll-section style="border:1px dashed var(--border2);border-radius:8px;padding:12px 14px;margin-bottom:12px">'+hdr
         +'<div style="font-size:12px;color:var(--muted)">No schedule uploaded yet.</div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">CSV format: <code>S.No., Task, Vendor Name, Start Date, End Date</code></div>'
-        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">Filename: <code>Schedule_PO&lt;PO_NUMBER&gt;.csv</code> — PO number is auto-extracted. Or use <b>+ Add Task</b> for a manual entry.</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:4px">Upload a PO PDF (maximum 20 MB). It will be saved site-wise and converted into schedule tasks automatically.</div>'
+        +'<div style="font-size:10px;color:var(--muted);margin-top:2px">If present, a number such as <code>PO-CSPL-25-26-31675</code> is read from the filename. Or use <b>+ Add Task</b> for a manual entry.</div>'
         +'</div>';
       return;
     }
@@ -5313,8 +5313,9 @@ function openModal(idx){
       return '<div style="margin-bottom:10px;border:1px solid var(--border2);border-radius:7px;overflow:hidden">'
         +'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface);flex-wrap:wrap;gap:6px">'
         +'<div>'
-        +'<span style="font-size:11px;font-weight:700;color:var(--text)">PO: '+(block.po?esc(block.po):'<span style="color:var(--muted);font-weight:400">No PO in filename</span>')+'</span>'
+        +'<span style="font-size:11px;font-weight:700;color:var(--text)">'+(block.po?'PO: '+esc(block.po):esc((block.pdf&&block.pdf.fileName)||'PO PDF'))+'</span>'
         +'<span style="font-size:10px;color:var(--muted);margin-left:8px">'+tasks.length+' tasks</span>'
+        +(block.pdf&&block.pdf.url?'<a href="'+esc(block.pdf.url)+'" target="_blank" rel="noopener noreferrer" style="font-size:10px;color:#2563eb;font-weight:700;margin-left:8px;text-decoration:none">📄 View PO PDF</a>':'')
         +'</div>'
         +'<div style="display:flex;align-items:center;gap:10px">'
         +'<div style="display:flex;align-items:center;gap:5px">'
@@ -7378,6 +7379,46 @@ function handleLLUpload(event,siteName){
   };
   reader.readAsText(file);
   event.target.value='';
+}
+
+// Upload a site PO PDF to R2; the Worker constructs its public URL and sends
+// that URL to Weave, returning normalized schedule tasks to this modal.
+function handleLLPdfUpload(event,siteName){
+  var input=event.target;
+  var file=input.files&&input.files[0];
+  if(!file) return;
+  if(!canUpload()){toast('Please log in first to upload a PO PDF','err');input.value='';return;}
+  if(!/\.pdf$/i.test(file.name)||file.type&&file.type!=='application/pdf'){toast('Please choose a PDF file','err');input.value='';return;}
+  if(file.size>20*1024*1024){toast('PDF is too large (maximum 20 MB)','err');input.value='';return;}
+  var label=document.getElementById(input.id+'-label');
+  var oldLabel=label?label.textContent:'';
+  if(label){label.textContent='⏳ Uploading & processing…';label.style.pointerEvents='none';label.style.opacity='.65';}
+  input.disabled=true;
+  toast('Uploading PDF to Cloudflare and processing with Weave…','ok');
+  fetch(WORKER_URL.replace(/\/+$/,'')+'/po-pdf/process',{
+    method:'POST',
+    headers:{'Authorization':workerAuthHeader(),'Content-Type':'application/pdf','X-Site-Name':siteName,'X-File-Name':encodeURIComponent(file.name)},
+    body:file
+  }).then(function(r){return r.json().catch(function(){return {success:false,error:'Unreadable server response'};}).then(function(j){if(!r.ok||!j.success) throw new Error(j.error||('HTTP '+r.status));return j;});})
+    .then(function(result){
+      var poMatch=file.name.match(/(PO-[A-Z0-9]+(?:-[A-Z0-9]+)+)/i);
+      var po=poMatch?poMatch[1].toUpperCase():'';
+      if(!SCHED_DATA[siteName]) SCHED_DATA[siteName]=[];
+      var arr=SCHED_DATA[siteName];
+      var existingIdx=po?arr.findIndex(function(b){return String(b.po||'').toUpperCase()===po;}):-1;
+      var oldTasks=existingIdx>=0?(arr[existingIdx].tasks||[]):[];
+      result.tasks.forEach(function(t){var old=oldTasks.find(function(x){return x.task===t.task;});if(old){t.done=old.done;t.wip=old.wip;}});
+      oldTasks.filter(function(t){return t.manual&&!result.tasks.some(function(x){return x.task===t.task;});}).forEach(function(t){result.tasks.push(t);});
+      var block={po:po,tasks:result.tasks,pdf:result.pdf,weave:result.weave};
+      if(existingIdx>=0) arr[existingIdx]=block; else arr.push(block);
+      saveSchedData();
+      updateLLCompletion(siteName);
+      var idx=allData.findIndex(function(r){return (r['Site Name']||'').trim()===siteName;});
+      toast('✓ PO PDF processed — '+result.tasks.length+' schedule tasks','ok');
+      if(idx>=0) openModal(idx);
+    })
+    .catch(function(err){toast('PO PDF processing failed: '+err.message,'err');})
+    .then(function(){input.disabled=false;input.value='';if(label){label.textContent=oldLabel||'📄 Upload PO PDF';label.style.pointerEvents='';label.style.opacity='';}});
 }
 
 function handleLLBulkUpload(event){

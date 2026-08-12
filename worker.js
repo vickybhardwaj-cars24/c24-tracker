@@ -82,6 +82,11 @@
 // Required binding:
 //   BUCKET         - R2 bucket binding (variable name BUCKET → bucket c24-tracker-data)
 
+const WEAVE_EXECUTION_URL = 'https://weave-chains.cars24.team/api/v1/execution/6a7c45f986a78680cf0147c8/run';
+const WEAVE_TEAM_ID = '68f87fa98ecef3bd736f59b6';
+const R2_PUBLIC_BASE_URL = 'https://pub-e8ea679da98c4d2992d947357d1e70c2.r2.dev';
+const PO_PDF_MAX_BYTES = 20 * 1024 * 1024;
+
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -1116,6 +1121,7 @@ export default {
       if (path === '/mappings')      return handleMappings(request, env);
       if (path === '/photo-upload')  return handlePhotoUpload(request, env);
       if (path === '/photo-delete')  return handlePhotoDelete(request, env);
+      if (path === '/po-pdf/process') return handlePoPdfProcess(request, env);
       if (path === '/slack/send')    return handleSlackSend(request, env);
       if (path === '/slack/resolve-users') return handleSlackResolveUsers(request, env);
       if (path === '/')              return handlePostLegacy(request, env);
@@ -1125,6 +1131,112 @@ export default {
     return json(405, { success: false, error: 'Method not allowed' });
   },
 };
+
+// ── PO PDF upload + Weave extraction: POST /po-pdf/process ────────
+// The PDF is written to the public R2 bucket first. Its deterministic public
+// URL is then passed to Weave; the API key never reaches the browser.
+function poPdfPublicUrl(key, env) {
+  const base = String(env.R2_PUBLIC_BASE_URL || R2_PUBLIC_BASE_URL).replace(/\/+$/, '');
+  return base + '/' + key.split('/').map(encodeURIComponent).join('/');
+}
+
+function weaveFieldValue(list, index) {
+  const item = Array.isArray(list) ? list[index] : null;
+  if (!item || item.is_present === false || item.value == null) return '';
+  return String(item.value).trim();
+}
+
+function normalizeWeaveSchedule(payload) {
+  const output = payload && payload.output;
+  if (!output || output.status !== true || payload.error || output.error) {
+    throw new Error(String((payload && payload.error) || (output && output.error) || (output && output.message) || 'Weave could not process this PDF'));
+  }
+  const results = output.results;
+  if (!results || !Array.isArray(results.Task)) throw new Error('Weave response did not contain schedule tasks');
+  const tasks = [];
+  for (let i = 0; i < results.Task.length; i++) {
+    const task = weaveFieldValue(results.Task, i);
+    if (!task) continue;
+    tasks.push({
+      sno: weaveFieldValue(results['S.No.'], i) || String(tasks.length + 1),
+      task,
+      vendor: weaveFieldValue(results['Vendor Name'], i),
+      startDate: weaveFieldValue(results['Start Date'], i),
+      endDate: weaveFieldValue(results['End Date'], i),
+      done: false,
+      wip: false,
+      confidence: {
+        task: Number((results.Task[i] && results.Task[i].confidence) || 0),
+        vendor: Number((results['Vendor Name'] && results['Vendor Name'][i] && results['Vendor Name'][i].confidence) || 0),
+        startDate: Number((results['Start Date'] && results['Start Date'][i] && results['Start Date'][i].confidence) || 0),
+        endDate: Number((results['End Date'] && results['End Date'][i] && results['End Date'][i].confidence) || 0)
+      }
+    });
+  }
+  if (!tasks.length) throw new Error('Weave did not find any usable schedule tasks');
+  return {
+    tasks,
+    taskId: Array.isArray(output.task_id) ? String(output.task_id[0] || '') : String(output.task_id || ''),
+    processingTime: Number(output.processing_time || payload.time || 0),
+    message: String(output.message || 'Document Processed Successfully')
+  };
+}
+
+async function handlePoPdfProcess(request, env) {
+  if (!await checkAnyAuth(request, env)) return json(401, { success: false, error: 'Unauthorized' });
+  if (!env.BUCKET) return json(500, { success: false, error: 'Worker is missing BUCKET binding' });
+  if (!env.WEAVE_API_KEY) return json(500, { success: false, error: 'Worker is missing WEAVE_API_KEY secret' });
+
+  const rawSite = String(request.headers.get('X-Site-Name') || '').trim();
+  let rawName = String(request.headers.get('X-File-Name') || 'PO.pdf').trim();
+  try { rawName = decodeURIComponent(rawName); } catch (_) {}
+  if (!rawSite) return json(400, { success: false, error: 'Site name is required' });
+  if (!/\.pdf$/i.test(rawName)) return json(400, { success: false, error: 'Only PDF files are accepted' });
+  const contentLength = Number(request.headers.get('Content-Length') || 0);
+  if (contentLength > PO_PDF_MAX_BYTES) return json(413, { success: false, error: 'PDF is too large (maximum 20 MB)' });
+
+  const body = await request.arrayBuffer();
+  if (!body.byteLength) return json(400, { success: false, error: 'The PDF is empty' });
+  if (body.byteLength > PO_PDF_MAX_BYTES) return json(413, { success: false, error: 'PDF is too large (maximum 20 MB)' });
+  const signature = new TextDecoder().decode(body.slice(0, 5));
+  if (signature !== '%PDF-') return json(400, { success: false, error: 'The selected file is not a valid PDF' });
+
+  const site = rawSite.replace(/[^a-zA-Z0-9_-]/g, '_').toLowerCase();
+  const fileName = rawName.replace(/[^a-zA-Z0-9._-]/g, '_');
+  const unique = Date.now() + '-' + crypto.randomUUID().slice(0, 8);
+  const key = `po-pdfs/${site}/${unique}-${fileName}`;
+  await env.BUCKET.put(key, body, { httpMetadata: { contentType: 'application/pdf' } });
+  const publicUrl = poPdfPublicUrl(key, env);
+
+  let weaveResponse;
+  try {
+    weaveResponse = await fetch(env.WEAVE_EXECUTION_URL || WEAVE_EXECUTION_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + env.WEAVE_API_KEY,
+        'team-id': env.WEAVE_TEAM_ID || WEAVE_TEAM_ID
+      },
+      body: JSON.stringify({ input_data: { PDFinput: publicUrl } })
+    });
+  } catch (_) {
+    return json(502, { success: false, error: 'Could not connect to Weave. The PDF was uploaded and can be retried.', pdf: { key, url: publicUrl, fileName: rawName } });
+  }
+  let payload;
+  try { payload = await weaveResponse.json(); }
+  catch (_) { return json(502, { success: false, error: 'Weave returned an unreadable response', pdf: { key, url: publicUrl, fileName: rawName } }); }
+  if (!weaveResponse.ok) return json(502, { success: false, error: String(payload.error || 'Weave request failed'), pdf: { key, url: publicUrl, fileName: rawName } });
+
+  let schedule;
+  try { schedule = normalizeWeaveSchedule(payload); }
+  catch (err) { return json(422, { success: false, error: err.message, pdf: { key, url: publicUrl, fileName: rawName } }); }
+  return json(200, {
+    success: true,
+    tasks: schedule.tasks,
+    pdf: { key, url: publicUrl, fileName: rawName, uploadedAt: new Date().toISOString() },
+    weave: { taskId: schedule.taskId, processingTime: schedule.processingTime, message: schedule.message }
+  });
+}
 
 // ── Photo upload: POST /photo-upload ─────────────────────────────
 // Headers: Authorization: Basic ..., X-Site-Name, X-Photo-Date, X-File-Name
