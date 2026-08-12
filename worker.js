@@ -1196,7 +1196,10 @@ function weaveErrorText(value, fallback = 'Weave could not process this PDF') {
 
 function normalizeWeaveSchedule(payload) {
   payload = parseWeaveObject(payload);
-  let output = parseWeaveObject(payload && (payload.output != null ? payload.output : (payload.result != null ? payload.result : payload.data)));
+  // The execution API currently returns the chain response in `final_output`.
+  // Older runtime revisions used `output`, `result`, or `data`, so retain all
+  // of those envelopes for backwards compatibility.
+  let output = parseWeaveObject(payload && (payload.final_output != null ? payload.final_output : (payload.output != null ? payload.output : (payload.result != null ? payload.result : payload.data))));
   // Depending on the chain/runtime version, Weave can wrap the chain result in
   // a second `output` property and can serialize either layer as JSON text.
   if (output && output.output != null && output.results == null) output = parseWeaveObject(output.output);
