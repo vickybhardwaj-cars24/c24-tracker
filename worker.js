@@ -1163,6 +1163,16 @@ function poPdfPublicUrl(key, env) {
   return base + '/' + key.split('/').map(encodeURIComponent).join('/');
 }
 
+function pdfDataUrl(body) {
+  const bytes = new Uint8Array(body);
+  const chunkSize = 3 * 8192;
+  let encoded = '';
+  for (let offset = 0; offset < bytes.length; offset += chunkSize) {
+    encoded += btoa(String.fromCharCode(...bytes.subarray(offset, offset + chunkSize)));
+  }
+  return 'data:application/pdf;base64,' + encoded;
+}
+
 function weaveFieldValue(list, index) {
   const item = Array.isArray(list) ? list[index] : null;
   if (item == null || (typeof item === 'object' && item.is_present === false)) return '';
